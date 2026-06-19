@@ -8,3 +8,6 @@ tgcrypto
 aiohttp
 requests
 python-dotenv
+aiofiles
+aiogram
+apscheduler

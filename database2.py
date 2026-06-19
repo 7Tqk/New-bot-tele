@@ -15,7 +15,7 @@ def patched_init(self, filename='/etc/resolv.conf', configure=True):
 dns.resolver.Resolver.__init__ = patched_init
 # -----------------
 
-MONGO_URL = "mongodb+srv://mhmwdalsrayrh96_db_user:Qym6nNGHPVv0CgLs@cluster0.xzvpqci.mongodb.net/?appName=Cluster0"
+MONGO_URL = "mongodb+srv://mhmwdalsrayrh96_db_user:<FETDR4W33dSa@!>@cluster0.xzvpqci.mongodb.net/?appName=Cluster0"
 DB_NAME = os.getenv("DB_NAME", "razor_x_bot")
 
 client = AsyncIOMotorClient(

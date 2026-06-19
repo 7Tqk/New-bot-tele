@@ -154,7 +154,18 @@ PLANS = {
 }
 PAID_TIERS = ["Core", "Elite", "Root", "X"]
 
-CE = {"crown": 5039727497143387500, "bolt": 5042334757040423886, "brain": 5040030395416969985, "shield": 5042328396193864923, "star": 5042176294222037888, "gem": 5042050649248760772, "check": 5039793437776282663, "fire": 5039644681583985437, "declined": 4956612582816351459, "cross": 5040042498634810056, "info": 5042306247047513767, "trash": 5039614900280754969, "warn": 5039665997506675838, "link": 5042101437237036298, "globe": 5042186567783809934, "chart": 5042290883949495533, "pin": 5039600026809009149, "eyes": 5039623284056917259, "tick": 5039844895779455925, "stop": 5039671744172917707, "plus": 5039891861246838069}
+# تم إضافة مفتاح search و party وكل المفاتيح المطلوبة هنا لإصلاح خطأ الأمر /start
+CE = {
+    "crown": 5039727497143387500, "bolt": 5042334757040423886, "brain": 5040030395416969985, 
+    "shield": 5042328396193864923, "star": 5042176294222037888, "gem": 5042050649248760772, 
+    "check": 5039793437776282663, "fire": 5039644681583985437, "party": 5039778134807806727,
+    "search": 5039649904264217620, "chart": 5042290883949495533, "pin": 5039600026809009149, 
+    "joker": 5039998939076494446, "plus": 5039891861246838069, "cross": 5040042498634810056, 
+    "info": 5042306247047513767, "gift": 5041975203853239332, "eyes": 5039623284056917259, 
+    "trash": 5039614900280754969, "tick": 5039844895779455925, "stop": 5039671744172917707, 
+    "warn": 5039665997506675838, "link": 5042101437237036298, "globe": 5042186567783809934, 
+    "restart": 5413554170668032766, "online": 5413813953685923984, "declined": 4956612582816351459
+}
 PE = "⭐"
 
 ACTIVE_SESSIONS = {}
@@ -195,7 +206,6 @@ async def get_user_http_session(uid, purpose="general"):
     session = _USER_HTTP_SESSIONS.get(key)
     if session is None or session.closed:
         t_val = RZ_TIMEOUT if purpose in ("rz", "mrz") else API_TIMEOUT
-        # تم إصلاح الخطأ القاتل الخاص بـ aiohttp عبر إزالة الخاصية الملغاة
         connector = aiohttp.TCPConnector(limit=150, limit_per_host=50, ttl_dns_cache=300, use_dns_cache=True, keepalive_timeout=30)
         session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=t_val, connect=10), connector=connector)
         _USER_HTTP_SESSIONS[key] = session
@@ -219,6 +229,25 @@ async def get_proxy_session():
     if _GLOBAL_PROXY_SESSION is None or _GLOBAL_PROXY_SESSION.closed:
         _GLOBAL_PROXY_SESSION = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=PROXY_TIMEOUT, connect=15), connector=aiohttp.TCPConnector(limit=30, limit_per_host=10, ttl_dns_cache=300, use_dns_cache=True))
     return _GLOBAL_PROXY_SESSION
+
+def _get_today_key(): return datetime.now().strftime("%Y-%m-%d")
+def get_free_sp_usage(user_id):
+    today = _get_today_key()
+    entry = _FREE_SP_USAGE.get(user_id)
+    if not entry or entry.get("date") != today:
+        _FREE_SP_USAGE[user_id] = {"date": today, "count": 0}
+        return 0
+    return entry["count"]
+def increment_free_sp_usage(user_id):
+    today = _get_today_key()
+    entry = _FREE_SP_USAGE.get(user_id)
+    if not entry or entry.get("date") != today: _FREE_SP_USAGE[user_id] = {"date": today, "count": 1}
+    else: _FREE_SP_USAGE[user_id]["count"] += 1
+def get_free_sp_cooldown_remaining(user_id):
+    last = _FREE_SP_LAST_USE.get(user_id, 0)
+    elapsed = time.time() - last
+    return 0 if elapsed >= FREE_SP_COOLDOWN else round(FREE_SP_COOLDOWN - elapsed, 1)
+def set_free_sp_last_use(user_id): _FREE_SP_LAST_USE[user_id] = time.time()
 
 # ====================== EXTRACTION & PARSING ======================
 def extract_cc(text):
@@ -333,26 +362,6 @@ def is_rz_retry_error(text):
     return any(kw in text.lower().strip() for kw in RZ_RETRY_KEYWORDS)
 
 def is_truly_alive(response, price): return True
-
-# ====================== FREE SYSTEM ======================
-def _get_today_key(): return datetime.now().strftime("%Y-%m-%d")
-def get_free_sp_usage(user_id):
-    today = _get_today_key()
-    entry = _FREE_SP_USAGE.get(user_id)
-    if not entry or entry.get("date") != today:
-        _FREE_SP_USAGE[user_id] = {"date": today, "count": 0}
-        return 0
-    return entry["count"]
-def increment_free_sp_usage(user_id):
-    today = _get_today_key()
-    entry = _FREE_SP_USAGE.get(user_id)
-    if not entry or entry.get("date") != today: _FREE_SP_USAGE[user_id] = {"date": today, "count": 1}
-    else: _FREE_SP_USAGE[user_id]["count"] += 1
-def get_free_sp_cooldown_remaining(user_id):
-    last = _FREE_SP_LAST_USE.get(user_id, 0)
-    elapsed = time.time() - last
-    return 0 if elapsed >= FREE_SP_COOLDOWN else round(FREE_SP_COOLDOWN - elapsed, 1)
-def set_free_sp_last_use(user_id): _FREE_SP_LAST_USE[user_id] = time.time()
 
 # ====================== API CHECKERS ======================
 async def test_proxy(proxy_url):
@@ -496,7 +505,7 @@ async def styled_reply(event, html_text, buttons=None, emoji_ids=None, file=None
         text, entities = build_entities(html_text, emoji_ids)
         return await asyncio.wait_for(event.reply(text, formatting_entities=entities, buttons=buttons, file=file if file else None, link_preview=False), timeout=15)
     except Exception as e:
-        try: return await event.reply(f"⚠️ **Error in formatting:**\n{html_text[:1000]}", link_preview=False)
+        try: return await event.reply(html_text[:4000], parse_mode='html', link_preview=False)
         except: return None
 
 async def styled_send(chat_id, html_text, buttons=None, emoji_ids=None, file=None):
@@ -666,7 +675,7 @@ async def start(event):
         ei = [CE["bolt"], CE["search"], CE["pin"], CE["fire"], CE["search"], CE["pin"], CE["brain"], CE["plus"], CE["cross"], CE["globe"], CE["link"], CE["shield"], CE["link"], CE["eyes"], CE["tick"], CE["trash"], CE["info"], CE["info"]] + se
         
         await styled_reply(event, text, buttons=kb, emoji_ids=ei)
-    except Exception as e: await event.reply(f"⚠️ Error: {e}")
+    except: pass
 
 @client.on(events.CallbackQuery(data=b"check_joined"))
 async def check_joined_cb(event):
@@ -759,7 +768,7 @@ async def add_site(event):
         PENDING_ADD_SITES[uid] = {"sites": new_sites, "exists": already_exists, "event": event}
         kb = [[pbtn(f"{bs('0-5 USD')}", f"addprice:5:{uid}"), pbtn(f"{bs('0-10 USD')}", f"addprice:10:{uid}")], [pbtn(f"{bs('0-20 USD')}", f"addprice:20:{uid}"), pbtn(f"{bs('0-40 USD')}", f"addprice:40:{uid}")]]
         await styled_reply(event, f"""{PE} <b>{bs('Select Price Range')}</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>{bs('New Sites')}:</b> <code>{len(new_sites)}</code>\n{PE} <b>{bs('Already Exist')}:</b> <code>{len(already_exists)}</code>\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <i>{bs('Only working sites within price range will be added')}</i>""", buttons=kb, emoji_ids=[CE["fire"], CE["fire"], CE["globe"], CE["warn"], CE["info"]])
-    except Exception as e: await styled_reply(event, f"{PE} <b>{bs('Error')}:</b> <code>{e}</code>", emoji_ids=[CE["cross"]])
+    except: pass
 
 @client.on(events.CallbackQuery(pattern=rb"addprice:(\d+):(\d+)"))
 async def add_price_cb(event):
@@ -962,7 +971,7 @@ async def add_proxy_cmd(event):
                 if isinstance(res, tuple) and res[0]: await add_proxy_db(event.sender_id, pd2); added.append(1)
                 else: failed.append(1)
         await styled_edit(tm, f"{PE} <b>{bs('Done')}</b> ✅{len(added)} ❌{len(failed)} | {bs('Total')}: {cc+len(added)}/100", emoji_ids=[CE["fire"]])
-    except Exception as e: await styled_reply(event, f"{PE} <b>{bs('Error')}:</b> <code>{e}</code>", emoji_ids=[CE["cross"]])
+    except: pass
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]proxy$'))
 async def view_proxies(event):
@@ -1055,13 +1064,8 @@ async def single_cc_check(event):
         try: await lm.delete()
         except: pass
         rm2 = await styled_reply(event, msg, emoji_ids=eid, buttons=HIT_BUTTON)
-        if status == "Charged":
-            asyncio.create_task(pin_charged_message(event, rm2))
-            asyncio.create_task(send_channel_hit(result, uid, username, name, "Shopify"))
-    except Exception as e:
-        try: await lm.delete()
-        except: pass
-        await styled_reply(event, f"{PE} <b>{bs('Error')}:</b> <code>{e}</code>", emoji_ids=[CE["cross"]])
+        if status == "Charged": asyncio.create_task(send_channel_hit(result, uid, username, name, "Shopify"))
+    except: pass
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]rz\b'))
 async def rz_single_check(event):
@@ -1096,13 +1100,8 @@ async def rz_single_check(event):
         try: await lm.delete()
         except: pass
         rm2 = await styled_reply(event, msg, emoji_ids=eid, buttons=HIT_BUTTON)
-        if status == "Charged":
-            asyncio.create_task(pin_charged_message(event, rm2))
-            asyncio.create_task(send_channel_hit(result, uid, username, name, "RazorPay"))
-    except Exception as e:
-        try: await lm.delete()
-        except: pass
-        await styled_reply(event, f"{PE} <b>{bs('Error')}:</b> <code>{e}</code>", emoji_ids=[CE["cross"]])
+        if status == "Charged": asyncio.create_task(send_channel_hit(result, uid, username, name, "RazorPay"))
+    except: pass
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]stop$'))
 async def stop_cmd(event):
@@ -1168,8 +1167,7 @@ async def _run_mass_process(event, cards, proxies, send_approved, process_store,
                     if send_approved: asyncio.create_task(_send_mass_hit(card, result, status, uid, username, name, is_rz))
                 else: declined += 1
                 await update_ui()
-            except Exception as e:
-                print(f"Worker Error: {e}")
+            except:
                 if not is_stopped(): errors += 1; checked += 1
     batch_size = workers * 2; all_tasks = []
     proc = process_store.get(uid)
@@ -1217,7 +1215,7 @@ async def send_final_file(uid, charged, approved, declined, errors, total, hits=
                 for h in hits: await f.write(h + "\n")
         try: await styled_send(target, f"{PE} <b>{bs('Results')}</b> {PE}", emoji_ids=[CE["fire"], CE["fire"]], file=fn)
         except: pass
-    except Exception as e: print(f"Final File Error: {e}")
+    except: pass
     finally:
         if os.path.exists(fn):
             try: os.remove(fn)
@@ -1245,7 +1243,7 @@ async def mass_check_cmd(event):
                     try:
                         async with aiofiles.open(fp, 'r', encoding='utf-8', errors='ignore') as f: content = await f.read()
                         os.remove(fp)
-                    except Exception as e: print(f"File Read Error: {e}")
+                    except: pass
             elif rm.text: content = rm.text
         else: return await styled_reply(event, f"{PE} <b>{bs('Reply to .txt or paste cards after')} </b><code>/msp</code>", emoji_ids=[CE["info"]])
         
@@ -1269,7 +1267,7 @@ async def mass_check_cmd(event):
             kb = [[pbtn(bs("Charged + Approved"), f"chk_pref:yes:{uid}")], [pbtn(bs("Only Charged"), f"chk_pref:no:{uid}")]]
             pm = await styled_reply(event, f"{PE} <b>{bs('Filter')}</b>", kb, emoji_ids=[CE["chart"]])
             USER_APPROVED_PREF[f"chk_{uid}"] = {"cards": cards, "sites": sites, "proxies": proxies, "event": event, "pref_msg": pm, "rotator": rotator}
-    except Exception as e: await event.reply(f"⚠️ Error in /msp: {e}")
+    except: pass
 
 @client.on(events.CallbackQuery(pattern=rb"chk_pref:(yes|no):(\d+)"))
 async def chk_pref_cb(event):
@@ -1324,7 +1322,7 @@ async def mrz_mass_check_cmd(event):
                     try:
                         async with aiofiles.open(fp, 'r', encoding='utf-8', errors='ignore') as f: content = await f.read()
                         os.remove(fp)
-                    except Exception as e: print(f"File Read Error: {e}")
+                    except: pass
             elif rm.text: content = rm.text
         else: return await styled_reply(event, f"{PE} <b>{bs('Reply to .txt or paste cards after')} </b><code>/mrz</code>", emoji_ids=[CE["info"]])
         
@@ -1344,7 +1342,7 @@ async def mrz_mass_check_cmd(event):
             kb = [[pbtn(bs("Charged + Approved"), f"mrz_pref:yes:{uid}")], [pbtn(bs("Only Charged"), f"mrz_pref:no:{uid}")]]
             pm = await styled_reply(event, f"{PE} <b>{bs('Filter')}</b>", kb, emoji_ids=[CE["chart"]])
             USER_APPROVED_PREF[f"mrz_{uid}"] = {"cards": cards, "proxies": proxies, "event": event, "pref_msg": pm}
-    except Exception as e: await event.reply(f"⚠️ Error in /mrz: {e}")
+    except: pass
 
 @client.on(events.CallbackQuery(pattern=rb"mrz_pref:(yes|no):(\d+)"))
 async def mrz_pref_cb(event):
@@ -1376,29 +1374,76 @@ async def stop_mrz_cb(event):
     await event.answer(f"{bs('Stopping')}...", alert=True)
 
 # ====================== COMMANDS (ADMIN) ======================
+def _get_system_uptime():
+    if not PSUTIL_AVAILABLE: return "N/A"
+    uptime_seconds = int(time.time() - psutil.boot_time())
+    days, remainder = divmod(uptime_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{days}d {hours:02}:{minutes:02}:{seconds:02}"
+
+def _create_progress_bar(percentage, length=10):
+    filled_length = int(length * percentage / 100)
+    return f"{'█' * filled_length}{'░' * (length - filled_length)} {percentage:.1f}%"
+
+def _get_system_info():
+    b_sec = int(time.time() - BOT_START_TIME)
+    b_days, rem = divmod(b_sec, 86400)
+    b_hrs, rem = divmod(rem, 3600)
+    b_mins, b_secs = divmod(rem, 60)
+    bot_uptime_str = f"{b_days}d {b_hrs:02}:{b_mins:02}:{b_secs:02}"
+    bot_restart_time = datetime.fromtimestamp(BOT_START_TIME).strftime("%Y-%m-%d %H:%M:%S")
+
+    if not PSUTIL_AVAILABLE:
+        return {
+            "error": None, "bot_uptime_str": bot_uptime_str, "uptime_str": "N/A",
+            "bot_restart_time": bot_restart_time, "cpu_usage": 0.0, "cpu_count": 0,
+            "memory_percent": 0.0, "used_memory": 0.0, "total_memory": 0.0,
+            "disk_percent": 0.0, "used_disk": 0.0, "total_disk": 0.0,
+            "bytes_sent": 0.0, "bytes_recv": 0.0, "cpu_critical": False,
+            "memory_critical": False, "disk_critical": False, "psutil_missing": True
+        }
+    try:
+        cpu_usage = psutil.cpu_percent(interval=0); cpu_count = psutil.cpu_count(logical=True)
+        memory = psutil.virtual_memory(); disk = psutil.disk_usage("/")
+        network = psutil.net_io_counters()
+        return {
+            "error": None, "bot_uptime_str": bot_uptime_str, "uptime_str": _get_system_uptime(),
+            "bot_restart_time": bot_restart_time, "cpu_usage": cpu_usage, "cpu_count": cpu_count,
+            "total_memory": memory.total / (1024**3), "used_memory": memory.used / (1024**3),
+            "memory_percent": memory.percent, "total_disk": disk.total / (1024**3),
+            "used_disk": disk.used / (1024**3), "disk_percent": disk.percent,
+            "bytes_sent": network.bytes_sent / (1024**2), "bytes_recv": network.bytes_recv / (1024**2),
+            "cpu_critical": cpu_usage > 90, "memory_critical": memory.percent > 90,
+            "disk_critical": disk.percent > 90, "psutil_missing": False
+        }
+    except Exception as e: return {"error": str(e)}
+
+async def _build_status_text():
+    s = await asyncio.get_event_loop().run_in_executor(None, _get_system_info)
+    if s.get("error"): return f"⌬ <b>𝐄𝐫𝐫𝐨𝐫</b> ↬ <code>❌ {s['error']}</code>\n⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/ravenu899'>𝑹@𝒗𝒆𝒏</a>"
+    if s.get("psutil_missing"):
+        return f"⌬ <b>𝐁𝐨𝐭 𝐒𝐭𝐚𝐭𝐮𝐬</b> ↬ <code>✅ Active</code>\n――――――――――――――\n⌬ <b>𝐁𝐨𝐭 𝐔𝐩𝐭𝐢𝐦𝐞</b> ↬ <code>{s['bot_uptime_str']}</code>\n⌬ <b>𝐋𝐚𝐬𝐭 𝐑𝐞𝐬𝐭𝐚𝐫𝐭</b> ↬ <code>{s['bot_restart_time']}</code>\n――――――――――――――\n⚠️ <i>System metrics unavailable (psutil not installed)</i>\n――――――――――――――\n⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/ravenu899'>𝑹@𝒗𝒆𝒏</a>"
+    msg = (f"⌬ <b>𝐁𝐨𝐭 𝐒𝐭𝐚𝐭𝐮𝐬</b> ↬ <code>✅ Active</code>\n――――――――――――――\n"
+           f"⌬ <b>𝐁𝐨𝐭 𝐔𝐩𝐭𝐢𝐦𝐞</b> ↬ <code>{s['bot_uptime_str']}</code>\n"
+           f"⌬ <b>𝐒𝐲𝐬𝐭𝐞𝐦 𝐔𝐩𝐭𝐢𝐦𝐞</b> ↬ <code>{s['uptime_str']}</code>\n"
+           f"⌬ <b>𝐋𝐚𝐬𝐭 𝐑𝐞𝐬𝐭𝐚𝐫𝐭</b> ↬ <code>{s['bot_restart_time']}</code>\n――――――――――――――\n"
+           f"⌬ <b>𝐂𝐏𝐔</b> ↬ <code>{s['cpu_usage']:.1f}% ({s['cpu_count']} cores)</code>\n"
+           f"⊀ <b>Usage</b> ↬ <code>{_create_progress_bar(s['cpu_usage'])}</code>\n――――――――――――――\n"
+           f"⌬ <b>𝐑𝐀𝐌</b> ↬ <code>{s['used_memory']:.2f}GB / {s['total_memory']:.2f}GB</code>\n"
+           f"⊀ <b>Usage</b> ↬ <code>{_create_progress_bar(s['memory_percent'])}</code>\n――――――――――――――\n"
+           f"⌬ <b>𝐃𝐢𝐬𝐤</b> ↬ <code>{s['used_disk']:.2f}GB / {s['total_disk']:.2f}GB</code>\n"
+           f"⊀ <b>Usage</b> ↬ <code>{_create_progress_bar(s['disk_percent'])}</code>\n――――――――――――――\n"
+           f"⌬ <b>𝐍𝐞𝐭𝐰𝐨𝐫𝐤</b> ↬ <code>↑ {s['bytes_sent']:.1f}MB ↓ {s['bytes_recv']:.1f}MB</code>\n")
+    if s["cpu_critical"] or s["memory_critical"] or s["disk_critical"]: msg += "\n⚠️ <b>Warning:</b> System resources critically low!"
+    msg += f"\n――――――――――――――\n⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/ravenu899'>𝑹@𝒗𝒆𝒏</a>"
+    return msg
+
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]status$'))
 async def status_cmd(event):
     if event.sender_id not in ADMIN_ID: return
     try:
-        if not PSUTIL_AVAILABLE: st = f"⌬ <b>𝐄𝐫𝐫𝐨𝐫</b> ↬ <code>❌ psutil not installed</code>\n⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/ravenu899'>𝑹@𝒗𝒆𝒏</a>"
-        else:
-            u_sec = int(time.time() - psutil.boot_time())
-            b_sec = int(time.time() - BOT_START_TIME)
-            cu = psutil.cpu_percent(interval=0)
-            mem = psutil.virtual_memory()
-            disk = psutil.disk_usage("/")
-            net = psutil.net_io_counters()
-            st = f"""⌬ <b>𝐁𝐨𝐭 𝐒𝐭𝐚𝐭𝐮𝐬</b> ↬ <code>✅ Active</code>
-――――――――――――――
-⌬ <b>𝐁𝐨𝐭 𝐔𝐩𝐭𝐢𝐦𝐞</b> ↬ <code>{b_sec//86400}d {(b_sec%86400)//3600:02}:{(b_sec%3600)//60:02}:{b_sec%60:02}</code>
-⌬ <b>𝐒𝐲𝐬𝐭𝐞𝐦 𝐔𝐩𝐭𝐢𝐦𝐞</b> ↬ <code>{u_sec//86400}d {(u_sec%86400)//3600:02}:{(u_sec%3600)//60:02}:{u_sec%60:02}</code>
-――――――――――――――
-⌬ <b>𝐂𝐏𝐔</b> ↬ <code>{cu:.1f}% ({psutil.cpu_count()} cores)</code>
-⌬ <b>𝐑𝐀𝐌</b> ↬ <code>{mem.used/(1024**3):.2f}GB / {mem.total/(1024**3):.2f}GB</code>
-⌬ <b>𝐃𝐢𝐬𝐤</b> ↬ <code>{disk.used/(1024**3):.2f}GB / {disk.total/(1024**3):.2f}GB</code>
-⌬ <b>𝐍𝐞𝐭𝐰𝐨𝐫𝐤</b> ↬ <code>↑ {net.bytes_sent/(1024**2):.1f}MB ↓ {net.bytes_recv/(1024**2):.1f}MB</code>
-――――――――――――――
-⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/ravenu899'>𝑹@𝒗𝒆𝒏</a>"""
+        st = await _build_status_text()
         await styled_reply(event, st, buttons=[[pbtn("🔄 Refresh", data="refresh_status")]])
     except Exception as e: await styled_reply(event, f"⚠️ <code>{e}</code>")
 
@@ -1407,26 +1452,8 @@ async def refresh_status_cb(event):
     if event.sender_id not in ADMIN_ID: return await event.answer("No!", alert=True)
     await event.answer("Refreshing...")
     try:
+        st = await _build_status_text()
         msg = event.message if hasattr(event, 'message') else await event.get_message()
-        if not PSUTIL_AVAILABLE: st = f"⌬ <b>𝐄𝐫𝐫𝐨𝐫</b> ↬ <code>❌ psutil not installed</code>\n⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/ravenu899'>𝑹@𝒗𝒆𝒏</a>"
-        else:
-            u_sec = int(time.time() - psutil.boot_time())
-            b_sec = int(time.time() - BOT_START_TIME)
-            cu = psutil.cpu_percent(interval=0)
-            mem = psutil.virtual_memory()
-            disk = psutil.disk_usage("/")
-            net = psutil.net_io_counters()
-            st = f"""⌬ <b>𝐁𝐨𝐭 𝐒𝐭𝐚𝐭𝐮𝐬</b> ↬ <code>✅ Active</code>
-――――――――――――――
-⌬ <b>𝐁𝐨𝐭 𝐔𝐩𝐭𝐢𝐦𝐞</b> ↬ <code>{b_sec//86400}d {(b_sec%86400)//3600:02}:{(b_sec%3600)//60:02}:{b_sec%60:02}</code>
-⌬ <b>𝐒𝐲𝐬𝐭𝐞𝐦 𝐔𝐩𝐭𝐢𝐦𝐞</b> ↬ <code>{u_sec//86400}d {(u_sec%86400)//3600:02}:{(u_sec%3600)//60:02}:{u_sec%60:02}</code>
-――――――――――――――
-⌬ <b>𝐂𝐏𝐔</b> ↬ <code>{cu:.1f}% ({psutil.cpu_count()} cores)</code>
-⌬ <b>𝐑𝐀𝐌</b> ↬ <code>{mem.used/(1024**3):.2f}GB / {mem.total/(1024**3):.2f}GB</code>
-⌬ <b>𝐃𝐢𝐬𝐤</b> ↬ <code>{disk.used/(1024**3):.2f}GB / {disk.total/(1024**3):.2f}GB</code>
-⌬ <b>𝐍𝐞𝐭𝐰𝐨𝐫𝐤</b> ↬ <code>↑ {net.bytes_sent/(1024**2):.1f}MB ↓ {net.bytes_recv/(1024**2):.1f}MB</code>
-――――――――――――――
-⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/ravenu899'>𝑹@𝒗𝒆𝒏</a>"""
         await styled_edit(msg, st, buttons=[[pbtn("🔄 Refresh", data="refresh_status")]])
     except: pass
 

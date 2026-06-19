@@ -130,6 +130,11 @@ API_ID = int(os.getenv('API_ID', 0))
 API_HASH = os.getenv('API_HASH', '').strip()
 BOT_TOKEN = os.getenv('BOT_TOKEN', '').strip()
 
+# ====================== CLIENT SETUP (تم إصلاح الخطأ هنا!) ======================
+client = TelegramClient('razor_x_bot', API_ID, API_HASH)
+client_instance = client
+# ==============================================================================
+
 _admin_env = os.getenv("ADMIN_ID", "8879293808")
 try:
     ADMIN_ID = [int(x.strip()) for x in _admin_env.split(",") if x.strip()]
@@ -142,7 +147,7 @@ JOIN_CHANNEL_ID = int(os.getenv("JOIN_CHANNEL_ID", 0))
 
 JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
 JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
-FORCE_JOIN_IMAGES = [] # تم التفريغ لمنع الأخطاء
+FORCE_JOIN_IMAGES = []
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://web-production-e6929.up.railway.app/shopify")
 RAZORPAY_API_URL = os.getenv("RAZORPAY_API_URL", "https://rz.rcvan.indevs.in/rz")
@@ -309,8 +314,6 @@ def normalize_site_url(url):
     if url.startswith('www.'): url = url[4:]
     if '/' in url: url = url.split('/')[0]
     return url
-
-client_instance = None
 
 def build_entities(html_text, emoji_ids=None):
     try:
@@ -1046,13 +1049,46 @@ async def _run_mass_process(event, cards, proxies, send_approved, process_store,
     process_store.pop(uid, None)
     await cleanup_user_http_session(uid, sem_type); cleanup_user_sem(uid)
 
+async def _send_mass_hit(card, result, status, uid, username, name, is_rz=False):
+    await asyncio.sleep(HIT_DELAY)
+    try:
+        bi = await get_bin_info(card.split("|")[0])
+        gw = result.get('Gateway', 'RazorPay' if is_rz else 'Shopify')
+        resp = result.get('Response', '')[:150]
+        if is_rz:
+            msg, eid = format_card_result_no_price(status, card, gw, resp, bi)
+        else:
+            msg, eid = format_card_result(status, card, gw, resp, result.get('Price', '-'), result.get('site', '-'), bi, 0.0)
+        try: await styled_send(uid, msg, emoji_ids=eid, buttons=HIT_BUTTON)
+        except: pass
+        if status == "Charged":
+            asyncio.create_task(send_channel_hit(result, uid, username, name, "RazorPay" if is_rz else "Shopify"))
+    except: pass
+
+async def send_final_file(uid, charged, approved, declined, errors, total, hits=None, target_chat=None):
+    hits = hits or []
+    fn = f"razor_x_{uid}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    target = target_chat or uid
+    try:
+        async with aiofiles.open(fn, 'w', encoding='utf-8') as f:
+            await f.write(f"{'='*49}\nRAZOR X RESULTS\n{'='*49}\n\nCharged: {charged}\nApproved: {approved}\nDeclined: {declined}\nErrors: {errors}\nTotal: {total}\n")
+            if hits:
+                await f.write(f"\n{'='*49}\nHITS\n{'='*49}\n\n")
+                for h in hits: await f.write(h + "\n")
+        try: await styled_send(target, f"{PE} <b>{bs('Results')}</b> {PE}", emoji_ids=[CE["fire"], CE["fire"]], file=fn)
+        except: pass
+        try: os.remove(fn)
+        except: pass
+    except: pass
+
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]msp\b'))
 async def mass_check_cmd(event):
     if not await force_join_check(event): return
     _, at, plan = await get_user_access(event)
     if at == "banned": t, e = banned_user_message(); return await styled_reply(event, t, emoji_ids=e)
     uid = event.sender_id
-    if uid not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
+    if uid not in ADMIN_ID and not is_paid_plan(plan):
+        return await send_premium_only_message(event)
     cl = get_cc_limit(plan, uid)
     if uid in ACTIVE_MTXT_PROCESSES: return await styled_reply(event, f"{PE} <b>{bs('Already running')}</b>", emoji_ids=[CE["warn"]])
     content, from_inline = "", False
@@ -1125,7 +1161,8 @@ async def mrz_mass_check_cmd(event):
     _, at, plan = await get_user_access(event)
     if at == "banned": t, e = banned_user_message(); return await styled_reply(event, t, emoji_ids=e)
     uid = event.sender_id
-    if uid not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
+    if uid not in ADMIN_ID and not is_paid_plan(plan):
+        return await send_premium_only_message(event)
     cl = get_cc_limit(plan, uid)
     if uid in ACTIVE_MRZ_PROCESSES: return await styled_reply(event, f"{PE} <b>{bs('Already running')}</b>", emoji_ids=[CE["warn"]])
     content, from_inline = "", False

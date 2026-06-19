@@ -1,111 +1,281 @@
-# database.py
 import os
+import json
 import datetime
-import certifi
-import dns.resolver
-from motor.motor_asyncio import AsyncIOMotorClient
+import random
+import uuid
 
-# --- DNS Patch ---
-original_init = dns.resolver.Resolver.__init__
+DB_FILE = "database.json"
 
-def patched_init(self, filename='/etc/resolv.conf', configure=True):
-    original_init(self, filename=filename, configure=False)
-    self.nameservers = ['8.8.8.8', '8.8.4.4']
+def read_db():
+    if not os.path.exists(DB_FILE):
+        return {
+            "users": {},
+            "keys": [],
+            "proxies": [],
+            "sites": [],
+            "cards": [],
+            "global_sites": [],
+            "joined_users": {}
+        }
+    try:
+        with open(DB_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return {
+            "users": {},
+            "keys": [],
+            "proxies": [],
+            "sites": [],
+            "cards": [],
+            "global_sites": [],
+            "joined_users": {}
+        }
 
-dns.resolver.Resolver.__init__ = patched_init
-# -----------------
-
-MONGO_URL = "mongodb+srv://mhmwdalsrayrh96_db_user:YFvspjKzOYmkI6Vy@cluster0.xzvpqci.mongodb.net/?appName=Cluster0&retryWrites=true&w=majority&tlsAllowInvalidCertificates=true"
-DB_NAME = os.getenv("DB_NAME", "razor_x_bot")
-
-client = AsyncIOMotorClient(
-    MONGO_URL,
-    tls=True,
-    tlsCAFile=certifi.where(),
-    tlsAllowInvalidCertificates=True,
-    tlsAllowInvalidHostnames=True
-)
-db = client[DB_NAME]
-
-# Collections
-users_col = db["users"]
-keys_col = db["keys"]
-proxies_col = db["proxies"]
-sites_col = db["sites"]
-cards_col = db["cards"]
-global_sites_col = db["global_sites"]
-joined_col = db["joined_users"]
+def write_db(data):
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
 
 async def init_db():
     try:
-        await users_col.create_index("user_id", unique=True)
-        await keys_col.create_index("key", unique=True)
-        await proxies_col.create_index([("user_id", 1), ("proxy_url", 1)])
-        await sites_col.create_index([("user_id", 1), ("site", 1)])
-        await global_sites_col.create_index("site", unique=True)
-        await cards_col.create_index("created_at")
-        await joined_col.create_index("user_id", unique=True)
-        print("✅ 𝗥𝗔𝗭𝗢𝗥 𝗫 𝗗𝗮𝘁𝗮𝗯𝗮𝘀𝗲 𝗶𝗻𝗶𝘁𝗶𝗮𝗹𝗶𝘇𝗲𝗱 𝘀𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹𝗹𝘆!")
+        data = read_db()
+        write_db(data)
+        print("✅ 𝗥𝗔𝗭𝗢𝗥 𝗫 𝗗𝗮𝘁𝗮𝗯𝗮𝘀𝗲 𝗶𝗻𝗶𝘁𝗶𝗮𝗹𝗶𝘇𝗲𝗱 𝘀𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹𝗹𝘆! (Local JSON)")
     except Exception as e:
         print(f"⚠️ 𝗗𝗕 𝗶𝗻𝗶𝘁 𝘄𝗮𝗿𝗻𝗶𝗻𝗴: {e}")
 
 async def ensure_user(user_id: int):
-    existing = await users_col.find_one({"user_id": user_id})
-    if not existing:
-        await users_col.insert_one({
+    data = read_db()
+    uid_str = str(user_id)
+    if uid_str not in data["users"]:
+        data["users"][uid_str] = {
             "user_id": user_id,
             "plan": "Bronze",
             "expiry": None,
             "banned": False,
             "banned_by": None,
-            "created_at": datetime.datetime.utcnow()
-        })
+            "created_at": datetime.datetime.utcnow().isoformat()
+        }
+        write_db(data)
 
 async def get_user_plan(user_id: int) -> str:
-    user = await users_col.find_one({"user_id": user_id})
+    data = read_db()
+    uid_str = str(user_id)
+    user = data["users"].get(uid_str)
+    
     if not user:
         return "Bronze"
+        
     plan = user.get("plan", "Bronze")
     expiry = user.get("expiry")
-    if expiry and datetime.datetime.utcnow() > expiry:
-        await users_col.update_one(
-            {"user_id": user_id},
-            {"$set": {"plan": "Bronze", "expiry": None}}
-        )
-        return "Bronze"
+    
+    if expiry:
+        exp_date = datetime.datetime.fromisoformat(expiry)
+        if datetime.datetime.utcnow() > exp_date:
+            data["users"][uid_str]["plan"] = "Bronze"
+            data["users"][uid_str]["expiry"] = None
+            write_db(data)
+            return "Bronze"
+            
     return plan
 
 async def set_user_plan(user_id: int, plan: str, days: int = 0):
+    data = read_db()
+    uid_str = str(user_id)
+    
     expiry = None
     if days > 0:
-        expiry = datetime.datetime.utcnow() + datetime.timedelta(days=days)
-    await users_col.update_one(
-        {"user_id": user_id},
-        {"$set": {
-            "plan": plan,
-            "expiry": expiry,
-            "premium_days": days,
-            "updated_at": datetime.datetime.utcnow()
-        }},
-        upsert=True
-    )
+        expiry = (datetime.datetime.utcnow() + datetime.timedelta(days=days)).isoformat()
+        
+    if uid_str not in data["users"]:
+        data["users"][uid_str] = {"user_id": user_id, "created_at": datetime.datetime.utcnow().isoformat()}
+        
+    data["users"][uid_str]["plan"] = plan
+    data["users"][uid_str]["expiry"] = expiry
+    data["users"][uid_str]["premium_days"] = days
+    data["users"][uid_str]["updated_at"] = datetime.datetime.utcnow().isoformat()
+    
+    write_db(data)
 
 async def is_premium_user(user_id: int) -> bool:
     plan = await get_user_plan(user_id)
     return plan in ["Core", "Elite", "Root", "X"]
 
 async def is_banned_user(user_id: int) -> bool:
-    user = await users_col.find_one({"user_id": user_id})
+    data = read_db()
+    user = data["users"].get(str(user_id))
     return user.get("banned", False) if user else False
 
 async def mark_user_joined(user_id: int):
-    await joined_col.update_one(
-        {"user_id": user_id},
-        {"$set": {"user_id": user_id, "joined_at": datetime.datetime.utcnow()}},
-        upsert=True
-    )
+    data = read_db()
+    data["joined_users"][str(user_id)] = {
+        "user_id": user_id,
+        "joined_at": datetime.datetime.utcnow().isoformat()
+    }
+    write_db(data)
 
 async def is_user_marked_joined(user_id: int) -> bool:
+    data = read_db()
+    return str(user_id) in data["joined_users"]
+
+async def remove_joined_mark(user_id: int):
+    data = read_db()
+    if str(user_id) in data["joined_users"]:
+        del data["joined_users"][str(user_id)]
+        write_db(data)
+
+async def add_proxy_db(user_id: int, proxy_data: dict):
+    data = read_db()
+    proxy_doc = {
+        "_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "ip": proxy_data.get("ip"),
+        "port": proxy_data.get("port"),
+        "username": proxy_data.get("username"),
+        "password": proxy_data.get("password"),
+        "proxy_url": proxy_data.get("proxy_url"),
+        "proxy_type": proxy_data.get("type", "http"),
+        "added_at": datetime.datetime.utcnow().isoformat()
+    }
+    data["proxies"].append(proxy_doc)
+    write_db(data)
+
+async def get_all_user_proxies(user_id: int):
+    data = read_db()
+    user_proxies = [p for p in data["proxies"] if p["user_id"] == user_id]
+    user_proxies.sort(key=lambda x: x.get("added_at", ""))
+    return user_proxies[:200]
+
+async def get_proxy_count(user_id: int) -> int:
+    data = read_db()
+    return sum(1 for p in data["proxies"] if p["user_id"] == user_id)
+
+async def get_random_proxy(user_id: int):
+    proxies = await get_all_user_proxies(user_id)
+    if not proxies:
+        return None
+    return random.choice(proxies)
+
+async def remove_proxy_by_index(user_id: int, index: int):
+    data = read_db()
+    user_proxies = [p for p in data["proxies"] if p["user_id"] == user_id]
+    user_proxies.sort(key=lambda x: x.get("added_at", ""))
+    
+    if 0 <= index < len(user_proxies):
+        target_proxy = user_proxies[index]
+        data["proxies"] = [p for p in data["proxies"] if p.get("_id") != target_proxy.get("_id")]
+        write_db(data)
+        return target_proxy
+    return None
+
+async def remove_proxy_by_url(user_id: int, proxy_url: str):
+    data = read_db()
+    initial_length = len(data["proxies"])
+    data["proxies"] = [p for p in data["proxies"] if not (p["user_id"] == user_id and p["proxy_url"] == proxy_url)]
+    
+    if len(data["proxies"]) < initial_length:
+        write_db(data)
+        return True
+    return False
+
+async def clear_all_proxies(user_id: int) -> int:
+    data = read_db()
+    initial_length = len(data["proxies"])
+    data["proxies"] = [p for p in data["proxies"] if p["user_id"] != user_id]
+    deleted_count = initial_length - len(data["proxies"])
+    
+    if deleted_count > 0:
+        write_db(data)
+    return deleted_count
+
+async def add_site_db(user_id: int, site: str) -> bool:
+    data = read_db()
+    for s in data["sites"]:
+        if s["user_id"] == user_id and s["site"] == site:
+            return False
+            
+    data["sites"].append({
+        "user_id": user_id,
+        "site": site,
+        "added_at": datetime.datetime.utcnow().isoformat()
+    })
+    write_db(data)
+    return True
+
+async def get_user_sites(user_id: int):
+    data = read_db()
+    return [s["site"] for s in data["sites"] if s["user_id"] == user_id]
+
+async def remove_site_db(user_id: int, site: str) -> bool:
+    data = read_db()
+    initial_length = len(data["sites"])
+    data["sites"] = [s for s in data["sites"] if not (s["user_id"] == user_id and s["site"] == site)]
+    
+    if len(data["sites"]) < initial_length:
+        write_db(data)
+        return True
+    return False
+
+async def add_global_site(site: str) -> bool:
+    data = read_db()
+    if any(s["site"] == site for s in data["global_sites"]):
+        return False
+        
+    data["global_sites"].append({
+        "site": site,
+        "added_at": datetime.datetime.utcnow().isoformat()
+    })
+    write_db(data)
+    return True
+
+async def get_global_sites():
+    data = read_db()
+    return [s["site"] for s in data["global_sites"]]
+
+async def remove_global_site(site: str) -> bool:
+    data = read_db()
+    initial_length = len(data["global_sites"])
+    data["global_sites"] = [s for s in data["global_sites"] if s["site"] != site]
+    
+    if len(data["global_sites"]) < initial_length:
+        write_db(data)
+        return True
+    return False
+
+async def get_total_users() -> int:
+    data = read_db()
+    return len(data["users"])
+
+async def get_premium_count() -> int:
+    data = read_db()
+    premium_plans = ["Core", "Elite", "Root", "X"]
+    return sum(1 for u in data["users"].values() if u.get("plan") in premium_plans)
+
+async def get_all_premium_users():
+    data = read_db()
+    premium_plans = ["Core", "Elite", "Root", "X"]
+    return [u for u in data["users"].values() if u.get("plan") in premium_plans]
+
+async def get_total_sites_count() -> int:
+    data = read_db()
+    return len(data["sites"])
+
+async def get_users_with_sites() -> int:
+    data = read_db()
+    unique_users = set(s["user_id"] for s in data["sites"])
+    return len(unique_users)
+
+async def get_sites_per_user():
+    data = read_db()
+    counts = {}
+    for s in data["sites"]:
+        uid = s["user_id"]
+        counts[uid] = counts.get(uid, 0) + 1
+    return [{"user_id": k, "cnt": v} for k, v in counts.items()]
+
+async def get_all_sites_detail():
+    data = read_db()
+    sorted_sites = sorted(data["sites"], key=lambda x: x["user_id"])
+    return sorted_sites
     doc = await joined_col.find_one({"user_id": user_id})
     return doc is not None
 

@@ -5,3 +5,6 @@ dnspython
 certifi
 pyrogram
 tgcrypto
+aiohttp
+requests
+python-dotenv

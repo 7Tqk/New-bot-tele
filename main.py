@@ -31,7 +31,7 @@ try:
 except ImportError:
     PSUTIL_AVAILABLE = False
 
-from database import init_db, db, ensure_user, get_user_plan, set_user_plan, is_premium_user, is_banned_user
+from database2 import init_db, db, ensure_user, get_user_plan, set_user_plan, is_premium_user, is_banned_user
 
 ')'
 

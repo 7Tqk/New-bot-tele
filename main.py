@@ -593,7 +593,7 @@ def banned_user_message():
     return f"""{PE} <b>{bs('Banned')}</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>{bs('Not allowed')}</b>\n{PE} <b>{bs('Appeal')}:</b> <i>{bs('Contact Admin')}</i>""", [CE["stop"], CE["stop"], CE["warn"], CE["info"]]
 
 async def send_premium_only_message(event):
-    return await styled_reply(event, f"""{PE} <b>{bs('Premium Only')}</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>{bs('This feature requires an active plan')}</b>\n{PE} <i>{bs('Use /plan to see available plans')}</i>""", buttons=[[pbtn(bs("Upgrade"), url="https://t.me/ravenu899")]], emoji_ids=[CE["stop"], CE["stop"], CE["warn"], CE["info"]])
+    return await styled_reply(event, f"""{PE} <b>{bs('Premium Only')}</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>{bs('This feature requires an active plan')}</b>\n{PE} <i>{bs('Use /plan to see available plans')}</i>""", buttons=[[pbtn(bs("Upgrade"), url="https://t.me/Dddadddyttt")]], emoji_ids=[CE["stop"], CE["stop"], CE["warn"], CE["info"]])
 
 async def send_group_only_message(event):
     return await styled_reply(event, f"""{PE} <b>{bs('Group Only')}</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>{bs('Free users')} → {bs('group only')}</b>\n{PE} <i>{bs('Upgrade for private access')}</i>""", emoji_ids=[CE["stop"], CE["stop"], CE["warn"], CE["gem"]])
@@ -604,11 +604,11 @@ async def _check_free_limits(event, uid, plan, is_group):
         if not is_group: await send_group_only_message(event); return False
         used = get_free_sp_usage(uid)
         if used >= FREE_SP_DAILY_LIMIT:
-            await styled_reply(event, f"{PE} <b>{bs('Daily Limit')}</b> {used}/{FREE_SP_DAILY_LIMIT}", buttons=[[pbtn(bs("Upgrade"), url="https://t.me/ravenu899")]], emoji_ids=[CE["stop"]])
+            await styled_reply(event, f"{PE} <b>{bs('Daily Limit')}</b> {used}/{FREE_SP_DAILY_LIMIT}", buttons=[[pbtn(bs("Upgrade"), url="https://t.me/Dddadddyttt")]], emoji_ids=[CE["stop"]])
             return False
         cd = get_free_sp_cooldown_remaining(uid)
         if cd > 0:
-            await styled_reply(event, f"⚠️ <b>{bs('Wait')} {cd}{bs('s')}</b>", buttons=[[pbtn(bs("Upgrade"), url="https://t.me/ravenu899")]])
+            await styled_reply(event, f"⚠️ <b>{bs('Wait')} {cd}{bs('s')}</b>", buttons=[[pbtn(bs("Upgrade"), url="https://t.me/Dddadddyttt")]])
             return False
     return True
 
@@ -673,7 +673,7 @@ async def start(event):
 |   {PE} <code>/plan</code> ━ <b>{bs('Plans')}</b>
 <b>━━━━━━━━━━━━━━━━━</b>
 {sl}"""
-        kb = [[pbtn(bs("Plans"), data="show_plans"), pbtn(bs("Support"), url="https://t.me/ravenu899")],
+        kb = [[pbtn(bs("Plans"), data="show_plans"), pbtn(bs("Support"), url="https://t.me/Dddadddyttt")],
               [pbtn(bs("Channel"), url=JOIN_CHANNEL_LINK), pbtn(bs("Group"), url=JOIN_GROUP_LINK)]]
         ei = [CE["bolt"], CE["search"], CE["pin"], CE["fire"], CE["search"], CE["pin"], CE["brain"], CE["plus"], CE["cross"], CE["globe"], CE["link"], CE["shield"], CE["link"], CE["eyes"], CE["tick"], CE["trash"], CE["info"], CE["info"]] + se
         
@@ -699,7 +699,7 @@ async def plans_cb(event):
     plans_text = f"""{PE} <b>{bs('Plans')}</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>"""
     for pid, pi in PLANS.items(): plans_text += f"\n{pi['emoji']} <b>{pi['name']}</b> ━ <b>{pi['duration_days']}{bs('d')}</b> ━ <b>{pi['price']}</b>"
     plans_text += f"\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>{bs('Current')}:</b> <b>{cp.upper()}</b>"
-    await styled_send(event.chat_id, plans_text, buttons=[[pbtn(bs("Upgrade"), url="https://t.me/ravenu899")]], emoji_ids=[CE["fire"], CE["fire"], CE["crown"]])
+    await styled_send(event.chat_id, plans_text, buttons=[[pbtn(bs("Upgrade"), url="https://t.me/Dddadddyttt")]], emoji_ids=[CE["fire"], CE["fire"], CE["crown"]])
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]plan$'))
 async def show_plans(event):
@@ -708,7 +708,7 @@ async def show_plans(event):
     plans_text = f"""{PE} <b>{bs('Plans')}</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>"""
     for pid, pi in PLANS.items(): plans_text += f"\n{pi['emoji']} <b>{pi['name']}</b> ━ <b>{pi['duration_days']}{bs('d')}</b> ━ <b>{pi['price']}</b>"
     plans_text += f"""\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>{bs('Current')}:</b> <b>{cp.upper()}</b>\n{PE} <i>{bs('Contact admin')}</i>"""
-    await styled_reply(event, plans_text, buttons=[[pbtn(bs("Upgrade"), url="https://t.me/ravenu899")]], emoji_ids=[CE["fire"], CE["fire"], CE["crown"]])
+    await styled_reply(event, plans_text, buttons=[[pbtn(bs("Upgrade"), url="https://t.me/Dddadddyttt")]], emoji_ids=[CE["fire"], CE["fire"], CE["crown"]])
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]info$'))
 async def info_cmd(event):
@@ -1468,9 +1468,9 @@ def _get_system_info():
 
 async def _build_status_text():
     s = await asyncio.get_event_loop().run_in_executor(None, _get_system_info)
-    if s.get("error"): return f"⌬ <b>𝐄𝐫𝐫𝐨𝐫</b> ↬ <code>❌ {s['error']}</code>\n⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/ravenu899'>𝑹@𝒗𝒆𝒏</a>"
+    if s.get("error"): return f"⌬ <b>𝐄𝐫𝐫𝐨𝐫</b> ↬ <code>❌ {s['error']}</code>\n⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/Dddadddyttt'>𝑹@𝒗𝒆𝒏</a>"
     if s.get("psutil_missing"):
-        return f"⌬ <b>𝐁𝐨𝐭 𝐒𝐭𝐚𝐭𝐮𝐬</b> ↬ <code>✅ Active</code>\n――――――――――――――\n⌬ <b>𝐁𝐨𝐭 𝐔𝐩𝐭𝐢𝐦𝐞</b> ↬ <code>{s['bot_uptime_str']}</code>\n⌬ <b>𝐋𝐚𝐬𝐭 𝐑𝐞𝐬𝐭𝐚𝐫𝐭</b> ↬ <code>{s['bot_restart_time']}</code>\n――――――――――――――\n⚠️ <i>System metrics unavailable (psutil not installed)</i>\n――――――――――――――\n⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/ravenu899'>𝑹@𝒗𝒆𝒏</a>"
+        return f"⌬ <b>𝐁𝐨𝐭 𝐒𝐭𝐚𝐭𝐮𝐬</b> ↬ <code>✅ Active</code>\n――――――――――――――\n⌬ <b>𝐁𝐨𝐭 𝐔𝐩𝐭𝐢𝐦𝐞</b> ↬ <code>{s['bot_uptime_str']}</code>\n⌬ <b>𝐋𝐚𝐬𝐭 𝐑𝐞𝐬𝐭𝐚𝐫𝐭</b> ↬ <code>{s['bot_restart_time']}</code>\n――――――――――――――\n⚠️ <i>System metrics unavailable (psutil not installed)</i>\n――――――――――――――\n⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/Dddadddyttt'>𝑹@𝒗𝒆𝒏</a>"
     msg = (f"⌬ <b>𝐁𝐨𝐭 𝐒𝐭𝐚𝐭𝐮𝐬</b> ↬ <code>✅ Active</code>\n――――――――――――――\n"
            f"⌬ <b>𝐁𝐨𝐭 𝐔𝐩𝐭𝐢𝐦𝐞</b> ↬ <code>{s['bot_uptime_str']}</code>\n"
            f"⌬ <b>𝐒𝐲𝐬𝐭𝐞𝐦 𝐔𝐩𝐭𝐢𝐦𝐞</b> ↬ <code>{s['uptime_str']}</code>\n"
@@ -1483,7 +1483,7 @@ async def _build_status_text():
            f"⊀ <b>Usage</b> ↬ <code>{_create_progress_bar(s['disk_percent'])}</code>\n――――――――――――――\n"
            f"⌬ <b>𝐍𝐞𝐭𝐰𝐨𝐫𝐤</b> ↬ <code>↑ {s['bytes_sent']:.1f}MB ↓ {s['bytes_recv']:.1f}MB</code>\n")
     if s["cpu_critical"] or s["memory_critical"] or s["disk_critical"]: msg += "\n⚠️ <b>Warning:</b> System resources critically low!"
-    msg += f"\n――――――――――――――\n⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/ravenu899'>𝑹@𝒗𝒆𝒏</a>"
+    msg += f"\n――――――――――――――\n⌬ <b>𝐁𝐨𝐭 𝐁𝐲</b> ↬ <a href='https://t.me/Dddadddyttt'>𝑹@𝒗𝒆𝒏</a>"
     return msg
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]status$'))
@@ -1524,7 +1524,7 @@ async def _handle_plan_assign(event, plan_key):
     current_plan = await get_user_plan(target_uid); is_upgrade = is_paid_plan(current_plan)
     await set_user_plan(target_uid, pi["tier"], pi["duration_days"])
     expiry_date = (datetime.now() + timedelta(days=pi["duration_days"])).strftime('%Y-%m-%d %H:%M:%S')
-    await styled_reply(event, f"""<b>✅ {bs('Plan Updated')}</b>\n<a href='https://t.me/ravenu899'>⊀</a> <b>{bs('User')}</b> ↬ <a href='tg://user?id={target_uid}'>{target_name}</a>\n<a href='https://t.me/ravenu899'>⊀</a> <b>{bs('Plan')}</b> ↬ {pi['emoji']} <b>{pi['name']}</b>\n<a href='https://t.me/ravenu899'>⊀</a> <b>{bs('Duration')}</b> ↬ <code>{pi['duration_days']} {bs('days')}</code>\n<a href='https://t.me/ravenu899'>⊀</a> <b>{bs('Expires')}</b> ↬ <code>{expiry_date}</code>""")
+    await styled_reply(event, f"""<b>✅ {bs('Plan Updated')}</b>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>{bs('User')}</b> ↬ <a href='tg://user?id={target_uid}'>{target_name}</a>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>{bs('Plan')}</b> ↬ {pi['emoji']} <b>{pi['name']}</b>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>{bs('Duration')}</b> ↬ <code>{pi['duration_days']} {bs('days')}</code>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>{bs('Expires')}</b> ↬ <code>{expiry_date}</code>""")
     try: await styled_send(target_uid, f"""<b>🎉 {bs('Plan Upgraded!')} 🎉</b>\n{pi['emoji']} <b>{pi['name']}</b> ━ <code>{pi['duration_days']}d</code>\n{bs('Limit')}: {get_cc_limit(pi['tier'])} CCs\n{bs('Expires')}: {expiry_date}""")
     except: pass
     try:

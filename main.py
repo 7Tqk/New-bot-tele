@@ -87,9 +87,11 @@ def bs(text):
 import os
 import json
 
-API_ID = 
-API_HASH = "83564c20e16add7e5388ec749a9efd4a"
-BOT_TOKEN = "YOUR_BOT_TOKEN"
+import os
+
+API_ID = int(os.getenv('API_ID', 0))
+API_HASH = os.getenv('API_HASH')
+BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = [8879293808]
 HIT_CHANNEL_ID = int(os.getenv("ID_HIT_CHANNEL", 0))
 JOIN_GROUP_ID = int(os.getenv("JOIN_GROUP_ID", 0))

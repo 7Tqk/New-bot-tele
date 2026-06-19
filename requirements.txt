@@ -1,7 +1,6 @@
-telethon
-aiohttp
-aiofiles
 motor
 pymongo
 dnspython
-psutil
+certifi
+pyrogram
+tgcrypto

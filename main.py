@@ -127,8 +127,8 @@ JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
 JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
 FORCE_JOIN_IMAGES = []
 
-# --- UPDATED API ENDPOINTS ---
-API_BASE_URL = os.getenv("API_BASE_URL", "http://62.72.20.10:8081/")
+# --- API ENDPOINTS (Reverted to Railway) ---
+API_BASE_URL = os.getenv("API_BASE_URL", "https://web-production-e6929.up.railway.app/shopify")
 RAZORPAY_API_URL = os.getenv("RAZORPAY_API_URL", "https://rz.rcvan.indevs.in/rz")
 
 SP_PER_USER_WORKERS = 30

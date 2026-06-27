@@ -127,7 +127,8 @@ JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
 JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
 FORCE_JOIN_IMAGES = []
 
-API_BASE_URL = os.getenv("API_BASE_URL", "https://web-production-e6929.up.railway.app/shopify")
+# --- UPDATED API ENDPOINTS ---
+API_BASE_URL = os.getenv("API_BASE_URL", "http://62.72.20.10:8081/")
 RAZORPAY_API_URL = os.getenv("RAZORPAY_API_URL", "https://rz.rcvan.indevs.in/rz")
 
 SP_PER_USER_WORKERS = 30
@@ -317,6 +318,30 @@ def parse_proxy_format(proxy):
     except: return None
     pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
     return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
+
+# ====================== TXT FILE LOADERS ======================
+SITES_FILE = 'sites.txt'
+PROXY_FILE = 'proxy.txt'
+
+def get_file_lines(filepath):
+    if not os.path.exists(filepath): return []
+    try:
+        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+            return [line.strip() for line in f if line.strip()]
+    except Exception as e:
+        print(f"Error reading {filepath}: {e}")
+        return []
+
+def get_txt_sites():
+    return [normalize_site_url(s) for s in get_file_lines(SITES_FILE) if s]
+
+def get_txt_proxies():
+    proxies = []
+    for line in get_file_lines(PROXY_FILE):
+        p = parse_proxy_format(line)
+        if p: proxies.append(p)
+    return proxies
+# ==============================================================
 
 # ====================== ROTATOR & DETECTION ======================
 class SmartRotator:
@@ -510,7 +535,7 @@ async def styled_reply(event, html_text, buttons=None, emoji_ids=None, file=None
 async def styled_send(chat_id, html_text, buttons=None, emoji_ids=None, file=None):
     try:
         text, entities = build_entities(html_text, emoji_ids)
-        return await asyncio.wait_for(client_instance.send_message(chat_id, text, formatting_entities=entities, buttons=buttons, file=file if file else None, link_preview=False), timeout=15)
+        return await asyncio.wait_for(client_instance.send_message(chat_id, text, formatting_entities=entities, buttons=buttons, file=file if file else None, link_link_preview=False), timeout=15)
     except: return None
 
 async def styled_edit(msg, html_text, buttons=None, emoji_ids=None):
@@ -629,7 +654,6 @@ async def start(event):
         await ensure_user(event.sender_id)
         if not await force_join_check(event): return
         
-        # FIX: can_use properly used
         uid = event.sender_id
         is_allowed, at = await can_use(uid, event.chat)
         if at == "banned":
@@ -1065,6 +1089,14 @@ async def single_cc_check(event):
             if not sites:
                 try: sites = await get_global_sites()
                 except: pass
+
+        # --- دمج الملفات النصية مع بيانات قاعدة البيانات ---
+        sites.extend(get_txt_sites())
+        sites = list(dict.fromkeys([s for s in sites if s]))
+        proxies.extend(get_txt_proxies())
+        proxies = list({p['proxy_url']: p for p in proxies if p}.values())
+        # ---------------------------------------------------
+
         if not sites: return await styled_reply(event, f"{PE} <b>{bs('No sites!')} </b><code>/add</code>", emoji_ids=[CE["warn"]])
         rm = await event.get_reply_message() if event.reply_to_msg_id else None
         card = _get_card_from_event(event, rm)
@@ -1114,6 +1146,12 @@ async def rz_single_check(event):
             for aid in ADMIN_ID:
                 proxies = await get_all_user_proxies(aid)
                 if proxies: break
+
+        # --- دمج ملف البروكسيات النصي ---
+        proxies.extend(get_txt_proxies())
+        proxies = list({p['proxy_url']: p for p in proxies if p}.values())
+        # --------------------------------
+
         rm = await event.get_reply_message() if event.reply_to_msg_id else None
         card = _get_card_from_event(event, rm)
         if not card: return await styled_reply(event, f"{PE} <code>/rz card|mm|yy|cvv</code>", emoji_ids=[CE["info"]])
@@ -1290,13 +1328,21 @@ async def mass_check_cmd(event):
         else: return await styled_reply(event, f"{PE} <b>{bs('Reply to .txt or paste cards after')} </b><code>/msp</code>", emoji_ids=[CE["info"]])
         
         sites = await get_user_sites(uid)
+        proxies = await get_all_user_proxies(uid)
+
+        # --- دمج الملفات النصية مع بيانات قاعدة البيانات ---
+        sites.extend(get_txt_sites())
+        sites = list(dict.fromkeys([s for s in sites if s]))
+        proxies.extend(get_txt_proxies())
+        proxies = list({p['proxy_url']: p for p in proxies if p}.values())
+        # ---------------------------------------------------
+
         if not sites: return await styled_reply(event, f"{PE} <b>{bs('No sites!')} </b><code>/add</code>", emoji_ids=[CE["warn"]])
         
         cards = extract_cc(content)
         if not cards: return await styled_reply(event, f"{PE} <b>{bs('No valid cards')}</b>", emoji_ids=[CE["cross"]])
         if len(cards) > cl: cards = cards[:cl]
         await styled_reply(event, f"<pre>{PE} {len(cards)} {bs('CCs')} | {bs('Limit')}: {cl}</pre>", emoji_ids=[CE["star"]])
-        proxies = await get_all_user_proxies(uid)
         rotator = SmartRotator()
         
         async def shopify_check(card, http_session):
@@ -1378,6 +1424,11 @@ async def mrz_mass_check_cmd(event):
         if len(cards) > cl: cards = cards[:cl]
         await styled_reply(event, f"<pre>{PE} {len(cards)} {bs('CCs')} | {bs('RazorPay')} | {bs('Limit')}: {cl}</pre>", emoji_ids=[CE["star"]])
         proxies = await get_all_user_proxies(uid)
+
+        # --- دمج ملف البروكسيات النصي ---
+        proxies.extend(get_txt_proxies())
+        proxies = list({p['proxy_url']: p for p in proxies if p}.values())
+        # --------------------------------
         
         async def rz_check(card, http_session):
             return await check_rz_with_retry(card, proxies, uid, max_retries=3, cancel_check=lambda: ACTIVE_MRZ_PROCESSES.get(uid, {}).get("stopped", True), http_session=http_session)

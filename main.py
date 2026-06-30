@@ -55,10 +55,10 @@ JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
 CHECKER_API_URL = 'http://62.72.20.10:8081/'
 PROXY_FILE = 'proxy.txt'
 
-GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/username/repo/main/sites.txt")
+GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 
 SP_PER_USER_WORKERS = 16
-WORKERS = 30 
+WORKERS = 20 
 PROXY_PER_USER_WORKERS = 50
 BIN_WORKERS = 20
 

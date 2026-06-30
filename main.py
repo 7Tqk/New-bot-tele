@@ -25,7 +25,6 @@ try:
 except ImportError:
     PSUTIL_AVAILABLE = False
 
-# تم إزالة استدعاءات قواعد بيانات المواقع لأننا نعتمد على جيت هب الآن
 from database2 import (
     init_db, ensure_user, get_user_plan, set_user_plan,
     is_premium_user, is_banned_user, get_all_user_proxies,
@@ -57,6 +56,9 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://web-production-e6929.up.railwa
 
 # 👇 ضع رابط ملف الـ sites.txt الخاص بك على جيتهب (يجب أن يكون بصيغة RAW) 👇
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/username/repo/main/sites.txt")
+
+# المتغير الذي كان مفقوداً (حل مشكلة الـ NameError جذرياً)
+PROXY_FILE = 'proxy.txt'
 
 SP_PER_USER_WORKERS = 30
 MSP_PER_USER_WORKERS = 70
@@ -150,7 +152,7 @@ _LAST_SITES_FETCH = 0
 async def get_github_sites():
     global _CACHED_SITES, _LAST_SITES_FETCH
     now = time.time()
-    if _CACHED_SITES and (now - _LAST_SITES_FETCH < 600):  # تحديث المواقع كل 10 دقائق
+    if _CACHED_SITES and (now - _LAST_SITES_FETCH < 600):
         return _CACHED_SITES
         
     try:
@@ -169,7 +171,6 @@ async def get_github_sites():
                         _LAST_SITES_FETCH = now
     except Exception: pass
     
-    # في حال فشل الاتصال بجيت هب، يقرأ من الملف الاحتياطي لو كان موجوداً
     if not _CACHED_SITES and os.path.exists('sites.txt'):
         try:
             with open('sites.txt', 'r', encoding='utf-8') as f:
@@ -204,6 +205,8 @@ async def fetch_random_gif():
 ACTIVE_MTXT_PROCESSES = {}
 USER_APPROVED_PREF = {}
 MAINTENANCE_FILE = "maintenance.json"
+_MAINTENANCE_CACHE = {"enabled": None, "last_check": 0}
+_JOIN_CACHE = {}
 _FREE_SP_USAGE = {}
 _FREE_SP_LAST_USE = {}
 HIT_BUTTON = [[Button.url("Razor X", "https://t.me/Razor_x_1998_bot")]]
@@ -353,6 +356,17 @@ class SmartRotator:
     def report_proxy_fail(self, proxy_url):
         if proxy_url: self._proxy_fails[proxy_url] = self._proxy_fails.get(proxy_url, 0) + 1
 
+SITE_ERROR_KEYWORDS = ['r4 token empty', 'not shopify', 'payment method is not shopify', 'site error', 'hcaptcha detected', 'cloudflare']
+PROXY_ERROR_KEYWORDS = ['proxy dead', 'proxy error', 'proxy timeout', 'proxy connection failed', 'proxy refused', 'timeout', 'timed out']
+
+def is_site_error(text):
+    if not text: return True
+    return any(kw in text.lower().strip() for kw in SITE_ERROR_KEYWORDS)
+
+def is_proxy_error(text):
+    if not text: return False
+    return any(kw in text.lower().strip() for kw in PROXY_ERROR_KEYWORDS)
+
 # ====================== API CHECKERS ======================
 async def test_proxy(proxy_url):
     try:
@@ -378,9 +392,7 @@ def classify_response(rj):
     if price and price != '-': price = f"${price}"
     rl = ar.lower()
     
-    # حماية من الأخطاء العشوائية أو البروكسيات الميتة
-    if any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'failed']) or not ar: 
-        return {"Response": ar or "Connection Timeout", "Price": price, "Gateway": gw, "Status": "SiteError"}
+    if is_site_error(ar) or is_proxy_error(ar) or not ar: return {"Response": ar or "Connection Timeout", "Price": price, "Gateway": gw, "Status": "SiteError"}
     
     ch = ['order_paid', 'payment successful', 'charged']
     ap = ['otp_required', '3d_authentication', '3ds_required', 'insufficient_funds', 'cvc', 'ccn live cvv', 'insufficient funds']
@@ -401,18 +413,15 @@ async def check_card_api(card, site, proxy_data=None, user_id=None, http_session
             ps = f"{proxy_data.get('username','')}:{proxy_data.get('password','')}@{proxy_data['ip']}:{proxy_data['port']}" if proxy_data.get('username') else f"{proxy_data['ip']}:{proxy_data['port']}"
             url += f'&proxy={quote(ps, safe="")}'
         s = http_session or (await get_user_http_session(uid, "sp"))
-        
         async with s.get(url) as r:
-            text_data = await r.text()
-            if r.status != 200: return {"Response": f"HTTP Error {r.status}", "Price": "-", "Gateway": "-", "Status": "SiteError", "card": card}
-            try: rj = json.loads(text_data)
-            except: return {"Response": "Invalid API response", "Price": "-", "Gateway": "-", "Status": "SiteError", "card": card}
-            
-        result = classify_response(rj); result["card"] = card
+            if r.status != 200: return {"Response": f"HTTP Error {r.status}", "Price": "-", "Gateway": "-", "Status": "SiteError", "card": card, "site": site}
+            try: rj = await r.json(content_type=None)
+            except: return {"Response": "Invalid JSON response", "Price": "-", "Gateway": "-", "Status": "SiteError", "card": card, "site": site}
+        result = classify_response(rj); result["card"] = card; result["site"] = site
         return result
-    except Exception as e: return {"Response": "Timeout/Proxy Failed", "Price": "-", "Gateway": "-", "Status": "SiteError", "card": card}
+    except Exception: return {"Response": "Connection Timeout/Proxy Error", "Price": "-", "Gateway": "-", "Status": "SiteError", "card": card, "site": site}
 
-async def check_card_with_retry(card, sites, user_id=None, proxies_data=None, max_retries=5, rotator=None, cancel_check=None, http_session=None):
+async def check_card_with_retry(card, sites, user_id=None, proxies_data=None, max_retries=6, rotator=None, cancel_check=None, http_session=None):
     if not sites: return {"Response": "No sites configured", "Price": "-", "Gateway": "-", "Status": "Error", "card": card}, -1
     tried_sites = set(); tried_proxies = set(); last = None
     
@@ -487,7 +496,7 @@ def pbtn(text, data=None, url=None):
     if data: return Button.inline(text, data.encode() if isinstance(data, str) else data)
     return Button.inline(text, b"none")
 
-# --- تصميم نظيف وفخم للردود باستخدام الـ blockquote مدعوم رسمياً ---
+# --- التنسيق الفخم مدعوم رسميًا ليعمل بدون انهيار في الإرسال ---
 def format_card_result(status, card, gateway, response, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "flag": "🏳️"}
     ps = f"${str(price).replace('$', '')}" if price and price != "-" else "-"
@@ -516,6 +525,19 @@ def format_card_result(status, card, gateway, response, price="-", bin_info=None
 🌍 <b>Country:</b> <code>{bi.get('country', '-')} {bi.get('flag', '🏳️')}</code>
 🏢 <b>Type:</b> <code>{bi.get('brand', '-')} - {bi.get('type', '-')} - {bi.get('level', '-')}</code>
 ⏱ <b>Took:</b> <code>{elapsed:.2f}s</code>""", emoji_id
+
+# دالة إرسال للقناة بأمان تام وتفادي الانهيارات
+async def send_channel_hit(result, uid, username, name, gateway, status="Charged"):
+    if not HIT_CHANNEL_ID: return
+    try:
+        card = result.get("card", "")
+        resp = result.get("Response", "")
+        price = result.get("Price", "-")
+        bi = await get_bin_info(card.split("|")[0])
+        msg, eid = format_card_result(status, card, gateway, resp, price, bi, 0.0)
+        msg += f"\n\n👤 <b>User:</b> <a href='tg://user?id={uid}'>{name}</a> (<code>{username}</code>)"
+        await styled_send(HIT_CHANNEL_ID, msg, emoji_ids=eid, buttons=HIT_BUTTON)
+    except: pass
 
 # ====================== MIDDLEWARES ======================
 async def is_user_joined(user_id):
@@ -683,7 +705,6 @@ async def info_cmd(event):
         used_today = get_free_sp_usage(event.sender_id)
         usage_line = f"\n{PE} <b>Used Today:</b> <code>{used_today}/{FREE_SP_DAILY_LIMIT}</code>" if not is_paid_plan(plan) and event.sender_id not in ADMIN_ID else ""
         
-        # الإحصائيات بعد إلغاء المواقع من الداتا بيز
         await styled_reply(event, f"""{PE} <b>Profile</b> {PE}\n<b>━━━━━━━━━━━━━━━━━</b>\n{PE} <b>ID:</b> <code>{event.sender_id}</code>\n{PE} <b>Status:</b> <code>{status}</code>\n{PE} <b>Plan:</b> {plan_emoji} <b>{plan.upper()}</b>\n{PE} <b>Expiry:</b> <code>{exp_str}</code>\n{PE} <b>Limit:</b> {limit_text}{usage_line}\n{PE} <b>Proxies:</b> <code>{pc}/100</code>""", emoji_ids=[CE["fire"], CE["fire"], CE["info"], CE["star"], CE["crown"], CE["chart"], CE["shield"]])
     except Exception as e: await event.reply(f"⚠️ Error in /info: {e}")
 
@@ -802,7 +823,6 @@ async def single_cc_check(event):
         try: sender = await event.get_sender(); username = sender.username or f"user_{uid}"; name = sender.first_name or username
         except: username, name = f"user_{uid}", "User"
         
-        # سحب المواقع من جيت هب
         sites = await get_github_sites()
         if not sites: return await styled_reply(event, f"{PE} <b>No sites available from GitHub!</b>", emoji_ids=[CE["warn"]])
         
@@ -818,8 +838,14 @@ async def single_cc_check(event):
         proxies = list({p['proxy_url']: p for p in proxies if p}.values())
 
         rm = await event.get_reply_message() if event.reply_to_msg_id else None
-        card = _get_card_from_event(event, rm)
-        if not card: return await styled_reply(event, f"{PE} <code>/sp card|mm|yy|cvv</code>", emoji_ids=[CE["info"]])
+        
+        # استخراج البطاقة
+        content = event.raw_text
+        if rm and rm.text: content = rm.text
+        cards = extract_cc(content)
+        
+        if not cards: return await styled_reply(event, f"{PE} <code>/sp card|mm|yy|cvv</code>", emoji_ids=[CE["info"]])
+        card = cards[0]
         
         if uid not in ADMIN_ID and not is_paid_plan(plan): 
             set_free_sp_last_use(uid); increment_free_sp_usage(uid)
@@ -842,7 +868,6 @@ async def single_cc_check(event):
             try: await lm.delete()
             except: pass
             
-            # --- سحب وإرسال GIF في حال الصيدة بأمان تام ---
             gif_io = await fetch_random_gif() if status in ["Charged", "Approved"] else None
             sent = False
             
@@ -850,14 +875,11 @@ async def single_cc_check(event):
                 try:
                     await styled_reply(event, msg, emoji_ids=eid, buttons=HIT_BUTTON, file=gif_io)
                     sent = True
-                except Exception as e:
-                    print(f"GIF Reply Error: {e}")
+                except Exception: pass
             
-            # إذا فشلت صورة الأنمي، يتم إرسال النص لتفادي اختفاء الصيدة
             if not sent:
                 await styled_reply(event, msg, emoji_ids=eid, buttons=HIT_BUTTON)
 
-            # تسجيل وإرسال للقناة
             if status in ["Charged", "Approved"]:
                 asyncio.create_task(save_card_to_db(card, status.upper(), result.get('Response', ''), result.get('Gateway', ''), result.get('Price', '-')))
                 asyncio.create_task(send_channel_hit(result, uid, username, name, result.get('Gateway', '?'), status))
@@ -881,19 +903,6 @@ async def stop_cmd(event):
             stopped_any = True
     if not stopped_any: return await styled_reply(event, f"{PE} <b>No active session</b>", emoji_ids=[CE["warn"]])
     await styled_reply(event, f"{PE} <b>Stopping...</b>", emoji_ids=[CE["stop"]])
-
-# دالة مساعدة لإرسال الصيدة إلى القناة بأمان
-async def send_channel_hit(result, uid, username, name, gateway, status="Charged"):
-    if not HIT_CHANNEL_ID: return
-    try:
-        card = result.get("card", "")
-        resp = result.get("Response", "")
-        price = result.get("Price", "-")
-        bi = await get_bin_info(card.split("|")[0])
-        msg, eid = format_card_result(status, card, gateway, resp, price, bi, 0.0)
-        msg += f"\n\n👤 <b>User:</b> <a href='tg://user?id={uid}'>{name}</a> (<code>{username}</code>)"
-        await styled_send(HIT_CHANNEL_ID, msg, emoji_ids=eid, buttons=HIT_BUTTON)
-    except: pass
 
 async def _run_mass_process(event, cards, proxies, send_approved, process_store, stop_prefix, check_func, gate_name, sem_type):
     uid = event.sender_id
@@ -920,7 +929,6 @@ async def _run_mass_process(event, cards, proxies, send_approved, process_store,
         if now - last_ui[0] < 3.0 or is_stopped(): return
         last_ui[0] = now
         
-        # --- تصميم أزرار جديد وأنيق ---
         kb = [
             [pbtn(f"💳 {lcd}", "none")],
             [pbtn(f"✅ Charged: {charged}", "none"), pbtn(f"⚡ Approved: {approved}", "none")],
@@ -931,7 +939,6 @@ async def _run_mass_process(event, cards, proxies, send_approved, process_store,
         try: await styled_edit(sm, f"<pre>{PE} Processing...</pre>", buttons=kb, emoji_ids=[CE["star"]])
         except: pass
 
-    # إظهار اللوحة مباشرة لمنع التعليق الوهمي
     await update_ui()
 
     async def worker(card):
@@ -1016,7 +1023,6 @@ async def _send_mass_hit(card, result, status, uid, username, name):
         if not sent:
             await styled_send(uid, msg, emoji_ids=eid, buttons=HIT_BUTTON)
             
-        # إرسال للقناة
         if status in ["Charged", "Approved"]:
             asyncio.create_task(send_channel_hit(result, uid, username, name, gw, status))
             
@@ -1235,9 +1241,10 @@ async def _handle_plan_assign(event, plan_key):
     await set_user_plan(target_uid, pi["tier"], pi["duration_days"])
     expiry_date = (datetime.now() + timedelta(days=pi["duration_days"])).strftime('%Y-%m-%d %H:%M:%S')
     
-    # 🌟 هنا الرد الواحد فقط في المحادثة مع الأدمن
     await styled_reply(event, f"""<b>✅ Plan Updated</b>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>User</b> ↬ <a href='tg://user?id={target_uid}'>{target_name}</a>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>Plan</b> ↬ {pi['emoji']} <b>{pi['name']}</b>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>Duration</b> ↬ <code>{pi['duration_days']} days</code>\n<a href='https://t.me/Dddadddyttt'>⊀</a> <b>Expires</b> ↬ <code>{expiry_date}</code>""")
     
+    try: await styled_send(target_uid, f"""<b>🎉 Plan Upgraded! 🎉</b>\n{pi['emoji']} <b>{pi['name']}</b> ━ <code>{pi['duration_days']}d</code>\nLimit: {get_cc_limit(pi['tier'])} CCs\nExpires: {expiry_date}""")
+    except: pass
     try:
         receipt_id = f"CARDX-{''.join(random.choices(string.ascii_uppercase + string.digits, k=8))}"
         lt = f"Plan RENEWED 🔄" if is_upgrade else f"New Plan 🛒"
@@ -1302,7 +1309,6 @@ async def stats_cmd(event):
     if event.sender_id not in ADMIN_ID: return
     try:
         tu = await get_total_users(); pu = await get_premium_count()
-        # تعويض بسيط لعدد المواقع بناء على جيتهب
         ts2 = len(_CACHED_SITES) if _CACHED_SITES else 0 
         tc = await get_total_cards_count()
         ch = await get_charged_count(); ap = await get_approved_count()
@@ -1325,7 +1331,6 @@ async def main():
                 print(f"🚨 [WEBHOOK CLEANUP]: {result}")
     except Exception as e: print(f"🚨 [WEBHOOK CLEANUP ERROR]: {e}")
 
-    # التجهيز المسبق للمواقع من GitHub قبل البدء
     log_system("BOOT", "Fetching sites from GitHub...")
     await get_github_sites()
 

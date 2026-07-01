@@ -52,7 +52,7 @@ JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
 JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
 
 # --- الإعدادات الصحيحة للـ API والملفات ---
-CHECKER_API_URL = 'http://62.72.20.10:8081/'
+CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
 PROXY_FILE = 'proxy.txt'
 
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
@@ -415,7 +415,8 @@ async def check_card_api(card, site, proxy, session):
         if len(parts) != 4:
             return {'status': 'Dead', 'message': 'Invalid card format', 'card': card}
 
-        params = {'cc': card, 'url': site}
+        # تم تغيير 'url' إلى 'site' لتتوافق مع متطلبات Railway API
+        params = {'cc': card, 'site': site}
         formatted_proxy = format_proxy_for_api(proxy)
         if formatted_proxy:
             params['proxy'] = formatted_proxy

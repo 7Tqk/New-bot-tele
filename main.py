@@ -1,7 +1,7 @@
 # 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟭𝟮𝟬𝗪 - 𝗦𝘁𝗿𝗶𝗰𝘁 𝗣𝗿𝗼𝘅𝘆 - 𝗙𝗲𝗲𝗱𝗯𝗮𝗰𝗸 - 𝗕𝗮𝗰𝗸 - 𝗧𝗶𝗺𝗲𝗿 - 𝟭𝟬𝟬% 𝗔𝗻𝘁𝗶-𝗟𝗮𝗴 𝗚𝗜𝗙𝘀)
 from telethon.errors import FloodWaitError, UserNotParticipantError
 from telethon import TelegramClient, events, Button
-from telethon.tl.types import ChannelParticipantBanned
+from telethon.tl.types import ChannelParticipantBanned, DocumentAttributeAnimated
 from telethon.tl.functions.channels import GetParticipantRequest
 import asyncio
 import aiohttp
@@ -11,8 +11,7 @@ import random
 import time
 import json
 import re
-import logging
-import io
+import uuid
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -132,32 +131,97 @@ _DEAD_INDICATORS = (
     'session_error', 'session expired'
 )
 
-# ====================== 100% ANTI-LAG GIF FETCHER ======================
-async def fetch_random_gif(specific_url=None):
-    """
-    إرجاع الرابط مباشرة بدلاً من تحميل الملف. تيليجرام سيعالجه كملف تلقائياً
-    مما يوفر سرعة استجابة خيالية ويمنع حدوث أي Lag أو Timeout.
-    """
-    return specific_url if specific_url else random.choice(ANIME_GIFS)
+# ====================== STRICT PHYSICAL GIF PROTOCOL (THE FORCE METHOD) ======================
+async def download_gif_physically(specific_url=None):
+    url = specific_url if specific_url else random.choice(ANIME_GIFS)
+    filename = f"temp_gif_{uuid.uuid4().hex[:8]}.gif"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=15) as response:
+                if response.status == 200:
+                    async with aiofiles.open(filename, 'wb') as f:
+                        await f.write(await response.read())
+                    return filename, url
+    except Exception as e:
+        print(f"⚠️ خطأ أثناء التحميل: {e}")
+    return None, url
 
-# ====================== STYLED OUTPUT OVERRIDES ======================
-async def styled_reply(event, text, buttons=None, file=None):
-    if file:
-        try:
-            return await event.client.send_file(event.chat_id, file, caption=text, buttons=buttons, reply_to=event.message.id, parse_mode="html")
-        except Exception as e:
-            print(f"⚠️ [styled_reply] GIF Send Error: {e} | Falling back to text-only.")
-            pass # التخطي للرد النصي إذا فشل إرسال الـ GIF
-    return await event.reply(text, buttons=buttons, parse_mode="html")
+# ====================== DOUBLE-LAYER SENDING PROTOCOL ======================
+async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=None):
+    file_path = None
+    gif_url = None
+    
+    if use_gif or specific_gif:
+        file_path, gif_url = await download_gif_physically(specific_gif)
+        
+    try:
+        # الطبقة الأولى: الإجبار الجسدي مع سمة (Animated)
+        if file_path and os.path.exists(file_path) and os.path.getsize(file_path) > 1024:
+            return await event.client.send_file(
+                event.chat_id, 
+                file_path, 
+                caption=text, 
+                buttons=buttons, 
+                reply_to=event.message.id, 
+                parse_mode="html",
+                attributes=[DocumentAttributeAnimated()] # <== هذا الكود يجبر تيليجرام يعتبره GIF غصب
+            )
+        # الطبقة الثانية: في حال فشل الملف، نضربه بالرابط المباشر
+        elif gif_url:
+            return await event.client.send_file(
+                event.chat_id, 
+                gif_url, 
+                caption=text, 
+                buttons=buttons, 
+                reply_to=event.message.id, 
+                parse_mode="html"
+            )
+        else:
+            return await event.reply(text, buttons=buttons, parse_mode="html")
+    except Exception as e:
+        print(f"⚠️ [styled_reply] فشل إرسال الـ GIF بالملف والرابط: {e}")
+        return await event.reply(text, buttons=buttons, parse_mode="html")
+    finally:
+        # مسح الملف من السيرفر فور الانتهاء
+        if file_path and os.path.exists(file_path):
+            try: os.remove(file_path)
+            except: pass
 
-async def styled_send(chat, text, buttons=None, file=None):
-    if file:
-        try:
-            return await client_instance.send_file(chat, file, caption=text, buttons=buttons, parse_mode="html")
-        except Exception as e:
-            print(f"⚠️ [styled_send] GIF Send Error: {e} | Falling back to text-only.")
-            pass # التخطي للإرسال النصي إذا فشل إرسال الـ GIF
-    return await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
+async def styled_send(chat, text, buttons=None, use_gif=False, specific_gif=None):
+    file_path = None
+    gif_url = None
+    
+    if use_gif or specific_gif:
+        file_path, gif_url = await download_gif_physically(specific_gif)
+        
+    try:
+        if file_path and os.path.exists(file_path) and os.path.getsize(file_path) > 1024:
+            return await client_instance.send_file(
+                chat, 
+                file_path, 
+                caption=text, 
+                buttons=buttons, 
+                parse_mode="html",
+                attributes=[DocumentAttributeAnimated()] # <== إجبار تيليجرام
+            )
+        elif gif_url:
+            return await client_instance.send_file(
+                chat, 
+                gif_url, 
+                caption=text, 
+                buttons=buttons, 
+                parse_mode="html"
+            )
+        else:
+            return await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
+    except Exception as e:
+        print(f"⚠️ [styled_send] فشل إرسال الـ GIF بالملف والرابط: {e}")
+        return await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
+    finally:
+        if file_path and os.path.exists(file_path):
+            try: os.remove(file_path)
+            except: pass
 
 async def styled_edit(msg, text, buttons=None):
     return await msg.edit(text, buttons=buttons, parse_mode="html")
@@ -177,9 +241,7 @@ async def check_single_chat(user_id, chat):
         if isinstance(part.participant, ChannelParticipantBanned): return False
         return True
     except UserNotParticipantError: return False
-    except Exception as e:
-        print(f"⚠️ [JOIN ERROR] Cannot check user {user_id} in {chat}: {e}")
-        return False
+    except Exception as e: return False
 
 async def is_user_joined(user_id):
     c_ok = await check_single_chat(user_id, JOIN_CHANNEL_ID)
@@ -202,7 +264,6 @@ async def force_join_check(event):
         kb.append(Button.url("💬 𝘑𝘰𝘪𝘯 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK))
     
     if not kb: return True
-    
     kb = [kb, [Button.inline("✅ 𝘝𝘦𝘳𝘪𝘧𝘺", b"check_joined")]]
     await styled_reply(event, "⦗ 🛑 ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb)
     return False
@@ -218,9 +279,6 @@ def get_cc_limit(plan, uid=0):
     if "elite" in plan_lower: return 500
     if "core" in plan_lower: return 100
     return 15
-
-async def send_premium_only_message(event):
-    return await event.reply("⚠️ 𝘗𝘳𝘦𝘮𝘪𝘶𝘮 𝘈𝘤𝘤𝘦𝘴𝘴 𝘙𝘦𝘲𝘶𝘪𝘳𝘦𝘥.", parse_mode="html")
 
 async def get_bin_info(bin_code):
     try:
@@ -252,14 +310,10 @@ def format_card_result(status, card, gateway, response, price="-", bin_info=None
     bi = bin_info or {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "-", "flag": "🏳️"}
     ps = f"${str(price).replace('$', '')}" if price and price != "-" else "-"
     
-    if status == "Charged":
-        header = f"⦗ {get_custom_emoji('charged', '🟢')} ⦘ 𝘊𝘩𝘢𝘳𝘨𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺"
-    elif status == "Approved":
-        header = f"⦗ {get_custom_emoji('approved', '⚡')} ⦘ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 𝘊𝘝𝘝"
-    elif status == "Insufficient":
-        header = f"⦗ {get_custom_emoji('insufficient', '🟡')} ⦘ 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 𝘍𝘶𝘯𝘥𝘴"
-    else:
-        header = f"⦗ 🔴 ⦘ 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥"
+    if status == "Charged": header = f"⦗ {get_custom_emoji('charged', '🟢')} ⦘ 𝘊𝘩𝘢𝘳𝘨𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺"
+    elif status == "Approved": header = f"⦗ {get_custom_emoji('approved', '⚡')} ⦘ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 𝘊𝘝𝘝"
+    elif status == "Insufficient": header = f"⦗ {get_custom_emoji('insufficient', '🟡')} ⦘ 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 𝘍𝘶𝘯𝘥𝘴"
+    else: header = f"⦗ 🔴 ⦘ 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥"
         
     c_code = bi.get('country_code', '')
     country_display = f"{bi.get('country', '-')} {get_country_emoji(c_code, bi.get('flag', '🏳️'))}"
@@ -373,8 +427,6 @@ async def get_github_sites():
                 _CACHED_SITES = list(set([re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in f if line.strip()]))
         except: pass
     return _CACHED_SITES
-
-def get_txt_proxies(): return []
 
 # ====================== CHECKER CORE ======================
 async def check_card_api(card, site, proxy, session, gateway_name):
@@ -555,8 +607,7 @@ async def _send_mass_hit(card, status, message, price, gateway, uid, elapsed):
     try:
         bi = await get_bin_info(card.split("|")[0])
         msg = format_card_result(status, card, gateway, message, price, bi, elapsed)
-        gif_io = await fetch_random_gif()
-        await styled_send(uid, msg, buttons=HIT_BUTTON, file=gif_io)
+        await styled_send(uid, msg, buttons=HIT_BUTTON, use_gif=True)
     except: pass
 
 @client.on(events.CallbackQuery(pattern=rb"stop_chk:(\d+)"))
@@ -590,8 +641,7 @@ async def feedback_cmd(event):
                 await client_instance.send_message(admin, f"📩 <b>Feedback From:</b> <code>{uid}</code>", parse_mode="html")
         except: pass
     reply_text = "⦗ ✨ ⦘ 𝘠𝘰𝘶𝘳 𝘧𝘦𝘦𝘥𝘣𝘢𝘤𝘬 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘴𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘴𝘦𝘯𝘵 𝘵𝘰 𝘵𝘩𝘦 𝘰𝘸𝘯𝘦𝘳. 𝘛𝘩𝘢𝘯𝘬 𝘺𝘰𝘶 𝘧𝘰𝘳 𝘺𝘰𝘶𝘳 𝘴𝘶𝘱𝘱𝘰𝘳𝘵! 👑"
-    gif_io = await fetch_random_gif()
-    await styled_reply(event, reply_text, file=gif_io)
+    await styled_reply(event, reply_text, use_gif=True)
 
 @client.on(events.CallbackQuery(data=b"check_joined"))
 async def check_joined_cb(event):
@@ -700,8 +750,7 @@ async def start(event):
             [Button.inline("⦗ 💎 ⦘ 𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", b"show_plans")],
             [Button.url("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK), Button.url("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK)]
         ]
-        gif_io = await fetch_random_gif(WELCOME_GIF)
-        await styled_reply(event, text, buttons=kb, file=gif_io)
+        await styled_reply(event, text, buttons=kb, specific_gif=WELCOME_GIF)
     except Exception as e: await event.reply(f"⚠️ Error: {e}")
 
 @client.on(events.CallbackQuery(data=b"back_start"))
@@ -786,8 +835,7 @@ async def assign_plan_cmd(event):
     
     user_msg = f"""⦗ 👑 ⦘ 𝘝𝘐𝘗 𝘜𝘱𝘨𝘳𝘢𝘥𝘦 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭!\n\n🎉 𝘊𝘰𝘯𝘨𝘳𝘢𝘵𝘶𝘭𝘢𝘵𝘪𝘰𝘯𝘴! 𝘠𝘰𝘶𝘳 𝘢𝘤𝘤𝘰𝘶𝘯𝘵 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘶𝘱𝘨𝘳𝘢𝘥𝘦𝘥.\n\n⦗ 💎 ⦘ 𝘗𝘭𝘢𝘯 𝘋𝘦𝘵𝘢𝘪𝘭𝘴 ⇾\n├ 𝘗𝘭𝘢𝘯: {pi['emoji']} <code>{pi['name']}</code>\n├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n├ 𝘔𝘢𝘴𝘴 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n╰ 𝘌𝘹𝘱𝘪𝘳𝘦𝘴 𝘖𝘯: <code>{expiry_date}</code>\n\n⦗ 🚀 ⦘ 𝘌𝘯𝘫𝘰𝘺 𝘶𝘭𝘵𝘳𝘢-𝘧𝘢𝘴𝘵 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨 𝘸𝘪𝘵𝘩 <code>{WORKERS}</code> 𝘞𝘰𝘳𝘬𝘦𝘳𝘴!\n𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘯𝘰𝘸 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵."""
     
-    gif_io = await fetch_random_gif()
-    await styled_send(target_uid, user_msg, file=gif_io)
+    await styled_send(target_uid, user_msg, use_gif=True)
 
 # ====================== MAIN LOOP ======================
 async def main():
@@ -799,7 +847,7 @@ async def main():
     while True:
         try:
             await client.start(bot_token=BOT_TOKEN)
-            print("✅ VIP BOT STARTED WITH ZERO ERRORS AND ENHANCED MEDIA DELIVERY!"); await client.run_until_disconnected()
+            print("✅ VIP BOT STARTED WITH THE FORCE GIF PROTOCOL!"); await client.run_until_disconnected()
         except FloodWaitError as e: await asyncio.sleep(e.seconds + 5)
         except: await asyncio.sleep(10)
 

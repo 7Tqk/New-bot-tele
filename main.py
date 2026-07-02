@@ -1,4 +1,4 @@
-# 𝙍𝘼𝙕𝙊𝙍 𝙓 𝘽𝙤𝙩 - 𝙑𝙄𝙋 𝙀𝘿𝙄𝙏𝙄𝙊𝙉 (𝗠𝗮𝘀𝘀 𝗢𝗻𝗹𝘆 - 𝗚𝗮𝘁𝗲𝘄𝗮𝘆𝘀 [𝗦𝗼𝗼𝗻 𝗙𝗲𝗮𝘁𝘂𝗿𝗲] - 𝗥𝗼𝘆𝗮𝗹)
+# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝗠𝗮𝘀𝘀 𝗢𝗻𝗹𝘆 - 𝗚𝗮𝘁𝗲𝘄𝗮𝘆𝘀 [𝗦𝗼𝗼𝗻] - 𝗥𝗼𝘆𝗮𝗹 𝗙𝗼𝗻𝘁 - 𝗙𝗶𝘅𝗲𝗱 𝗚𝗜𝗙𝘀)
 from telethon.errors import FloodWaitError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantBanned
@@ -12,7 +12,6 @@ import time
 import json
 import re
 import logging
-import io
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -200,17 +199,6 @@ async def get_bin_info(bin_code):
                     }
     except: pass
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "-", "flag": "🏳️"}
-
-async def fetch_random_gif():
-    try:
-        async with aiohttp.ClientSession() as s:
-            async with s.get(random.choice(ANIME_GIFS), timeout=5) as r:
-                if r.status == 200:
-                    b = io.BytesIO(await r.read())
-                    b.name = 'animation.gif'
-                    return b
-    except: pass
-    return None
 
 # ====================== LUXURY HIT FORMATTER ======================
 def get_custom_emoji(key, fallback=""):
@@ -427,7 +415,7 @@ async def auto_file_check_cmd(event):
         uid = event.sender_id
         now = time.time()
         if uid in USER_LAST_REQ and now - USER_LAST_REQ[uid] < 5:
-            return await event.reply("⚠️ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘸𝘢𝘪𝘵 𝘣𝘦𝘧𝘰𝘳𝘦 𝘴𝘦𝘯𝘥𝘪𝘯ง 𝘢𝘯𝘰𝘵𝘩𝘦𝘳 𝘧𝘪𝘭𝘦.", parse_mode="html")
+            return await event.reply("⚠️ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘸𝘢𝘪𝘵 𝘣𝘦𝘧𝘰𝘳𝘦 𝘴𝘦𝘯𝘥𝘪𝘯𝘨 𝘢𝘯𝘰𝘵𝘩𝘦𝘳 𝘧𝘪𝘭𝘦.", parse_mode="html")
         USER_LAST_REQ[uid] = now
 
         if getattr(event.document, 'size', 0) > 2 * 1024 * 1024:
@@ -455,10 +443,10 @@ async def auto_file_check_cmd(event):
         
         PENDING_FILES[uid] = cards
         
-        # نظام الـ Soon المحدث لأزرار سترايب وبايبال
+        # أزرار البوابات مع علامة Soon
         kb = [
             [Button.inline("🛍️ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘎𝘢𝘵𝘦𝘸𝘢𝘺", b"gate:Shopify"), Button.inline("💳 𝘚𝘵𝘳𝘪𝘱𝘦 (𝘚𝘰𝘰𝘯)", b"gate:soon_Stripe")],
-            [Button.inline("🅿️ 𝘗𝘢𝘺𝘗𝘢𝘭 (𝘚𝘰𝘰𝘯)", b"gate:soon_PayPal"), Button.inline("🌐 𝘉𝘳𝘢𝘪𝘯𝘵𝘳𝘦𝘦", b"gate:Braintree")],
+            [Button.inline("🅿️ 𝘗𝘢𝘺𝘗𝘢𝘭 (𝘚𝘰𝘰𝘯)", b"gate:soon_PayPal"), Button.inline("🌐 𝘉𝘳𝘢𝘪𝘯𝘵𝘳𝘦𝘦 (𝘚𝘰𝘰𝘯)", b"gate:soon_Braintree")],
             [Button.inline("❌ 𝘊𝘢𝘯𝘤𝘦𝘭", b"gate:cancel")]
         ]
         
@@ -471,7 +459,7 @@ async def gateway_selection_cb(event):
     uid = event.sender_id
     gate_name = event.pattern_match.group(1).decode()
     
-    # اعتراض الأزرار التي تحتوي على Soon ومنع الفحص وتنبيه المستخدم
+    # اعتراض الأزرار التي تحتوي على Soon
     if gate_name.startswith("soon_"):
         real_name = gate_name.split("_")[1]
         return await event.answer(f"⏳ {real_name} Gateway is coming soon! Please choose another.", alert=True)
@@ -527,6 +515,15 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
     queue = asyncio.Queue()
     for c in cards: queue.put_nowait(c)
 
+    # خريطة تحويل الحالات لتظهر بشكل فخم في الزر
+    royal_status_map = {
+        'Charged': '𝘊𝘩𝘢𝘳𝘨𝘦𝘥',
+        'Approved': '𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥',
+        'Insufficient': '𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵',
+        'Site Error': '𝘌𝘳𝘳𝘰𝘳',
+        'Dead': '𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥'
+    }
+
     async def worker():
         nonlocal checked, charged, approved, insufficient, declined, errors, lcd
         while not queue.empty() and not is_stopped():
@@ -542,7 +539,10 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
                 price = res.get('price', '-')
                 
                 checked += 1
-                lcd = card
+                
+                # إظهار حالة البطاقة بجانب الرقم داخل الزر
+                royal_status = royal_status_map.get(status, '𝘌𝘳𝘳𝘰𝘳')
+                lcd = f"{card} ⇾ {royal_status}"
                 
                 if status == 'Charged':
                     charged += 1
@@ -590,13 +590,10 @@ async def _send_mass_hit(card, status, message, price, gateway, uid):
         bi = await get_bin_info(card.split("|")[0])
         msg = format_card_result(status, card, gateway, message, price, bi, 0.0)
         
-        gif_io = await fetch_random_gif() if status in ["Charged", "Approved", "Insufficient"] else None
-        
-        if gif_io:
-            try: await styled_send(uid, msg, buttons=HIT_BUTTON, file=gif_io)
-            except: await styled_send(uid, msg, buttons=HIT_BUTTON)
-        else:
-            await styled_send(uid, msg, buttons=HIT_BUTTON)
+        # الاعتماد الكلي والآمن على إرسال الـ URL لتجنب مشاكل الذاكرة والتأكد من إرسال GIF بنسبة 100%
+        gif_url = random.choice(ANIME_GIFS)
+        try: await styled_send(uid, msg, buttons=HIT_BUTTON, file=gif_url)
+        except: await styled_send(uid, msg, buttons=HIT_BUTTON)
     except: pass
 
 @client.on(events.CallbackQuery(pattern=rb"stop_chk:(\d+)"))
@@ -620,7 +617,7 @@ async def check_joined_cb(event):
         await event.answer(f"✅ Successfully Verified!", alert=True)
         try: await event.delete()
         except: pass
-        await styled_send(event.chat_id, f"⦗ ✨ ⦘ 𝘞𝘦𝘭𝘤𝘰𝘮𝘦\n𝘚𝘦𝘯𝗱 <code>/start</code> 𝘵𝘰 𝘴𝘦𝘦 𝘤𝘰𝘮𝘮𝘢𝘯𝘥𝘴.")
+        await styled_send(event.chat_id, f"⦗ ✨ ⦘ 𝘞𝘦𝘭𝘤𝘰𝘮𝘦\n𝘚𝘦𝘯𝘥 /start 𝘵𝘰 𝘴𝘦𝘦 𝘤𝘰𝘮𝘮𝘢𝘯𝘥𝘴.")
     else: await event.answer(f"❌ You are not joined!", alert=True)
 
 # ====================== UI / PLANS ======================
@@ -632,19 +629,19 @@ async def start(event):
         plan = await get_user_plan(event.sender_id)
         limit = get_cc_limit(plan, event.sender_id)
         
-        text = f"""⦗ ⚡ ⦘ 𝘙𝘢𝘻𝘰𝘳 𝘟 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
+        text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
 
 ├ ⦗ 💳 ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
 │ ╰ 𝘚𝘦𝘯𝘥 𝘢 .𝘵𝘹𝘵 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
 
 ├ ⦗ ⚙️ ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
-│ ├ <code>/addpxy</code> ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ├ <code>/proxy</code> ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ╰ <code>/rmpxy</code> ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
 
 ╰ ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
-  ├ <code>/info</code> ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
-  ╰ <code>/plan</code> ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘀
+  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
+  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴
 
 ⦗ 💎 ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title()} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
         
@@ -653,11 +650,9 @@ async def start(event):
             [Button.url("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK), Button.url("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK)]
         ]
         
-        gif_io = await fetch_random_gif()
-        if gif_io:
-            await styled_reply(event, text, buttons=kb, file=gif_io)
-        else:
-            await styled_reply(event, text, buttons=kb)
+        gif_url = random.choice(ANIME_GIFS)
+        try: await styled_reply(event, text, buttons=kb, file=gif_url)
+        except Exception: await styled_reply(event, text, buttons=kb)
             
     except Exception as e: await event.reply(f"⚠️ Error in /start: {e}")
 
@@ -730,7 +725,7 @@ async def _handle_plan_assign(event, plan_key):
 🎉 𝘊𝘰𝘯𝘨𝘳𝘢𝘵𝘶𝘭𝘢𝘵𝘪𝘰𝘯𝘴! 𝘠𝘰𝘶𝘳 𝘢𝘤𝘤𝘰𝘶𝘯𝘵 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘶𝘱𝘨𝘳𝘢𝘥𝘦𝘥.
 
 ⦗ 💎 ⦘ 𝘗𝘭𝘢𝘯 𝘋𝘦𝘵𝘢𝘪𝘭𝘴 ⇾
-├ 𝘗𝘭𝘢𝘯: {pi['emoji']} <code>{pi['name']}</code>
+├ 𝘗𝘭𝘢𝘯: {pi['emoji']} {pi['name']}
 ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>
 ├ 𝘔𝘢𝘴𝘴 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>
 ╰ 𝘌𝘹𝘱𝘪𝘳𝘦𝘴 𝘖𝘯: <code>{expiry_date}</code>
@@ -738,15 +733,12 @@ async def _handle_plan_assign(event, plan_key):
 ⦗ 🚀 ⦘ 𝘌𝘯𝘫𝘰𝘺 𝘶𝘭𝘵𝘳𝘢-𝘧𝘢𝘴𝘵 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨 𝘸𝘪𝘵𝘩 𝟩𝟬 𝘞𝘰𝘳𝘬𝘦𝘳𝘴!
 𝘚𝘦𝘯𝘥 𝘺𝘰𝘶𝘳 .𝘵𝘹𝘵 𝘧𝘪𝘭𝘦 𝘯𝘰𝘸 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵 𝘵𝘩𝘦 𝘱𝘳𝘰𝘤𝘦𝘴𝘴."""
 
-    try:
-        gif_io = await fetch_random_gif()
-        if gif_io:
-            await styled_send(target_uid, user_msg, file=gif_io)
-        else:
-            await styled_send(target_uid, user_msg)
+    gif_url = random.choice(ANIME_GIFS)
+    try: await styled_send(target_uid, user_msg, file=gif_url)
     except Exception as e:
         logging.info(f"Could not send upgrade message to {target_uid}: {e}")
-        pass
+        try: await styled_send(target_uid, user_msg)
+        except: pass
 
 # ====================== MAIN LOOP ======================
 async def main():

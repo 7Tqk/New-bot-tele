@@ -134,36 +134,29 @@ _DEAD_INDICATORS = (
 
 # ====================== 100% ANTI-LAG GIF FETCHER ======================
 async def fetch_random_gif(specific_url=None):
-    url = specific_url if specific_url else random.choice(ANIME_GIFS)
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    try:
-        # تايم اوت 5 ثواني لمنع البوت من التعليق نهائياً
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=5) as response:
-                if response.status == 200:
-                    file_data = await response.read()
-                    gif_io = io.BytesIO(file_data)
-                    gif_io.name = 'animation.gif'
-                    return gif_io
-    except Exception:
-        pass
-    return None
+    """
+    إرجاع الرابط مباشرة بدلاً من تحميل الملف. تيليجرام سيعالجه كملف تلقائياً
+    مما يوفر سرعة استجابة خيالية ويمنع حدوث أي Lag أو Timeout.
+    """
+    return specific_url if specific_url else random.choice(ANIME_GIFS)
 
 # ====================== STYLED OUTPUT OVERRIDES ======================
 async def styled_reply(event, text, buttons=None, file=None):
     if file:
         try:
             return await event.client.send_file(event.chat_id, file, caption=text, buttons=buttons, reply_to=event.message.id, parse_mode="html")
-        except Exception:
-            return await event.reply(text, buttons=buttons, parse_mode="html")
+        except Exception as e:
+            print(f"⚠️ [styled_reply] GIF Send Error: {e} | Falling back to text-only.")
+            pass # التخطي للرد النصي إذا فشل إرسال الـ GIF
     return await event.reply(text, buttons=buttons, parse_mode="html")
 
 async def styled_send(chat, text, buttons=None, file=None):
     if file:
         try:
             return await client_instance.send_file(chat, file, caption=text, buttons=buttons, parse_mode="html")
-        except Exception:
-            return await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
+        except Exception as e:
+            print(f"⚠️ [styled_send] GIF Send Error: {e} | Falling back to text-only.")
+            pass # التخطي للإرسال النصي إذا فشل إرسال الـ GIF
     return await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
 
 async def styled_edit(msg, text, buttons=None):
@@ -505,7 +498,7 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
                 [Button.inline(f"⦗ 💳 ⦘ {lcd}", b"none")],
                 [Button.inline(f"🟢 𝘊𝘩𝘢𝘳𝘨𝘦𝘥 ⇾ {charged}", b"none"), Button.inline(f"⚡ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 ⇾ {approved}", b"none")],
                 [Button.inline(f"🟡 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 ⇾ {insufficient}", b"none"), Button.inline(f"🔴 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥 ⇾ {declined}", b"none")],
-                [Button.inline(f"⚠️ 𝘌𝘳𝘳𝘰𝘳𝘴 ⇾ {errors}", b"none"), Button.inline(f"📊 𝘛𝘰𝘵𝘢𝘭 ⇾ {checked} / {total}", b"none")],
+                [Button.inline(f"⚠️ 𝘌𝘳𝘳𝘰𝘳 ⇾ {errors}", b"none"), Button.inline(f"📊 𝘛𝘰𝘵𝘢𝘭 ⇾ {checked} / {total}", b"none")],
                 [Button.inline("🛑 𝘚𝘵𝘰𝘱 𝘗𝘳𝘰𝘤𝘦𝘴𝘴", f"{stop_prefix}:{uid}".encode())]
             ]
             try: await styled_edit(msg_obj, f"⦗ ⚡ ⦘ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘈𝘤𝘵𝘪𝘷𝘦...\n\n├ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 ⇾ <code>{gate_name}</code>\n╰ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴 ⇾ <code>{WORKERS}</code>", buttons=kb)

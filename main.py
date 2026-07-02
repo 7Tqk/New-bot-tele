@@ -1,4 +1,4 @@
-# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟰𝟬𝗪 - 𝟭𝟬𝟬% 𝗔𝗰𝗰𝘂𝗿𝗮𝗰𝘆 - 𝗕𝘂𝗹𝗹𝗲𝘁𝗽𝗿𝗼𝗼𝗳 𝗚𝗜𝗙𝘀 - 𝗜𝗻𝘀𝘁𝗮𝗻𝘁 𝗦𝘁𝗼𝗽)
+# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟰𝟬𝗪 - 𝟭𝟬𝟬% 𝗔𝗰𝗰𝘂𝗿𝗮𝗰𝘆 - 𝗙𝗼𝗿𝗰𝗲𝗱 𝗚𝗜𝗙𝘀 - 𝗔𝗻𝘁𝗶-𝗙𝗹𝗼𝗼𝗱 𝗦𝗵𝗶𝗲𝗹𝗱)
 from telethon.errors import FloodWaitError, UserNotParticipantError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantBanned, DocumentAttributeAnimated
@@ -154,6 +154,10 @@ ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
 HIT_BUTTON = [[Button.url("⇾ 𝘖𝘸𝘯𝘦𝘳 ⇽", "https://t.me/Dddadddyttt")]]
 
+# أقفال التحكم بالمرور (Anti-Flood Shields)
+_MSG_LOCK = asyncio.Lock()
+_EDIT_LOCK = asyncio.Lock()
+
 _DEAD_INDICATORS = (
     'receipt id is empty', 'handle is empty', 'product id is empty', 'tax amount is empty', 
     'payment method identifier is empty', 'invalid url', 'error in 1st req', 'error in 1 req',
@@ -177,7 +181,7 @@ async def fetch_gif_to_memory(target_url):
     }
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(target_url, headers=headers, timeout=3, allow_redirects=True) as response:
+            async with session.get(target_url, headers=headers, timeout=5, allow_redirects=True) as response:
                 if response.status == 200:
                     content_type = response.headers.get('Content-Type', '').lower()
                     if 'image' in content_type or 'gif' in content_type:
@@ -190,61 +194,106 @@ async def fetch_gif_to_memory(target_url):
         pass
     return None
 
-# ====================== FORCE-SEND FUNCTIONS (DOUBLE LAYER) ======================
+# ====================== ANTI-FLOOD FORCE-SEND FUNCTIONS ======================
 async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=None):
-    if use_gif or specific_gif:
-        target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
-        try:
-            gif_file = await fetch_gif_to_memory(target_url)
-            if gif_file:
-                return await event.client.send_file(
-                    event.chat_id, 
-                    gif_file, 
-                    caption=text, 
-                    buttons=buttons, 
-                    reply_to=event.message.id, 
-                    parse_mode="html",
-                    attributes=[DocumentAttributeAnimated()] 
-                )
-            else:
-                return await event.client.send_file(
-                    event.chat_id, 
-                    target_url, 
-                    caption=text, 
-                    buttons=buttons, 
-                    reply_to=event.message.id, 
-                    parse_mode="html"
-                )
-        except Exception: pass
-    return await event.reply(text, buttons=buttons, parse_mode="html")
+    async with _MSG_LOCK: # قفل المرور: يمنع تداخل الرسائل ويحمي من الحظر
+        if use_gif or specific_gif:
+            while True:
+                target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
+                try:
+                    gif_file = await fetch_gif_to_memory(target_url)
+                    if gif_file:
+                        res = await event.client.send_file(
+                            event.chat_id, 
+                            gif_file, 
+                            caption=text, 
+                            buttons=buttons, 
+                            reply_to=event.message.id, 
+                            parse_mode="html",
+                            attributes=[DocumentAttributeAnimated()] 
+                        )
+                    else:
+                        res = await event.client.send_file(
+                            event.chat_id, 
+                            target_url, 
+                            caption=text, 
+                            buttons=buttons, 
+                            reply_to=event.message.id, 
+                            parse_mode="html"
+                        )
+                    await asyncio.sleep(0.5) # مسافة أمان بعد كل إرسال ناجح
+                    return res
+                except FloodWaitError as e:
+                    print(f"⏳ [Anti-Flood Shield] تم حظر البوت مؤقتاً. جاري حفظ الصيدة والانتظار لـ {e.seconds} ثانية...")
+                    await asyncio.sleep(e.seconds + 1)
+                except Exception:
+                    await asyncio.sleep(0.5)
+        else:
+            while True:
+                try:
+                    res = await event.reply(text, buttons=buttons, parse_mode="html")
+                    await asyncio.sleep(0.3)
+                    return res
+                except FloodWaitError as e:
+                    await asyncio.sleep(e.seconds + 1)
+                except Exception:
+                    return None
 
 async def styled_send(chat, text, buttons=None, use_gif=False, specific_gif=None):
-    if use_gif or specific_gif:
-        target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
-        try:
-            gif_file = await fetch_gif_to_memory(target_url)
-            if gif_file:
-                return await client_instance.send_file(
-                    chat, 
-                    gif_file, 
-                    caption=text, 
-                    buttons=buttons, 
-                    parse_mode="html",
-                    attributes=[DocumentAttributeAnimated()] 
-                )
-            else:
-                return await client_instance.send_file(
-                    chat, 
-                    target_url, 
-                    caption=text, 
-                    buttons=buttons, 
-                    parse_mode="html"
-                )
-        except Exception: pass
-    return await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
+    async with _MSG_LOCK: # قفل المرور للصيدات
+        if use_gif or specific_gif:
+            while True:
+                target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
+                try:
+                    gif_file = await fetch_gif_to_memory(target_url)
+                    if gif_file:
+                        res = await client_instance.send_file(
+                            chat, 
+                            gif_file, 
+                            caption=text, 
+                            buttons=buttons, 
+                            parse_mode="html",
+                            attributes=[DocumentAttributeAnimated()] 
+                        )
+                    else:
+                        res = await client_instance.send_file(
+                            chat, 
+                            target_url, 
+                            caption=text, 
+                            buttons=buttons, 
+                            parse_mode="html"
+                        )
+                    await asyncio.sleep(0.5) # حماية السيرفر من ضغط تيليجرام
+                    return res
+                except FloodWaitError as e:
+                    print(f"⏳ [Anti-Flood Shield] تم حظر البوت مؤقتاً. جاري حفظ الصيدة والانتظار لـ {e.seconds} ثانية...")
+                    await asyncio.sleep(e.seconds + 1)
+                except Exception:
+                    await asyncio.sleep(0.5)
+        else:
+            while True:
+                try:
+                    res = await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
+                    await asyncio.sleep(0.3)
+                    return res
+                except FloodWaitError as e:
+                    await asyncio.sleep(e.seconds + 1)
+                except Exception:
+                    return None
 
 async def styled_edit(msg, text, buttons=None):
-    return await msg.edit(text, buttons=buttons, parse_mode="html")
+    async with _EDIT_LOCK: # قفل منفصل خاص بتحديثات لوحة التحكم
+        while True:
+            try:
+                res = await msg.edit(text, buttons=buttons, parse_mode="html")
+                await asyncio.sleep(1) # يمنع الاهتزاز السريع للوحة التحكم
+                return res
+            except FloodWaitError as e:
+                # تحديثات لوحة التحكم تتخطى الحظر بصمت حتى لا تستهلك الرام
+                await asyncio.sleep(e.seconds + 1)
+                return None 
+            except Exception:
+                return None
 
 # ====================== HELPER FUNCTIONS ======================
 def is_dead_site_error(error_msg):
@@ -904,7 +953,7 @@ async def main():
     while True:
         try:
             await client.start(bot_token=BOT_TOKEN)
-            print("✅ VIP BOT STARTED WITH ZERO ERRORS AND BULLETPROOF GIFS!"); await client.run_until_disconnected()
+            print("✅ VIP BOT STARTED WITH ANTI-FLOOD SHIELD!"); await client.run_until_disconnected()
         except FloodWaitError as e: await asyncio.sleep(e.seconds + 5)
         except: await asyncio.sleep(10)
 

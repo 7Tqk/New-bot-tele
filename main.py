@@ -1,4 +1,4 @@
-# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝗠𝗮𝘀𝘀 𝗢𝗻𝗹𝘆 - 𝗚𝗮𝘁𝗲𝘄𝗮𝘆𝘀 [𝗦𝗼𝗼𝗻] - 𝗥𝗼𝘆𝗮𝗹 𝗙𝗼𝗻𝘁 - 𝗙𝗶𝘅𝗲𝗱 𝗚𝗜𝗙𝘀)
+# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝗠𝗮𝘀𝘀 𝗢𝗻𝗹𝘆 - 𝗚𝗮𝘁𝗲𝘄𝗮𝘆𝘀 [𝗦𝗼𝗼𝗻] - 𝗥𝗼𝘆𝗮𝗹 𝗙𝗼𝗻𝘁 - 𝟭𝟮𝟬𝗪 𝗙𝗶𝘅𝗲𝗱)
 from telethon.errors import FloodWaitError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantBanned
@@ -12,6 +12,7 @@ import time
 import json
 import re
 import logging
+import io
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -50,17 +51,19 @@ CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
 PROXY_FILE = 'proxy.txt'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 
-# --- INCREASED WORKERS ---
-WORKERS = 70 
+# --- MAX SPEED (120 WORKERS) ---
+WORKERS = 120 
 API_TIMEOUT = 60  
-DELAY = 0.05
+DELAY = 0.02
 HIT_DELAY = 0.5
 
 # --- SYSTEM FOR BROKEN SITES ---
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 4
 
-# ====================== VIP EMOJIS & FLAGS ======================
+# ====================== VIP EMOJIS, FLAGS & GIFS ======================
+WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
+
 VIP_EMOJIS = {
     "charged": "5039644681583985437",
     "approved": "5039793437776282663",
@@ -89,15 +92,15 @@ ANIME_GIFS = [
     "https://media.giphy.com/media/4ilFRqgbzbx4c/giphy.gif", "https://media.giphy.com/media/xT1R9yebNpKAAJjH0s/giphy.gif",
     "https://media.giphy.com/media/108BDeJ2BvtZRu/giphy.gif", "https://media.giphy.com/media/F3uJq1J1x0u6k/giphy.gif",
     "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif", "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif",
-    "https://media.giphy.com/media/oYxqA3S2ZqO3u/giphy.gif", "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif",
-    "https://media.giphy.com/media/xUPGcxpCV81ebhq7cI/giphy.gif", "https://media.giphy.com/media/l41lUjUgLLwWPe20E/giphy.gif",
-    "https://media.giphy.com/media/l0HlNQ03J5JxX6lva/giphy.gif", "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif",
-    "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif", "https://media.giphy.com/media/l3vR16pONsV8cKCEE/giphy.gif",
-    "https://media.giphy.com/media/xT0xezQGU5xCDJuCPe/giphy.gif", "https://media.giphy.com/media/3oKIPnAiaCRi8NNRWU/giphy.gif",
-    "https://media.giphy.com/media/xT9IgzoWaVYHbYqNUk/giphy.gif", "https://media.giphy.com/media/26BkLGA2PqBf02Mpy/giphy.gif",
-    "https://media.giphy.com/media/3o7TKsQ8gE0bF40Y6I/giphy.gif", "https://media.giphy.com/media/xT0xem7ZlZ2DOYqpG0/giphy.gif",
-    "https://media.giphy.com/media/l46CtynlAiRNzfsIG/giphy.gif", "https://media.giphy.com/media/3o7WIxrKxS22wI3B0A/giphy.gif",
-    "https://media.giphy.com/media/l0HlRnAWXxn0MhKLK/giphy.gif", "https://media.giphy.com/media/xT9DPIlGnuHpr2yOic/giphy.gif"
+    "https://media.giphy.com/media/oYxqA3S2ZqO3u/giphy.gif", "https://media.giphy.com/media/xUPGcxpCV81ebhq7cI/giphy.gif",
+    "https://media.giphy.com/media/l41lUjUgLLwWPe20E/giphy.gif", "https://media.giphy.com/media/l0HlNQ03J5JxX6lva/giphy.gif",
+    "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif", "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif",
+    "https://media.giphy.com/media/l3vR16pONsV8cKCEE/giphy.gif", "https://media.giphy.com/media/xT0xezQGU5xCDJuCPe/giphy.gif",
+    "https://media.giphy.com/media/3oKIPnAiaCRi8NNRWU/giphy.gif", "https://media.giphy.com/media/xT9IgzoWaVYHbYqNUk/giphy.gif",
+    "https://media.giphy.com/media/26BkLGA2PqBf02Mpy/giphy.gif", "https://media.giphy.com/media/3o7TKsQ8gE0bF40Y6I/giphy.gif",
+    "https://media.giphy.com/media/xT0xem7ZlZ2DOYqpG0/giphy.gif", "https://media.giphy.com/media/l46CtynlAiRNzfsIG/giphy.gif",
+    "https://media.giphy.com/media/3o7WIxrKxS22wI3B0A/giphy.gif", "https://media.giphy.com/media/l0HlRnAWXxn0MhKLK/giphy.gif",
+    "https://media.giphy.com/media/xT9DPIlGnuHpr2yOic/giphy.gif"
 ]
 
 PLANS = {
@@ -130,6 +133,18 @@ _DEAD_INDICATORS = (
 )
 
 # ====================== HELPER FUNCTIONS ======================
+async def fetch_gif(url=None):
+    target_url = url if url else random.choice(ANIME_GIFS)
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(target_url, timeout=10) as r:
+                if r.status == 200:
+                    b = io.BytesIO(await r.read())
+                    b.name = 'animation.gif'
+                    return b
+    except: pass
+    return None
+
 def is_dead_site_error(error_msg):
     if not error_msg: return True
     return any(keyword in str(error_msg).lower() for keyword in _DEAD_INDICATORS)
@@ -184,8 +199,9 @@ async def styled_edit(msg, text, buttons=None):
 
 async def get_bin_info(bin_code):
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"https://bins.antipublic.cc/bins/{bin_code[:6]}", timeout=10) as r:
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(f"https://bins.antipublic.cc/bins/{bin_code[:6]}") as r:
                 if r.status == 200:
                     data = await r.json()
                     return {
@@ -246,7 +262,7 @@ def format_card_result(status, card, gateway, response, price="-", bin_info=None
 
 ⦗ {get_custom_emoji('time', '⏱')} ⦘ 𝘛𝘰𝘰𝘬 ⇾ <code>{elapsed:.2f}s</code>"""
 
-# ====================== HTTP SESSIONS ======================
+# ====================== HTTP SESSIONS FOR 120 WORKERS ======================
 _USER_HTTP_SESSIONS = {}
 _USER_SEMS = {}
 
@@ -260,8 +276,9 @@ async def get_user_http_session(uid, purpose="general"):
     key = f"{uid}_{purpose}"
     session = _USER_HTTP_SESSIONS.get(key)
     if session is None or session.closed:
-        connector = aiohttp.TCPConnector(limit=0, ssl=False)
-        session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=API_TIMEOUT), connector=connector)
+        connector = aiohttp.TCPConnector(limit=200, ssl=False, enable_cleanup_closed=True)
+        timeout = aiohttp.ClientTimeout(total=45, connect=15, sock_read=20)
+        session = aiohttp.ClientSession(timeout=timeout, connector=connector)
         _USER_HTTP_SESSIONS[key] = session
     return session
 
@@ -303,6 +320,27 @@ def format_proxy_for_api(proxy):
         return clean
     return ""
 
+def parse_proxy_format(proxy):
+    proxy = proxy.strip()
+    pt = 'http'
+    pm = re.match(r'^(socks5|socks4|http|https)://(.+)$', proxy, re.IGNORECASE)
+    if pm: pt, proxy = pm.group(1).lower(), pm.group(2)
+    h = p = u = pw = ''
+    if re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy):
+        m_parts = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy)
+        u, pw, h, p = m_parts.groups()
+    elif re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy):
+        m2 = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy)
+        ph, pp, pu, ppw = m2.groups()
+        if 0 < int(pp) <= 65535: h, p, u, pw = ph, pp, pu, ppw
+    elif re.match(r'^([^:@]+):(\d+)$', proxy):
+        m3 = re.match(r'^([^:@]+):(\d+)$', proxy)
+        h, p = m3.groups()
+    else: return None
+    if not h or not p: return None
+    pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
+    return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
+
 _CACHED_SITES = []
 _LAST_SITES_FETCH = 0
 async def get_github_sites():
@@ -338,7 +376,8 @@ async def check_card_api(card, site, proxy, session, gateway_name):
         fproxy = format_proxy_for_api(proxy)
         if fproxy: params['proxy'] = fproxy
         
-        async with session.get(CHECKER_API_URL, params=params) as resp:
+        strict_timeout = aiohttp.ClientTimeout(total=20)
+        async with session.get(CHECKER_API_URL, params=params, timeout=strict_timeout) as resp:
             text_data = await resp.text()
             if resp.status != 200: return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
             try: rj = json.loads(text_data)
@@ -368,8 +407,10 @@ async def check_card_api(card, site, proxy, session, gateway_name):
                 return {'status': 'Site Error', 'message': response_msg, 'card': card, 'retry': True, 'gateway': gate, 'price': price}
             return {'status': 'Dead', 'message': response_msg, 'card': card, 'site': site, 'gateway': gate, 'price': price}
 
-    except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
-    except Exception: return {'status': 'Site Error', 'message': 'Connection dropped', 'card': card, 'retry': True}
+    except asyncio.TimeoutError: 
+        return {'status': 'Site Error', 'message': 'API Timeout (Skipped to prevent freeze)', 'card': card, 'retry': True}
+    except Exception: 
+        return {'status': 'Site Error', 'message': 'Connection dropped', 'card': card, 'retry': True}
 
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, max_retries=3):
     last_result = None
@@ -443,7 +484,6 @@ async def auto_file_check_cmd(event):
         
         PENDING_FILES[uid] = cards
         
-        # أزرار البوابات مع علامة Soon
         kb = [
             [Button.inline("🛍️ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘎𝘢𝘵𝘦𝘸𝘢𝘺", b"gate:Shopify"), Button.inline("💳 𝘚𝘵𝘳𝘪𝘱𝘦 (𝘚𝘰𝘰𝘯)", b"gate:soon_Stripe")],
             [Button.inline("🅿️ 𝘗𝘢𝘺𝘗𝘢𝘭 (𝘚𝘰𝘰𝘯)", b"gate:soon_PayPal"), Button.inline("🌐 𝘉𝘳𝘢𝘪𝘯𝘵𝘳𝘦𝘦 (𝘚𝘰𝘰𝘯)", b"gate:soon_Braintree")],
@@ -459,7 +499,6 @@ async def gateway_selection_cb(event):
     uid = event.sender_id
     gate_name = event.pattern_match.group(1).decode()
     
-    # اعتراض الأزرار التي تحتوي على Soon
     if gate_name.startswith("soon_"):
         real_name = gate_name.split("_")[1]
         return await event.answer(f"⏳ {real_name} Gateway is coming soon! Please choose another.", alert=True)
@@ -499,7 +538,7 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
 
     async def dashboard_updater():
         while not is_stopped():
-            await asyncio.sleep(2)
+            await asyncio.sleep(3.5)
             if is_stopped(): break
             kb = [
                 [Button.inline(f"⦗ 💳 ⦘ {lcd}", b"none")],
@@ -515,13 +554,12 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
     queue = asyncio.Queue()
     for c in cards: queue.put_nowait(c)
 
-    # خريطة تحويل الحالات لتظهر بشكل فخم في الزر
     royal_status_map = {
-        'Charged': '𝘊𝘩𝘢𝘳𝘨𝘦𝘥',
-        'Approved': '𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥',
-        'Insufficient': '𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵',
-        'Site Error': '𝘌𝘳𝘳𝘰𝘳',
-        'Dead': '𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥'
+        'Charged': '𝘊𝘩𝘢𝘳𝘨𝘦𝘥 🟢',
+        'Approved': '𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 ⚡',
+        'Insufficient': '𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 🟡',
+        'Site Error': '𝘌𝘳𝘳𝘰𝘳 ⚠️',
+        'Dead': '𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥 🔴'
     }
 
     async def worker():
@@ -539,10 +577,8 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
                 price = res.get('price', '-')
                 
                 checked += 1
-                
-                # إظهار حالة البطاقة بجانب الرقم داخل الزر
-                royal_status = royal_status_map.get(status, '𝘌𝘳𝘳𝘰𝘳')
-                lcd = f"{card} ⇾ {royal_status}"
+                royal_status = royal_status_map.get(status, '𝘌𝘳𝘳𝘰𝘳 ⚠️')
+                lcd = f"{card[:15]}... ⇾ {royal_status}"
                 
                 if status == 'Charged':
                     charged += 1
@@ -582,7 +618,6 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
         
     process_store.pop(uid, None)
     await cleanup_user_http_session(uid, sem_type)
-    cleanup_user_sem(uid)
 
 async def _send_mass_hit(card, status, message, price, gateway, uid):
     await asyncio.sleep(HIT_DELAY)
@@ -590,10 +625,12 @@ async def _send_mass_hit(card, status, message, price, gateway, uid):
         bi = await get_bin_info(card.split("|")[0])
         msg = format_card_result(status, card, gateway, message, price, bi, 0.0)
         
-        # الاعتماد الكلي والآمن على إرسال الـ URL لتجنب مشاكل الذاكرة والتأكد من إرسال GIF بنسبة 100%
-        gif_url = random.choice(ANIME_GIFS)
-        try: await styled_send(uid, msg, buttons=HIT_BUTTON, file=gif_url)
-        except: await styled_send(uid, msg, buttons=HIT_BUTTON)
+        gif_io = await fetch_gif()
+        if gif_io:
+            try: await styled_send(uid, msg, buttons=HIT_BUTTON, file=gif_io)
+            except: await styled_send(uid, msg, buttons=HIT_BUTTON)
+        else:
+            await styled_send(uid, msg, buttons=HIT_BUTTON)
     except: pass
 
 @client.on(events.CallbackQuery(pattern=rb"stop_chk:(\d+)"))
@@ -620,6 +657,96 @@ async def check_joined_cb(event):
         await styled_send(event.chat_id, f"⦗ ✨ ⦘ 𝘞𝘦𝘭𝘤𝘰𝘮𝘦\n𝘚𝘦𝘯𝘥 /start 𝘵𝘰 𝘴𝘦𝘦 𝘤𝘰𝘮𝘮𝘢𝘯𝘥𝘴.")
     else: await event.answer(f"❌ You are not joined!", alert=True)
 
+# ====================== PROXY COMMANDS ======================
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]addpxy'))
+async def add_proxy_cmd(event):
+    try:
+        if not await force_join_check(event): return
+        plan = await get_user_plan(event.sender_id)
+        if event.sender_id not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
+        
+        lines = []
+        if event.is_reply:
+            rm = await event.get_reply_message()
+            if rm.file:
+                fp = await rm.download_media()
+                if fp:
+                    try:
+                        async with aiofiles.open(fp, "r", encoding="utf-8") as f:
+                            lines = [l.strip() for l in (await f.read()).splitlines() if l.strip()]
+                        os.remove(fp)
+                    except: pass
+            elif rm.text: lines = [l.strip() for l in rm.text.splitlines() if l.strip()]
+        else:
+            p = event.raw_text.split(maxsplit=1)
+            if len(p) == 2: lines = [l.strip() for l in p[1].splitlines() if l.strip()]
+            else: return await styled_reply(event, "⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹: <code>/addpxy ip:port:user:pass</code>")
+        
+        if not lines: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘧𝘰𝘶𝘯𝘥.")
+        
+        cc = await get_proxy_count(event.sender_id)
+        if cc >= 100: return await styled_reply(event, "⚠️ 𝘓𝘪𝘮𝘪𝘵 𝟣𝟬𝟬/𝟣𝟬𝟬 𝘙𝘦𝘢𝘤𝘩𝘦𝘥.")
+        
+        parsed = []
+        for l in lines:
+            pd = parse_proxy_format(l)
+            if pd: parsed.append(pd)
+        if not parsed: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘷𝘢𝘭𝘪𝘥 𝘱𝘳𝘰𝘹𝘪𝘦𝘴.")
+        parsed = parsed[:100-cc]
+        
+        tm = await styled_reply(event, f"⦗ ⚙️ ⦘ 𝘈𝘥𝘥𝘪𝘯𝘨 {len(parsed)} 𝘗𝘳𝘰𝘹𝘪𝘦𝘴...")
+        added = 0
+        for pd2 in parsed:
+            await add_proxy_db(event.sender_id, pd2)
+            added += 1
+        await styled_edit(tm, f"✅ 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘈𝘥𝘥𝘦𝘥: <code>{added}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴")
+    except Exception as e: await event.reply(f"⚠️ Error: {e}")
+
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]proxy$'))
+async def view_proxies(event):
+    try:
+        if not await force_join_check(event): return
+        plan = await get_user_plan(event.sender_id)
+        if event.sender_id not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
+        
+        proxies = await get_all_user_proxies(event.sender_id)
+        if not proxies: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 𝘍𝘰𝘶𝘯𝘥.")
+        
+        text = f"⦗ 🛡️ ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 ({len(proxies)}/100)\n\n"
+        for i, p in enumerate(proxies[:30], 1): 
+            text += f"<code>{i}.</code> <code>{p['ip']}:{p['port']}</code>\n"
+        if len(proxies) > 30: text += f"\n<i>+{len(proxies)-30} 𝘮𝘰𝘳𝘦...</i>"
+        text += f"\n\n╰ 𝘜𝘴𝘦 <code>/rmpxy all</code> 𝘵𝘰 𝘤𝘭𝘦𝘢𝘳."
+        await styled_reply(event, text)
+    except Exception as e: await event.reply(f"⚠️ Error: {e}")
+
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]rmpxy'))
+async def remove_proxy_cmd(event):
+    try:
+        if not await force_join_check(event): return
+        plan = await get_user_plan(event.sender_id)
+        if event.sender_id not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
+        
+        proxies = await get_all_user_proxies(event.sender_id)
+        if not proxies: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 𝘍𝘰𝘶𝘯𝘥.")
+        
+        p = event.raw_text.split(maxsplit=1)
+        if len(p) == 1: return await styled_reply(event, "⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹: <code>/rmpxy index</code> 𝘰𝘳 <code>all</code>")
+        
+        arg = p[1].strip().lower()
+        if arg == 'all':
+            c = await clear_all_proxies(event.sender_id)
+            return await styled_reply(event, f"✅ 𝘊𝘭𝘦𝘢𝘳𝘦𝘥 <code>{c}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴.")
+        
+        try:
+            idx = int(arg) - 1
+            if 0 <= idx < len(proxies):
+                rm = await remove_proxy_by_index(event.sender_id, idx)
+                await styled_reply(event, f"✅ 𝘙𝘦𝘮𝘰𝘷𝘦𝘥: <code>{rm['ip']}:{rm['port']}</code>")
+            else: await styled_reply(event, "⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘐𝘯𝘥𝘦𝘹.")
+        except: await styled_reply(event, "⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘐𝘯𝘥𝘦𝘹.")
+    except Exception as e: await event.reply(f"⚠️ Error: {e}")
+
 # ====================== UI / PLANS ======================
 @client.on(events.NewMessage(pattern=r'(?i)^[/.](start|cmds?|commands?)$'))
 async def start(event):
@@ -632,7 +759,7 @@ async def start(event):
         text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
 
 ├ ⦗ 💳 ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
-│ ╰ 𝘚𝘦𝘯𝘥 𝘢 .𝘵𝘹𝘵 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
+│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
 
 ├ ⦗ ⚙️ ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
 │ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
@@ -650,9 +777,12 @@ async def start(event):
             [Button.url("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK), Button.url("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK)]
         ]
         
-        gif_url = random.choice(ANIME_GIFS)
-        try: await styled_reply(event, text, buttons=kb, file=gif_url)
-        except Exception: await styled_reply(event, text, buttons=kb)
+        gif_io = await fetch_gif(WELCOME_GIF)
+        if gif_io:
+            try: await styled_reply(event, text, buttons=kb, file=gif_io)
+            except Exception: await styled_reply(event, text, buttons=kb)
+        else:
+            await styled_reply(event, text, buttons=kb)
             
     except Exception as e: await event.reply(f"⚠️ Error in /start: {e}")
 
@@ -725,18 +855,22 @@ async def _handle_plan_assign(event, plan_key):
 🎉 𝘊𝘰𝘯𝘨𝘳𝘢𝘵𝘶𝘭𝘢𝘵𝘪𝘰𝘯𝘴! 𝘠𝘰𝘶𝘳 𝘢𝘤𝘤𝘰𝘶𝘯𝘵 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘶𝘱𝘨𝘳𝘢𝘥𝘦𝘥.
 
 ⦗ 💎 ⦘ 𝘗𝘭𝘢𝘯 𝘋𝘦𝘵𝘢𝘪𝘭𝘴 ⇾
-├ 𝘗𝘭𝘢𝘯: {pi['emoji']} {pi['name']}
+├ 𝘗𝘭𝘢𝘯: {pi['emoji']} <code>{pi['name']}</code>
 ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>
 ├ 𝘔𝘢𝘴𝘴 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>
 ╰ 𝘌𝘹𝘱𝘪𝘳𝘦𝘴 𝘖𝘯: <code>{expiry_date}</code>
 
-⦗ 🚀 ⦘ 𝘌𝘯𝘫𝘰𝘺 𝘶𝘭𝘵𝘳𝘢-𝘧𝘢𝘴𝘵 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨 𝘸𝘪𝘵𝘩 𝟩𝟬 𝘞𝘰𝘳𝘬𝘦𝘳𝘴!
-𝘚𝘦𝘯𝘥 𝘺𝘰𝘶𝘳 .𝘵𝘹𝘵 𝘧𝘪𝘭𝘦 𝘯𝘰𝘸 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵 𝘵𝘩𝘦 𝘱𝘳𝘰𝘤𝘦𝘴𝘴."""
+⦗ 🚀 ⦘ 𝘌𝘯𝘫𝘰𝘺 𝘶𝘭𝘵𝘳𝘢-𝘧𝘢𝘴𝘵 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨 𝘸𝘪𝘵𝘩 <code>{WORKERS}</code> 𝘞𝘰𝘳𝘬𝘦𝘳𝘴!
+𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘯𝘰𝘸 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵 𝘵𝘩𝘦 𝘱𝘳𝘰𝘤𝘦𝘴𝘴."""
 
-    gif_url = random.choice(ANIME_GIFS)
-    try: await styled_send(target_uid, user_msg, file=gif_url)
-    except Exception as e:
-        logging.info(f"Could not send upgrade message to {target_uid}: {e}")
+    gif_io = await fetch_gif()
+    if gif_io:
+        try: await styled_send(target_uid, user_msg, file=gif_io)
+        except Exception as e:
+            logging.info(f"Could not send upgrade message with GIF to {target_uid}: {e}")
+            try: await styled_send(target_uid, user_msg)
+            except: pass
+    else:
         try: await styled_send(target_uid, user_msg)
         except: pass
 

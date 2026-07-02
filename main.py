@@ -1,4 +1,4 @@
-# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝗠𝗮𝘀𝘀 𝗢𝗻𝗹𝘆 - 𝗚𝗮𝘁𝗲𝘄𝗮𝘆𝘀 [𝗦𝗼𝗼𝗻] - 𝗥𝗼𝘆𝗮𝗹 𝗙𝗼𝗻𝘁 - 𝟭𝟮𝟬𝗪 - 𝟭𝟬𝟬% 𝗚𝗜𝗙 𝗙𝗶𝘅)
+# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟭𝟮𝟬𝗪 - 𝗦𝘁𝗿𝗶𝗰𝘁 𝗣𝗿𝗼𝘅𝘆 - 𝗙𝗲𝗲𝗱𝗯𝗮𝗰𝗸 - 𝗙𝗼𝗿𝗰𝗲 𝗝𝗼𝗶𝗻 - 𝗭𝗲𝗿𝗼 𝗘𝗿𝗿𝗼𝗿𝘀)
 from telethon.errors import FloodWaitError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantBanned
@@ -12,6 +12,7 @@ import time
 import json
 import re
 import logging
+import io
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -29,7 +30,7 @@ from database2 import (
     remove_joined_mark, get_total_users, get_premium_count
 )
 
-# ====================== CONFIG ======================
+# ====================== CONFIG (إعدادات البوت) ======================
 API_ID = int(os.getenv('API_ID', 0))
 API_HASH = os.getenv('API_HASH', '').strip()
 BOT_TOKEN = os.getenv('BOT_TOKEN', '').strip()
@@ -41,8 +42,10 @@ _admin_env = os.getenv("ADMIN_ID", "8879293808")
 try: ADMIN_ID = [int(x.strip()) for x in _admin_env.split(",") if x.strip()]
 except: ADMIN_ID = [8879293808]
 
-JOIN_GROUP_ID = int(os.getenv("JOIN_GROUP_ID", 0))
-JOIN_CHANNEL_ID = int(os.getenv("JOIN_CHANNEL_ID", 0))
+# ⚠️ ضع أيدي القناة والجروب هنا (يجب أن يبدأ بـ -100) ليقوم البوت بإجبار الأعضاء
+JOIN_GROUP_ID = int(os.getenv("-1004466775890", 0))       # مثال: -1001234567890
+JOIN_CHANNEL_ID = int(os.getenv("-1004436210980", 0))   # مثال: -1001234567890
+
 JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
 JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
 
@@ -56,11 +59,9 @@ API_TIMEOUT = 60
 DELAY = 0.05
 HIT_DELAY = 0.5
 
-# --- SPEED OPTIMIZATION CACHES ---
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 4
 _JOIN_CACHE = {}
-GLOBAL_SESSION = None
 
 # ====================== VIP EMOJIS, FLAGS & GIFS ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
@@ -92,16 +93,7 @@ ANIME_GIFS = [
     "https://media.giphy.com/media/1n4iuWZFnTeN6qvdpD/giphy.gif", "https://media.giphy.com/media/11KzOet1ElBDz2/giphy.gif",
     "https://media.giphy.com/media/4ilFRqgbzbx4c/giphy.gif", "https://media.giphy.com/media/xT1R9yebNpKAAJjH0s/giphy.gif",
     "https://media.giphy.com/media/108BDeJ2BvtZRu/giphy.gif", "https://media.giphy.com/media/F3uJq1J1x0u6k/giphy.gif",
-    "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif", "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif",
-    "https://media.giphy.com/media/oYxqA3S2ZqO3u/giphy.gif", "https://media.giphy.com/media/xUPGcxpCV81ebhq7cI/giphy.gif",
-    "https://media.giphy.com/media/l41lUjUgLLwWPe20E/giphy.gif", "https://media.giphy.com/media/l0HlNQ03J5JxX6lva/giphy.gif",
-    "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif", "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif",
-    "https://media.giphy.com/media/l3vR16pONsV8cKCEE/giphy.gif", "https://media.giphy.com/media/xT0xezQGU5xCDJuCPe/giphy.gif",
-    "https://media.giphy.com/media/3oKIPnAiaCRi8NNRWU/giphy.gif", "https://media.giphy.com/media/xT9IgzoWaVYHbYqNUk/giphy.gif",
-    "https://media.giphy.com/media/26BkLGA2PqBf02Mpy/giphy.gif", "https://media.giphy.com/media/3o7TKsQ8gE0bF40Y6I/giphy.gif",
-    "https://media.giphy.com/media/xT0xem7ZlZ2DOYqpG0/giphy.gif", "https://media.giphy.com/media/l46CtynlAiRNzfsIG/giphy.gif",
-    "https://media.giphy.com/media/3o7WIxrKxS22wI3B0A/giphy.gif", "https://media.giphy.com/media/l0HlRnAWXxn0MhKLK/giphy.gif",
-    "https://media.giphy.com/media/xT9DPIlGnuHpr2yOic/giphy.gif"
+    "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif", "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif"
 ]
 
 PLANS = {
@@ -132,46 +124,51 @@ _DEAD_INDICATORS = (
     'session_error', 'session expired'
 )
 
-# ====================== LIGHTNING FAST HELPER FUNCTIONS ======================
-async def get_global_session():
-    global GLOBAL_SESSION
-    if GLOBAL_SESSION is None or GLOBAL_SESSION.closed:
-        GLOBAL_SESSION = aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=100))
-    return GLOBAL_SESSION
-
+# ====================== HELPER FUNCTIONS ======================
 def is_dead_site_error(error_msg):
     if not error_msg: return True
     return any(keyword in str(error_msg).lower() for keyword in _DEAD_INDICATORS)
 
 async def is_user_joined(user_id):
     if not JOIN_CHANNEL_ID and not JOIN_GROUP_ID: return True
-    try:
-        if JOIN_CHANNEL_ID:
+    
+    # فحص صارم للقناة
+    if JOIN_CHANNEL_ID:
+        try:
             part = await client_instance(GetParticipantRequest(channel=JOIN_CHANNEL_ID, participant=user_id))
             if isinstance(part.participant, ChannelParticipantBanned): return False
-        if JOIN_GROUP_ID:
+        except Exception:
+            return False
+            
+    # فحص صارم للجروب
+    if JOIN_GROUP_ID:
+        try:
             part = await client_instance(GetParticipantRequest(channel=JOIN_GROUP_ID, participant=user_id))
             if isinstance(part.participant, ChannelParticipantBanned): return False
-        return True
-    except: return False
+        except Exception:
+            return False
+            
+    return True
 
 async def force_join_check(event):
     uid = event.sender_id
     if uid in ADMIN_ID: return True
     
     now = time.time()
-    if uid in _JOIN_CACHE and now - _JOIN_CACHE[uid] < 600:
-        return True
-        
+    if uid in _JOIN_CACHE and now - _JOIN_CACHE[uid] < 600: return True
+    
     if await is_user_joined(uid):
         _JOIN_CACHE[uid] = now
         return True
     
+    # رسالة الإجبار بالخط الملكي
+    text = """⦗ 🛑 ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺' 𝘵𝘰 𝘤𝘰𝘯𝘵𝘪𝘯𝘶𝘦."""
     kb = []
     if JOIN_CHANNEL_LINK: kb.append(Button.url("📢 𝘑𝘰𝘪𝘯 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK))
     if JOIN_GROUP_LINK: kb.append(Button.url("💬 𝘑𝘰𝘪𝘯 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK))
     kb = [kb, [Button.inline("✅ 𝘝𝘦𝘳𝘪𝘧𝘺", b"check_joined")]]
-    await event.reply(f"⚠️ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵!", buttons=kb, parse_mode="html")
+    
+    await event.reply(text, buttons=kb, parse_mode="html")
     return False
 
 def is_paid_plan(plan):
@@ -179,11 +176,11 @@ def is_paid_plan(plan):
 
 def get_cc_limit(plan, uid=0):
     if uid in ADMIN_ID: return 50000
-    plan_lower = plan.lower() if plan else ""
-    if plan_lower == "core": return 100
-    if plan_lower == "elite": return 500
-    if plan_lower == "root": return 2000
-    if plan_lower == "x": return 10000
+    plan_lower = str(plan).lower() if plan else "bronze"
+    if "x" in plan_lower: return 10000
+    if "root" in plan_lower: return 2000
+    if "elite" in plan_lower: return 500
+    if "core" in plan_lower: return 100
     return 15
 
 async def send_premium_only_message(event):
@@ -263,7 +260,7 @@ def format_card_result(status, card, gateway, response, price="-", bin_info=None
 
 ⦗ {get_custom_emoji('time', '⏱')} ⦘ 𝘛𝘰𝘰𝘬 ⇾ <code>{elapsed:.2f}s</code>"""
 
-# ====================== HTTP SESSIONS FOR 120 WORKERS ======================
+# ====================== SESSIONS ======================
 _USER_HTTP_SESSIONS = {}
 _USER_SEMS = {}
 
@@ -307,20 +304,6 @@ def extract_cc(text):
         for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
     return list(dict.fromkeys(cards))
 
-def format_proxy_for_api(proxy):
-    if not proxy: return ""
-    if isinstance(proxy, dict):
-        if proxy.get('username') and proxy.get('password'):
-            return f"{proxy['username']}:{proxy['password']}@{proxy['ip']}:{proxy['port']}"
-        return f"{proxy['ip']}:{proxy['port']}"
-    if isinstance(proxy, str):
-        clean = proxy.strip()
-        if "://" in clean:
-            try: return urlparse(clean).netloc
-            except: return clean
-        return clean
-    return ""
-
 def parse_proxy_format(proxy):
     proxy = proxy.strip()
     pt = 'http'
@@ -342,6 +325,20 @@ def parse_proxy_format(proxy):
     pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
     return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
 
+def format_proxy_for_api(proxy):
+    if not proxy: return ""
+    if isinstance(proxy, dict):
+        if proxy.get('username') and proxy.get('password'):
+            return f"{proxy['username']}:{proxy['password']}@{proxy['ip']}:{proxy['port']}"
+        return f"{proxy['ip']}:{proxy['port']}"
+    if isinstance(proxy, str):
+        clean = proxy.strip()
+        if "://" in clean:
+            try: return urlparse(clean).netloc
+            except: return clean
+        return clean
+    return ""
+
 _CACHED_SITES = []
 _LAST_SITES_FETCH = 0
 async def get_github_sites():
@@ -349,14 +346,14 @@ async def get_github_sites():
     now = time.time()
     if _CACHED_SITES and (now - _LAST_SITES_FETCH < 600): return _CACHED_SITES
     try:
-        session = await get_global_session()
-        async with session.get(GITHUB_SITES_URL, timeout=10) as r:
-            if r.status == 200:
-                text = await r.text()
-                sites = [re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in text.split('\n') if line.strip()]
-                if sites:
-                    _CACHED_SITES = list(set(sites))
-                    _LAST_SITES_FETCH = now
+        async with aiohttp.ClientSession() as s:
+            async with s.get(GITHUB_SITES_URL, timeout=10) as r:
+                if r.status == 200:
+                    text = await r.text()
+                    sites = [re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in text.split('\n') if line.strip()]
+                    if sites:
+                        _CACHED_SITES = list(set(sites))
+                        _LAST_SITES_FETCH = now
     except: pass
     if not _CACHED_SITES and os.path.exists('sites.txt'):
         try:
@@ -367,7 +364,7 @@ async def get_github_sites():
 
 def get_txt_proxies(): return []
 
-# ====================== STRICT API CHECKER ======================
+# ====================== API CHECKER ======================
 async def check_card_api(card, site, proxy, session, gateway_name):
     try:
         parts = card.split('|')
@@ -408,10 +405,8 @@ async def check_card_api(card, site, proxy, session, gateway_name):
                 return {'status': 'Site Error', 'message': response_msg, 'card': card, 'retry': True, 'gateway': gate, 'price': price}
             return {'status': 'Dead', 'message': response_msg, 'card': card, 'site': site, 'gateway': gate, 'price': price}
 
-    except asyncio.TimeoutError: 
-        return {'status': 'Site Error', 'message': 'API Timeout (Skipped to prevent freeze)', 'card': card, 'retry': True}
-    except Exception: 
-        return {'status': 'Site Error', 'message': 'Connection dropped', 'card': card, 'retry': True}
+    except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
+    except Exception: return {'status': 'Site Error', 'message': 'Connection dropped', 'card': card, 'retry': True}
 
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, max_retries=3):
     last_result = None
@@ -450,7 +445,7 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
     if last_result: return {'status': 'Dead', 'message': f'{str(last_result["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': last_result.get('price', '-')}
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
 
-# ====================== AUTO MASS CHECK ======================
+# ====================== AUTO MASS CHECK (GATEWAY SELECTION) ======================
 @client.on(events.NewMessage(func=lambda e: getattr(e, 'document', None) and e.document.mime_type.startswith('text/')))
 async def auto_file_check_cmd(event):
     try:
@@ -466,7 +461,16 @@ async def auto_file_check_cmd(event):
         if not await force_join_check(event): return
         
         plan = await get_user_plan(uid)
-        if uid not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
+        
+        # حماية صارمة: الفحص يتطلب بروكسي اجبارياً
+        proxies = await get_all_user_proxies(uid)
+        if not proxies: proxies = []
+        try: proxies.extend(get_txt_proxies())
+        except: pass
+        proxies = [p for p in proxies if p]
+        
+        if len(proxies) == 0:
+            return await styled_reply(event, "⚠️ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘢𝘥𝘥 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘣𝘦𝘧𝘰𝘳𝘦 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨! 𝘜𝘴𝘦 <code>/addpxy</code> 𝘵𝘰 𝘢𝘥𝘥.")
         
         if uid in ACTIVE_MTXT_PROCESSES: return await styled_reply(event, "⚠️ 𝘈 𝘱𝘳𝘰𝘤𝘦𝘴𝘴 𝘪𝘴 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘢𝘤𝘵𝘪𝘷𝘦!")
         
@@ -525,7 +529,9 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
     
     sites = await get_github_sites()
     proxies = await get_all_user_proxies(uid)
-    proxies.extend(get_txt_proxies())
+    if not proxies: proxies = []
+    try: proxies.extend(get_txt_proxies())
+    except: pass
     proxies = [p for p in proxies if p]
 
     user_sem = get_user_sem(uid, sem_type)
@@ -626,7 +632,6 @@ async def _send_mass_hit(card, status, message, price, gateway, uid):
         bi = await get_bin_info(card.split("|")[0])
         msg = format_card_result(status, card, gateway, message, price, bi, 0.0)
         
-        # إرسال الصورة كـ URL المباشر لضمان توافقها 100% بدون تعليق
         gif_url = random.choice(ANIME_GIFS)
         try: await styled_send(uid, msg, buttons=HIT_BUTTON, file=gif_url)
         except: await styled_send(uid, msg, buttons=HIT_BUTTON)
@@ -643,6 +648,28 @@ async def stop_chk_cb(event):
         for t in proc.get("tasks", []):
             if not t.done(): t.cancel()
     await event.answer("Stopping Process...", alert=True)
+
+# ====================== FEEDBACK COMMAND ======================
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]fb(?:\s+(.*))?'))
+async def feedback_cmd(event):
+    if not await force_join_check(event): return
+    uid = event.sender_id
+    text = event.pattern_match.group(1)
+    
+    if not text and not event.is_reply and not getattr(event.message, 'media', None):
+        return await styled_reply(event, "⚠️ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘧𝘦𝘦𝘥𝘣𝘢𝘤𝘬 𝘵𝘦𝘹𝘵 𝘰𝘳 𝘳𝘦𝘱𝘭𝘺 𝘵𝘰 𝘢 𝘱𝘩𝘰𝘵𝘰/𝘮𝘦𝘴𝘴𝘢𝘨𝘦.")
+
+    admin = ADMIN_ID[0] if ADMIN_ID else None
+    if admin:
+        try:
+            await client_instance.forward_messages(admin, event.message)
+            await client_instance.send_message(admin, f"📩 <b>𝗡𝗲𝘄 𝗙𝗲𝗲𝗱𝗯𝗮𝗰𝗸 𝗳𝗿𝗼𝗺:</b> <code>{uid}</code>", parse_mode="html")
+        except: pass
+
+    reply_text = "⦗ ✨ ⦘ 𝘠𝘰𝘶𝘳 𝘧𝘦𝘦𝘥𝘣𝘢𝘤𝘬 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘴𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘴𝘦𝘯𝘵 𝘵𝘰 𝘵𝘩𝘦 𝘰𝘸𝘯𝘦𝘳. 𝘛𝘩𝘢𝘯𝘬 𝘺𝘰𝘶 𝘧𝘰𝘳 𝘺𝘰𝘶𝘳 𝘴𝘶𝘱𝘱𝘰𝘳𝘵! 👑"
+    gif_url = random.choice(ANIME_GIFS)
+    try: await styled_reply(event, reply_text, file=gif_url)
+    except: await styled_reply(event, reply_text)
 
 @client.on(events.CallbackQuery(data=b"check_joined"))
 async def check_joined_cb(event):
@@ -661,8 +688,6 @@ async def check_joined_cb(event):
 async def add_proxy_cmd(event):
     try:
         if not await force_join_check(event): return
-        plan = await get_user_plan(event.sender_id)
-        if event.sender_id not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
         
         lines = []
         if event.is_reply:
@@ -684,7 +709,7 @@ async def add_proxy_cmd(event):
         if not lines: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘧𝘰𝘶𝘯𝘥.")
         
         cc = await get_proxy_count(event.sender_id)
-        if cc >= 100: return await styled_reply(event, "⚠️ 𝘓𝘪𝘮𝘪𝘵 𝟣𝟬𝟬/𝟣𝟬𝟬 𝘙𝘦𝘢𝘤𝘩𝘦𝘥.")
+        if cc >= 100: return await styled_reply(event, "⚠️ 𝘓𝘪𝘮𝘪𝘵 𝟣𝟬𝟬/𝟣𝟬𝟬 𝘙𝘦𝘢𝘤𝘩𝘦𝘥. 𝘗𝘭𝘦𝘢𝘴𝘦 𝘳𝘦𝘮𝘰𝘷𝘦 𝘴𝘰𝘮𝘦 𝘧𝘪𝘳𝘴𝘵.")
         
         parsed = []
         for l in lines:
@@ -705,8 +730,6 @@ async def add_proxy_cmd(event):
 async def view_proxies(event):
     try:
         if not await force_join_check(event): return
-        plan = await get_user_plan(event.sender_id)
-        if event.sender_id not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
         
         proxies = await get_all_user_proxies(event.sender_id)
         if not proxies: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 𝘍𝘰𝘶𝘯𝘥.")
@@ -723,8 +746,6 @@ async def view_proxies(event):
 async def remove_proxy_cmd(event):
     try:
         if not await force_join_check(event): return
-        plan = await get_user_plan(event.sender_id)
-        if event.sender_id not in ADMIN_ID and not is_paid_plan(plan): return await send_premium_only_message(event)
         
         proxies = await get_all_user_proxies(event.sender_id)
         if not proxies: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 𝘍𝘰𝘶𝘯𝘥.")
@@ -767,9 +788,10 @@ async def start(event):
 
 ╰ ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
   ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
-  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪प्‍𝘵𝘪𝘰𝘯𝘴
+  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬
+  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴
 
-⦗ 💎 ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title()} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
+⦗ 💎 ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
         
         kb = [
             [Button.inline("⦗ 💎 ⦘ 𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", b"show_plans")],
@@ -780,6 +802,35 @@ async def start(event):
         except Exception: await styled_reply(event, text, buttons=kb)
             
     except Exception as e: await event.reply(f"⚠️ Error in /start: {e}")
+
+@client.on(events.CallbackQuery(data=b"back_start"))
+async def back_start_cb(event):
+    uid = event.sender_id
+    plan = await get_user_plan(uid)
+    limit = get_cc_limit(plan, uid)
+    
+    text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
+
+├ ⦗ 💳 ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
+│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
+
+├ ⦗ ⚙️ ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
+│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+
+╰ ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
+  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
+  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬
+  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴
+
+⦗ 💎 ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
+        
+    kb = [
+        [Button.inline("⦗ 💎 ⦘ 𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", b"show_plans")],
+        [Button.url("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK), Button.url("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK)]
+    ]
+    await styled_edit(event, text, buttons=kb)
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]info$'))
 async def info_cmd(event):
@@ -792,7 +843,7 @@ async def info_cmd(event):
 
 ├ 𝘐𝘋: <code>{event.sender_id}</code>
 ├ 𝘚𝘵𝘢𝘵𝘶𝘴: <code>{status}</code>
-├ 𝘗𝘭𝘢𝘯: <code>{plan.title()}</code>
+├ 𝘗𝘭𝘢𝘯: <code>{plan.title() if plan else 'Bronze'}</code>
 ╰ 𝘓𝘪𝘮𝘪𝘵: <code>{limit} 𝘊𝘊𝘴</code>"""
     await styled_reply(event, text)
 
@@ -804,8 +855,11 @@ async def plans_cb(event):
     for pid, pi in PLANS.items():
         plans_text += f"├ {pi['emoji']} {pi['name']}\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
     
-    plans_text += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title()}</code>"
-    kb = [[Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘜𝘱𝘨𝘳𝘢𝘥𝘦", "https://t.me/Dddadddyttt")]]
+    plans_text += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
+    kb = [
+        [Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘜𝘱𝘨𝘳𝘢𝘥𝘦", "https://t.me/Dddadddyttt")],
+        [Button.inline("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", b"back_start")]
+    ]
     await styled_edit(event, plans_text, buttons=kb)
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]plan$'))
@@ -816,8 +870,11 @@ async def show_plans(event):
     for pid, pi in PLANS.items():
         plans_text += f"├ {pi['emoji']} {pi['name']}\n│ ├ 𝘋𝘶𝗿𝗮𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
     
-    plans_text += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title()}</code>"
-    kb = [[Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘜𝘱𝘨𝘳𝘢𝘥𝘦", "https://t.me/Dddadddyttt")]]
+    plans_text += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
+    kb = [
+        [Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘜𝘱𝘨𝘳𝘢𝘥𝘦", "https://t.me/Dddadddyttt")],
+        [Button.inline("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", b"back_start")]
+    ]
     await styled_reply(event, plans_text, buttons=kb)
 
 # ====================== ADMIN COMMANDS ======================
@@ -850,7 +907,7 @@ async def _handle_plan_assign(event, plan_key):
 🎉 𝘊𝘰𝘯𝘨𝘳𝘢𝘵𝘶𝘭𝘢𝘵𝘪𝘰𝘯𝘴! 𝘠𝘰𝘶𝘳 𝘢𝘤𝘤𝘰𝘶𝘯𝘵 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘶𝘱𝘨𝘳𝘢𝘥𝘦𝘥.
 
 ⦗ 💎 ⦘ 𝘗𝘭𝘢𝘯 𝘋𝘦𝘵𝘢𝘪𝘭𝘴 ⇾
-├ 𝘗𝘭𝘢𝘯: {pi['emoji']} {pi['name']}
+├ 𝘗𝘭𝘢𝘯: {pi['emoji']} <code>{pi['name']}</code>
 ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>
 ├ 𝘔𝘢𝘴𝘴 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>
 ╰ 𝘌𝘹𝘱𝘪𝘳𝘦𝘴 𝘖𝘯: <code>{expiry_date}</code>

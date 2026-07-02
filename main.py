@@ -1,5 +1,5 @@
 # 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟭𝟮𝟬𝗪 - 𝗦𝘁𝗿𝗶𝗰𝘁 𝗣𝗿𝗼𝘅𝘆 - 𝗙𝗲𝗲𝗱𝗯𝗮𝗰𝗸 - 𝗙𝗼𝗿𝗰𝗲 𝗝𝗼𝗶𝗻 - 𝗭𝗲𝗿𝗼 𝗘𝗿𝗿𝗼𝗿𝘀)
-from telethon.errors import FloodWaitError
+from telethon.errors import FloodWaitError, UserNotParticipantError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantBanned
 from telethon.tl.functions.channels import GetParticipantRequest
@@ -42,12 +42,14 @@ _admin_env = os.getenv("ADMIN_ID", "8879293808")
 try: ADMIN_ID = [int(x.strip()) for x in _admin_env.split(",") if x.strip()]
 except: ADMIN_ID = [8879293808]
 
-# ⚠️ ضع أيدي القناة والجروب هنا (يجب أن يبدأ بـ -100) ليقوم البوت بإجبار الأعضاء
-JOIN_GROUP_ID = int(os.getenv("-1004466775890", 0))       # مثال: -1001234567890
-JOIN_CHANNEL_ID = int(os.getenv("-1004436210980", 0))   # مثال: -1001234567890
+# ⚠️ نظام الإجبار (الدرع الملكي) - ضع الايديهات والروابط هنا مباشرة
+# استبدل الصفر بأيدي القناة (يجب أن يبدأ بـ -100) وتأكد أن البوت "أدمن" في القناة!
+JOIN_CHANNEL_ID = -1004416063771  # 👈 مثال: -1001234567890
+JOIN_CHANNEL_LINK = "https://t.me/hgffrrddrddf" # 👈 رابط القناة
 
-JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
-JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
+# إذا لا تريد إجبار لجروب ثاني، اترك الجروب 0
+JOIN_GROUP_ID = -1004466775890    
+JOIN_GROUP_LINK = "https://t.me/jonvhddrrd"
 
 CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
 PROXY_FILE = 'proxy.txt'
@@ -61,7 +63,6 @@ HIT_DELAY = 0.5
 
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 4
-_JOIN_CACHE = {}
 
 # ====================== VIP EMOJIS, FLAGS & GIFS ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
@@ -93,7 +94,16 @@ ANIME_GIFS = [
     "https://media.giphy.com/media/1n4iuWZFnTeN6qvdpD/giphy.gif", "https://media.giphy.com/media/11KzOet1ElBDz2/giphy.gif",
     "https://media.giphy.com/media/4ilFRqgbzbx4c/giphy.gif", "https://media.giphy.com/media/xT1R9yebNpKAAJjH0s/giphy.gif",
     "https://media.giphy.com/media/108BDeJ2BvtZRu/giphy.gif", "https://media.giphy.com/media/F3uJq1J1x0u6k/giphy.gif",
-    "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif", "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif"
+    "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif", "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif",
+    "https://media.giphy.com/media/oYxqA3S2ZqO3u/giphy.gif", "https://media.giphy.com/media/xUPGcxpCV81ebhq7cI/giphy.gif",
+    "https://media.giphy.com/media/l41lUjUgLLwWPe20E/giphy.gif", "https://media.giphy.com/media/l0HlNQ03J5JxX6lva/giphy.gif",
+    "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif", "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif",
+    "https://media.giphy.com/media/l3vR16pONsV8cKCEE/giphy.gif", "https://media.giphy.com/media/xT0xezQGU5xCDJuCPe/giphy.gif",
+    "https://media.giphy.com/media/3oKIPnAiaCRi8NNRWU/giphy.gif", "https://media.giphy.com/media/xT9IgzoWaVYHbYqNUk/giphy.gif",
+    "https://media.giphy.com/media/26BkLGA2PqBf02Mpy/giphy.gif", "https://media.giphy.com/media/3o7TKsQ8gE0bF40Y6I/giphy.gif",
+    "https://media.giphy.com/media/xT0xem7ZlZ2DOYqpG0/giphy.gif", "https://media.giphy.com/media/l46CtynlAiRNzfsIG/giphy.gif",
+    "https://media.giphy.com/media/3o7WIxrKxS22wI3B0A/giphy.gif", "https://media.giphy.com/media/l0HlRnAWXxn0MhKLK/giphy.gif",
+    "https://media.giphy.com/media/xT9DPIlGnuHpr2yOic/giphy.gif"
 ]
 
 PLANS = {
@@ -124,51 +134,67 @@ _DEAD_INDICATORS = (
     'session_error', 'session expired'
 )
 
+# ====================== 100% RELIABLE GIF FETCHER ======================
+async def fetch_random_gif(specific_url=None):
+    # تحميل الصورة فعلياً كملف بالذاكرة لضمان عملها بنسبة 100% بدون أي أخطاء من تيليجرام
+    url = specific_url if specific_url else random.choice(ANIME_GIFS)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    file_data = await response.read()
+                    gif_io = io.BytesIO(file_data)
+                    gif_io.name = 'animation.gif'
+                    return gif_io
+    except Exception as e:
+        logging.error(f"Failed to fetch GIF: {e}")
+    return None
+
 # ====================== HELPER FUNCTIONS ======================
 def is_dead_site_error(error_msg):
     if not error_msg: return True
     return any(keyword in str(error_msg).lower() for keyword in _DEAD_INDICATORS)
 
 async def is_user_joined(user_id):
-    if not JOIN_CHANNEL_ID and not JOIN_GROUP_ID: return True
+    if JOIN_CHANNEL_ID == 0 and JOIN_GROUP_ID == 0: return True
     
     # فحص صارم للقناة
-    if JOIN_CHANNEL_ID:
+    if JOIN_CHANNEL_ID != 0:
         try:
             part = await client_instance(GetParticipantRequest(channel=JOIN_CHANNEL_ID, participant=user_id))
             if isinstance(part.participant, ChannelParticipantBanned): return False
-        except Exception:
+        except UserNotParticipantError:
+            return False
+        except Exception as e:
+            print(f"⚠️ [JOIN CHECK] Make sure the bot is ADMIN in channel {JOIN_CHANNEL_ID}. Error: {e}")
             return False
             
     # فحص صارم للجروب
-    if JOIN_GROUP_ID:
+    if JOIN_GROUP_ID != 0:
         try:
             part = await client_instance(GetParticipantRequest(channel=JOIN_GROUP_ID, participant=user_id))
             if isinstance(part.participant, ChannelParticipantBanned): return False
-        except Exception:
+        except UserNotParticipantError:
+            return False
+        except Exception as e:
+            print(f"⚠️ [JOIN CHECK] Make sure the bot is ADMIN in group {JOIN_GROUP_ID}. Error: {e}")
             return False
             
     return True
 
 async def force_join_check(event):
     uid = event.sender_id
-    if uid in ADMIN_ID: return True
+    if uid in ADMIN_ID: return True  # استثناء الأدمن من الإجبار
     
-    now = time.time()
-    if uid in _JOIN_CACHE and now - _JOIN_CACHE[uid] < 600: return True
+    if await is_user_joined(uid): return True
     
-    if await is_user_joined(uid):
-        _JOIN_CACHE[uid] = now
-        return True
-    
-    # رسالة الإجبار بالخط الملكي
-    text = """⦗ 🛑 ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺' 𝘵𝘰 𝘤𝘰𝘯𝘵𝘪𝘯𝘶𝘦."""
+    # رسالة الإجبار بالخط الملكي تظهر فقط لمن لم يشترك
     kb = []
-    if JOIN_CHANNEL_LINK: kb.append(Button.url("📢 𝘑𝘰𝘪𝘯 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK))
-    if JOIN_GROUP_LINK: kb.append(Button.url("💬 𝘑𝘰𝘪𝘯 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK))
+    if JOIN_CHANNEL_LINK and JOIN_CHANNEL_ID != 0: kb.append(Button.url("📢 𝘑𝘰𝘪𝘯 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK))
+    if JOIN_GROUP_LINK and JOIN_GROUP_ID != 0: kb.append(Button.url("💬 𝘑𝘰𝘪𝘯 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK))
     kb = [kb, [Button.inline("✅ 𝘝𝘦𝘳𝘪𝘧𝘺", b"check_joined")]]
     
-    await event.reply(text, buttons=kb, parse_mode="html")
+    await event.reply("⦗ 🛑 ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, parse_mode="html")
     return False
 
 def is_paid_plan(plan):
@@ -410,7 +436,7 @@ async def check_card_api(card, site, proxy, session, gateway_name):
 
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, max_retries=3):
     last_result = None
-    available_proxies = list(proxies) if proxies else [None]
+    available_proxies = list(proxies) if proxies else []
 
     for attempt in range(max_retries):
         active_sites = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
@@ -420,8 +446,8 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
 
         site = random.choice(active_sites)
         
-        if not available_proxies: available_proxies = list(proxies) if proxies else [None]
-        proxy = random.choice(available_proxies)
+        if not available_proxies: available_proxies = list(proxies) if proxies else []
+        proxy = random.choice(available_proxies) if available_proxies else None
         
         result = await check_card_api(card, site, proxy, session, gateway_name)
         
@@ -462,15 +488,11 @@ async def auto_file_check_cmd(event):
         
         plan = await get_user_plan(uid)
         
-        # حماية صارمة: الفحص يتطلب بروكسي اجبارياً
-        proxies = await get_all_user_proxies(uid)
-        if not proxies: proxies = []
-        try: proxies.extend(get_txt_proxies())
-        except: pass
-        proxies = [p for p in proxies if p]
-        
-        if len(proxies) == 0:
-            return await styled_reply(event, "⚠️ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘢𝘥𝘥 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘣𝘦𝘧𝘰𝘳𝘦 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨! 𝘜𝘴𝘦 <code>/addpxy</code> 𝘵𝘰 𝘢𝘥𝘥.")
+        # حماية صارمة: لا فحص بدون بروكسي إطلاقاً
+        db_proxies = await get_all_user_proxies(uid)
+        proxies = [p['proxy_url'] for p in db_proxies]
+        if not proxies:
+            return await styled_reply(event, "<b>⚠️ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘢𝘥𝘥 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘣𝘦𝘧𝘰𝘳𝘦 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨! 𝘜𝘴𝘦 <code>/addpxy</code> 𝘵𝘰 𝘢𝘥𝘥.</b>")
         
         if uid in ACTIVE_MTXT_PROCESSES: return await styled_reply(event, "⚠️ 𝘈 𝘱𝘳𝘰𝘤𝘦𝘴𝘴 𝘪𝘴 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘢𝘤𝘵𝘪𝘷𝘦!")
         
@@ -528,11 +550,8 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
     st = time.time()
     
     sites = await get_github_sites()
-    proxies = await get_all_user_proxies(uid)
-    if not proxies: proxies = []
-    try: proxies.extend(get_txt_proxies())
-    except: pass
-    proxies = [p for p in proxies if p]
+    db_proxies = await get_all_user_proxies(uid)
+    proxies = [p['proxy_url'] for p in db_proxies]
 
     user_sem = get_user_sem(uid, sem_type)
     http_session = await get_user_http_session(uid, sem_type)
@@ -576,9 +595,11 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
             except asyncio.QueueEmpty: break
             
             try:
+                card_st = time.time()
                 async with user_sem:
                     res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=3)
-                    
+                card_el = time.time() - card_st
+                
                 status = res.get('status', 'Dead')
                 message = res.get('message', 'Error')
                 price = res.get('price', '-')
@@ -589,13 +610,13 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
                 
                 if status == 'Charged':
                     charged += 1
-                    asyncio.create_task(_send_mass_hit(card, "Charged", message, price, gate_name, uid))
+                    asyncio.create_task(_send_mass_hit(card, "Charged", message, price, gate_name, uid, card_el))
                 elif status == 'Approved':
                     approved += 1
-                    asyncio.create_task(_send_mass_hit(card, "Approved", message, price, gate_name, uid))
+                    asyncio.create_task(_send_mass_hit(card, "Approved", message, price, gate_name, uid, card_el))
                 elif status == 'Insufficient':
                     insufficient += 1
-                    asyncio.create_task(_send_mass_hit(card, "Insufficient", message, price, gate_name, uid))
+                    asyncio.create_task(_send_mass_hit(card, "Insufficient", message, price, gate_name, uid, card_el))
                 elif status == 'Site Error': errors += 1
                 else: declined += 1
                     
@@ -626,15 +647,18 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
     process_store.pop(uid, None)
     await cleanup_user_http_session(uid, sem_type)
 
-async def _send_mass_hit(card, status, message, price, gateway, uid):
+async def _send_mass_hit(card, status, message, price, gateway, uid, elapsed):
     await asyncio.sleep(HIT_DELAY)
     try:
         bi = await get_bin_info(card.split("|")[0])
-        msg = format_card_result(status, card, gateway, message, price, bi, 0.0)
+        msg = format_card_result(status, card, gateway, message, price, bi, elapsed)
         
-        gif_url = random.choice(ANIME_GIFS)
-        try: await styled_send(uid, msg, buttons=HIT_BUTTON, file=gif_url)
-        except: await styled_send(uid, msg, buttons=HIT_BUTTON)
+        gif_io = await fetch_random_gif()
+        if gif_io:
+            try: await styled_send(uid, msg, buttons=HIT_BUTTON, file=gif_io)
+            except: await styled_send(uid, msg, buttons=HIT_BUTTON)
+        else:
+            await styled_send(uid, msg, buttons=HIT_BUTTON)
     except: pass
 
 @client.on(events.CallbackQuery(pattern=rb"stop_chk:(\d+)"))
@@ -667,9 +691,12 @@ async def feedback_cmd(event):
         except: pass
 
     reply_text = "⦗ ✨ ⦘ 𝘠𝘰𝘶𝘳 𝘧𝘦𝘦𝘥𝘣𝘢𝘤𝘬 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘴𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘴𝘦𝘯𝘵 𝘵𝘰 𝘵𝘩𝘦 𝘰𝘸𝘯𝘦𝘳. 𝘛𝘩𝘢𝘯𝘬 𝘺𝘰𝘶 𝘧𝘰𝘳 𝘺𝘰𝘶𝘳 𝘴𝘶𝘱𝘱𝘰𝘳𝘵! 👑"
-    gif_url = random.choice(ANIME_GIFS)
-    try: await styled_reply(event, reply_text, file=gif_url)
-    except: await styled_reply(event, reply_text)
+    gif_io = await fetch_random_gif()
+    if gif_io:
+        try: await styled_reply(event, reply_text, file=gif_io)
+        except: await styled_reply(event, reply_text)
+    else:
+        await styled_reply(event, reply_text)
 
 @client.on(events.CallbackQuery(data=b"check_joined"))
 async def check_joined_cb(event):
@@ -798,8 +825,12 @@ async def start(event):
             [Button.url("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK), Button.url("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK)]
         ]
         
-        try: await styled_reply(event, text, buttons=kb, file=WELCOME_GIF)
-        except Exception: await styled_reply(event, text, buttons=kb)
+        gif_io = await fetch_random_gif(WELCOME_GIF)
+        if gif_io:
+            try: await styled_reply(event, text, buttons=kb, file=gif_io)
+            except Exception: await styled_reply(event, text, buttons=kb)
+        else:
+            await styled_reply(event, text, buttons=kb)
             
     except Exception as e: await event.reply(f"⚠️ Error in /start: {e}")
 
@@ -915,10 +946,14 @@ async def _handle_plan_assign(event, plan_key):
 ⦗ 🚀 ⦘ 𝘌𝘯𝘫𝘰𝘺 𝘶𝘭𝘵𝘳𝘢-𝘧𝘢𝘴𝘵 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨 𝘸𝘪𝘵𝘩 <code>{WORKERS}</code> 𝘞𝘰𝘳𝘬𝘦𝘳𝘴!
 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘯𝘰𝘸 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵 𝘵𝘩𝘦 𝘱𝘳𝘰𝘤𝘦𝘴𝘴."""
 
-    gif_url = random.choice(ANIME_GIFS)
-    try: await styled_send(target_uid, user_msg, file=gif_url)
-    except Exception as e:
-        logging.info(f"Could not send upgrade message with GIF to {target_uid}: {e}")
+    gif_io = await fetch_random_gif()
+    if gif_io:
+        try: await styled_send(target_uid, user_msg, file=gif_io)
+        except Exception as e:
+            logging.info(f"Could not send upgrade message with GIF to {target_uid}: {e}")
+            try: await styled_send(target_uid, user_msg)
+            except: pass
+    else:
         try: await styled_send(target_uid, user_msg)
         except: pass
 

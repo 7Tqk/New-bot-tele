@@ -1,4 +1,4 @@
-# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝗠𝗮𝘀𝘀 𝗢𝗻𝗹𝘆 - 𝗚𝗮𝘁𝗲𝘄𝗮𝘆𝘀 [𝗦𝗼𝗼𝗻] - 𝗥𝗼𝘆𝗮𝗹 𝗙𝗼𝗻𝘁 - 𝟭𝟮𝟬𝗪 𝗙𝗶𝘅𝗲𝗱)
+# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝗠𝗮𝘀𝘀 𝗢𝗻𝗹𝘆 - 𝗚𝗮𝘁𝗲𝘄𝗮𝘆𝘀 [𝗦𝗼𝗼𝗻] - 𝗥𝗼𝘆𝗮𝗹 𝗙𝗼𝗻𝘁 - 𝟭𝟮𝟬𝗪 - 𝟭𝟬𝟬% 𝗚𝗜𝗙 𝗙𝗶𝘅)
 from telethon.errors import FloodWaitError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantBanned
@@ -12,7 +12,6 @@ import time
 import json
 import re
 import logging
-import io
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -54,12 +53,14 @@ GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.
 # --- MAX SPEED (120 WORKERS) ---
 WORKERS = 120 
 API_TIMEOUT = 60  
-DELAY = 0.02
+DELAY = 0.05
 HIT_DELAY = 0.5
 
-# --- SYSTEM FOR BROKEN SITES ---
+# --- SPEED OPTIMIZATION CACHES ---
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 4
+_JOIN_CACHE = {}
+GLOBAL_SESSION = None
 
 # ====================== VIP EMOJIS, FLAGS & GIFS ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
@@ -111,7 +112,6 @@ PLANS = {
 }
 PAID_TIERS = ["Core", "Elite", "Root", "X"]
 
-# State tracking
 USER_LAST_REQ = {}
 ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
@@ -132,18 +132,12 @@ _DEAD_INDICATORS = (
     'session_error', 'session expired'
 )
 
-# ====================== HELPER FUNCTIONS ======================
-async def fetch_gif(url=None):
-    target_url = url if url else random.choice(ANIME_GIFS)
-    try:
-        async with aiohttp.ClientSession() as s:
-            async with s.get(target_url, timeout=10) as r:
-                if r.status == 200:
-                    b = io.BytesIO(await r.read())
-                    b.name = 'animation.gif'
-                    return b
-    except: pass
-    return None
+# ====================== LIGHTNING FAST HELPER FUNCTIONS ======================
+async def get_global_session():
+    global GLOBAL_SESSION
+    if GLOBAL_SESSION is None or GLOBAL_SESSION.closed:
+        GLOBAL_SESSION = aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=100))
+    return GLOBAL_SESSION
 
 def is_dead_site_error(error_msg):
     if not error_msg: return True
@@ -164,7 +158,14 @@ async def is_user_joined(user_id):
 async def force_join_check(event):
     uid = event.sender_id
     if uid in ADMIN_ID: return True
-    if await is_user_joined(uid): return True
+    
+    now = time.time()
+    if uid in _JOIN_CACHE and now - _JOIN_CACHE[uid] < 600:
+        return True
+        
+    if await is_user_joined(uid):
+        _JOIN_CACHE[uid] = now
+        return True
     
     kb = []
     if JOIN_CHANNEL_LINK: kb.append(Button.url("📢 𝘑𝘰𝘪𝘯 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK))
@@ -276,7 +277,7 @@ async def get_user_http_session(uid, purpose="general"):
     key = f"{uid}_{purpose}"
     session = _USER_HTTP_SESSIONS.get(key)
     if session is None or session.closed:
-        connector = aiohttp.TCPConnector(limit=200, ssl=False, enable_cleanup_closed=True)
+        connector = aiohttp.TCPConnector(limit=250, ssl=False, enable_cleanup_closed=True)
         timeout = aiohttp.ClientTimeout(total=45, connect=15, sock_read=20)
         session = aiohttp.ClientSession(timeout=timeout, connector=connector)
         _USER_HTTP_SESSIONS[key] = session
@@ -348,14 +349,14 @@ async def get_github_sites():
     now = time.time()
     if _CACHED_SITES and (now - _LAST_SITES_FETCH < 600): return _CACHED_SITES
     try:
-        async with aiohttp.ClientSession() as s:
-            async with s.get(GITHUB_SITES_URL, timeout=10) as r:
-                if r.status == 200:
-                    text = await r.text()
-                    sites = [re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in text.split('\n') if line.strip()]
-                    if sites:
-                        _CACHED_SITES = list(set(sites))
-                        _LAST_SITES_FETCH = now
+        session = await get_global_session()
+        async with session.get(GITHUB_SITES_URL, timeout=10) as r:
+            if r.status == 200:
+                text = await r.text()
+                sites = [re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in text.split('\n') if line.strip()]
+                if sites:
+                    _CACHED_SITES = list(set(sites))
+                    _LAST_SITES_FETCH = now
     except: pass
     if not _CACHED_SITES and os.path.exists('sites.txt'):
         try:
@@ -366,7 +367,7 @@ async def get_github_sites():
 
 def get_txt_proxies(): return []
 
-# ====================== API CHECKER ======================
+# ====================== STRICT API CHECKER ======================
 async def check_card_api(card, site, proxy, session, gateway_name):
     try:
         parts = card.split('|')
@@ -449,7 +450,7 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
     if last_result: return {'status': 'Dead', 'message': f'{str(last_result["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': last_result.get('price', '-')}
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
 
-# ====================== AUTO MASS CHECK (GATEWAY SELECTION) ======================
+# ====================== AUTO MASS CHECK ======================
 @client.on(events.NewMessage(func=lambda e: getattr(e, 'document', None) and e.document.mime_type.startswith('text/')))
 async def auto_file_check_cmd(event):
     try:
@@ -625,12 +626,10 @@ async def _send_mass_hit(card, status, message, price, gateway, uid):
         bi = await get_bin_info(card.split("|")[0])
         msg = format_card_result(status, card, gateway, message, price, bi, 0.0)
         
-        gif_io = await fetch_gif()
-        if gif_io:
-            try: await styled_send(uid, msg, buttons=HIT_BUTTON, file=gif_io)
-            except: await styled_send(uid, msg, buttons=HIT_BUTTON)
-        else:
-            await styled_send(uid, msg, buttons=HIT_BUTTON)
+        # إرسال الصورة كـ URL المباشر لضمان توافقها 100% بدون تعليق
+        gif_url = random.choice(ANIME_GIFS)
+        try: await styled_send(uid, msg, buttons=HIT_BUTTON, file=gif_url)
+        except: await styled_send(uid, msg, buttons=HIT_BUTTON)
     except: pass
 
 @client.on(events.CallbackQuery(pattern=rb"stop_chk:(\d+)"))
@@ -751,8 +750,8 @@ async def remove_proxy_cmd(event):
 @client.on(events.NewMessage(pattern=r'(?i)^[/.](start|cmds?|commands?)$'))
 async def start(event):
     try:
-        await ensure_user(event.sender_id)
         if not await force_join_check(event): return
+        await ensure_user(event.sender_id)
         plan = await get_user_plan(event.sender_id)
         limit = get_cc_limit(plan, event.sender_id)
         
@@ -768,7 +767,7 @@ async def start(event):
 
 ╰ ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
   ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
-  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴
+  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪प्‍𝘵𝘪𝘰𝘯𝘴
 
 ⦗ 💎 ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title()} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
         
@@ -777,12 +776,8 @@ async def start(event):
             [Button.url("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK), Button.url("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK)]
         ]
         
-        gif_io = await fetch_gif(WELCOME_GIF)
-        if gif_io:
-            try: await styled_reply(event, text, buttons=kb, file=gif_io)
-            except Exception: await styled_reply(event, text, buttons=kb)
-        else:
-            await styled_reply(event, text, buttons=kb)
+        try: await styled_reply(event, text, buttons=kb, file=WELCOME_GIF)
+        except Exception: await styled_reply(event, text, buttons=kb)
             
     except Exception as e: await event.reply(f"⚠️ Error in /start: {e}")
 
@@ -855,7 +850,7 @@ async def _handle_plan_assign(event, plan_key):
 🎉 𝘊𝘰𝘯𝘨𝘳𝘢𝘵𝘶𝘭𝘢𝘵𝘪𝘰𝘯𝘴! 𝘠𝘰𝘶𝘳 𝘢𝘤𝘤𝘰𝘶𝘯𝘵 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘶𝘱𝘨𝘳𝘢𝘥𝘦𝘥.
 
 ⦗ 💎 ⦘ 𝘗𝘭𝘢𝘯 𝘋𝘦𝘵𝘢𝘪𝘭𝘴 ⇾
-├ 𝘗𝘭𝘢𝘯: {pi['emoji']} <code>{pi['name']}</code>
+├ 𝘗𝘭𝘢𝘯: {pi['emoji']} {pi['name']}
 ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>
 ├ 𝘔𝘢𝘴𝘴 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>
 ╰ 𝘌𝘹𝘱𝘪𝘳𝘦𝘴 𝘖𝘯: <code>{expiry_date}</code>
@@ -863,14 +858,10 @@ async def _handle_plan_assign(event, plan_key):
 ⦗ 🚀 ⦘ 𝘌𝘯𝘫𝘰𝘺 𝘶𝘭𝘵𝘳𝘢-𝘧𝘢𝘴𝘵 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨 𝘸𝘪𝘵𝘩 <code>{WORKERS}</code> 𝘞𝘰𝘳𝘬𝘦𝘳𝘴!
 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘯𝘰𝘸 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵 𝘵𝘩𝘦 𝘱𝘳𝘰𝘤𝘦𝘴𝘴."""
 
-    gif_io = await fetch_gif()
-    if gif_io:
-        try: await styled_send(target_uid, user_msg, file=gif_io)
-        except Exception as e:
-            logging.info(f"Could not send upgrade message with GIF to {target_uid}: {e}")
-            try: await styled_send(target_uid, user_msg)
-            except: pass
-    else:
+    gif_url = random.choice(ANIME_GIFS)
+    try: await styled_send(target_uid, user_msg, file=gif_url)
+    except Exception as e:
+        logging.info(f"Could not send upgrade message with GIF to {target_uid}: {e}")
         try: await styled_send(target_uid, user_msg)
         except: pass
 

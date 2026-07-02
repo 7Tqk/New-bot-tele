@@ -1,4 +1,4 @@
-# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟰𝟬𝗪 - 𝟭𝟬𝟬% 𝗔𝗰𝗰𝘂𝗿𝗮𝗰𝘆 - 𝗭𝗲𝗿𝗼-𝗟𝗮𝗴 𝗚𝗜𝗙𝘀 - 𝗜𝗻𝘀𝘁𝗮𝗻𝘁 𝗦𝘁𝗼𝗽)
+# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟰𝟬𝗪 - 𝟭𝟬𝟬% 𝗔𝗰𝗰𝘂𝗿𝗮𝗰𝘆 - 𝗕𝘂𝗹𝗹𝗲𝘁𝗽𝗿𝗼𝗼𝗳 𝗚𝗜𝗙𝘀 - 𝗜𝗻𝘀𝘁𝗮𝗻𝘁 𝗦𝘁𝗼𝗽)
 from telethon.errors import FloodWaitError, UserNotParticipantError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantBanned, DocumentAttributeAnimated
@@ -88,19 +88,57 @@ CUSTOM_COUNTRY_EMOJIS = {
 }
 
 ANIME_GIFS = [
-    "https://media.giphy.com/media/1n4iuWZFnTeN6qvdpD/giphy.gif", "https://media.giphy.com/media/11KzOet1ElBDz2/giphy.gif",
-    "https://media.giphy.com/media/4ilFRqgbzbx4c/giphy.gif", "https://media.giphy.com/media/xT1R9yebNpKAAJjH0s/giphy.gif",
-    "https://media.giphy.com/media/108BDeJ2BvtZRu/giphy.gif", "https://media.giphy.com/media/F3uJq1J1x0u6k/giphy.gif",
-    "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif", "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif",
-    "https://media.giphy.com/media/oYxqA3S2ZqO3u/giphy.gif", "https://media.giphy.com/media/xUPGcxpCV81ebhq7cI/giphy.gif",
-    "https://media.giphy.com/media/l41lUjUgLLwWPe20E/giphy.gif", "https://media.giphy.com/media/l0HlNQ03J5JxX6lva/giphy.gif",
-    "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif", "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif",
-    "https://media.giphy.com/media/l3vR16pONsV8cKCEE/giphy.gif", "https://media.giphy.com/media/xT0xezQGU5xCDJuCPe/giphy.gif",
-    "https://media.giphy.com/media/3oKIPnAiaCRi8NNRWU/giphy.gif", "https://media.giphy.com/media/xT9IgzoWaVYHbYqNUk/giphy.gif",
-    "https://media.giphy.com/media/26BkLGA2PqBf02Mpy/giphy.gif", "https://media.giphy.com/media/3o7TKsQ8gE0bF40Y6I/giphy.gif",
-    "https://media.giphy.com/media/xT0xem7ZlZ2DOYqpG0/giphy.gif", "https://media.giphy.com/media/l46CtynlAiRNzfsIG/giphy.gif",
-    "https://media.giphy.com/media/3o7WIxrKxS22wI3B0A/giphy.gif", "https://media.giphy.com/media/l0HlRnAWXxn0MhKLK/giphy.gif",
-    "https://media.giphy.com/media/xT9DPIlGnuHpr2yOic/giphy.gif"
+    "https://media.giphy.com/media/1n4iuWZFnTeN6qvdpD/giphy.gif",
+    "https://media.giphy.com/media/11KzOet1ElBDz2/giphy.gif",
+    "https://media.giphy.com/media/4ilFRqgbzbx4c/giphy.gif",
+    "https://media.giphy.com/media/xT1R9yebNpKAAJjH0s/giphy.gif",
+    "https://media.giphy.com/media/108BDeJ2BvtZRu/giphy.gif",
+    "https://media.giphy.com/media/F3uJq1J1x0u6k/giphy.gif",
+    "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif",
+    "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif",
+    "https://media.giphy.com/media/oYxqA3S2ZqO3u/giphy.gif",
+    "https://media.giphy.com/media/xUPGcxpCV81ebhq7cI/giphy.gif",
+    "https://media.giphy.com/media/l41lUjUgLLwWPe20E/giphy.gif",
+    "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif",
+    "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif",
+    "https://media.giphy.com/media/l3vR16pONsV8cKCEE/giphy.gif",
+    "https://media.giphy.com/media/xT0xezQGU5xCDJuCPe/giphy.gif",
+    "https://media.giphy.com/media/3oKIPnAiaCRi8NNRWU/giphy.gif",
+    "https://media.giphy.com/media/xT9IgzoWaVYHbYqNUk/giphy.gif",
+    "https://media.giphy.com/media/26BkLGA2PqBf02Mpy/giphy.gif",
+    "https://media.giphy.com/media/3o7TKsQ8gE0bF40Y6I/giphy.gif",
+    "https://media.giphy.com/media/xT0xem7ZlZ2DOYqpG0/giphy.gif",
+    "https://media.giphy.com/media/l46CtynlAiRNzfsIG/giphy.gif",
+    "https://media.giphy.com/media/3o7WIxrKxS22wI3B0A/giphy.gif",
+    "https://media.giphy.com/media/l0HlRnAWXxn0MhKLK/giphy.gif",
+    "https://media.giphy.com/media/xT9DPIlGnuHpr2yOic/giphy.gif",
+    "https://media.giphy.com/media/M3a51DMeWvYUo/giphy.gif",
+    "https://media.giphy.com/media/13Uqp5IGFpmDle/giphy.gif",
+    "https://media.giphy.com/media/10bKPDUM5H7m7u/giphy.gif",
+    "https://media.giphy.com/media/vSy3kE9B1XvvG/giphy.gif",
+    "https://media.giphy.com/media/2y98KScHKeaQM/giphy.gif",
+    "https://media.giphy.com/media/Y4jGnkLhC1qcV9Txep/giphy.gif",
+    "https://media.giphy.com/media/L0I7qEM2nFj2b5y0yX/giphy.gif",
+    "https://media.giphy.com/media/Q81NcsY6YxK7jxcas5/giphy.gif",
+    "https://media.giphy.com/media/3ohhwpIXefRFiC3DYc/giphy.gif",
+    "https://media.giphy.com/media/mXnO9IiWWzBsnlsnvH/giphy.gif",
+    "https://media.giphy.com/media/uBcJXf8yuHqAo/giphy.gif",
+    "https://media.giphy.com/media/l8ooOxhcItoww/giphy.gif",
+    "https://media.giphy.com/media/s2qXK8wAvkHTO/giphy.gif",
+    "https://media.giphy.com/media/fItgT774J3nWw/giphy.gif",
+    "https://media.giphy.com/media/nZ12zG8U1h9Tq/giphy.gif",
+    "https://media.giphy.com/media/4aaIbB1lBwOOY/giphy.gif",
+    "https://media.giphy.com/media/JTwoEqX4zFJiM/giphy.gif",
+    "https://media.giphy.com/media/14hmBhqTX0kSTm/giphy.gif",
+    "https://media.giphy.com/media/1naY1TdNLTl0Q/giphy.gif",
+    "https://media.giphy.com/media/wM0gE97X12xoc/giphy.gif",
+    "https://media.giphy.com/media/IeWcqupkuHwEE/giphy.gif",
+    "https://media.giphy.com/media/bMllC6pZq18B2/giphy.gif",
+    "https://media.giphy.com/media/R1e9yD5ic1w9W/giphy.gif",
+    "https://media.giphy.com/media/XSc4Kqc5Mcpmg/giphy.gif",
+    "https://media.giphy.com/media/y0jT2QZg514eY/giphy.gif",
+    "https://media.giphy.com/media/f4V2mqvvCGwXUjEunI/giphy.gif",
+    "https://media.giphy.com/media/qLWGnB0yCg728/giphy.gif"
 ]
 
 PLANS = {
@@ -131,36 +169,33 @@ _DEAD_INDICATORS = (
     'session_error', 'session expired'
 )
 
-# ====================== ZERO-LAG INFINITY GIF PROTOCOL ======================
-async def fetch_gif_to_memory(specific_url=None):
+# ====================== ZERO-LAG BULLETPROOF GIF PROTOCOL ======================
+async def fetch_gif_to_memory(target_url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "image/webp,image/apng,image/*,*/*;q=0.8"
     }
-    
-    for attempt in range(4):
-        url = specific_url if specific_url else random.choice(ANIME_GIFS)
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=headers, timeout=8, allow_redirects=True) as response:
-                    if response.status == 200:
-                        content_type = response.headers.get('Content-Type', '').lower()
-                        if 'image' in content_type or 'gif' in content_type:
-                            data = await response.read()
-                            if len(data) > 1024:
-                                gif_io = io.BytesIO(data)
-                                gif_io.name = "vip_hit.gif"
-                                return gif_io
-        except Exception:
-            pass
-        if specific_url: break
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(target_url, headers=headers, timeout=3, allow_redirects=True) as response:
+                if response.status == 200:
+                    content_type = response.headers.get('Content-Type', '').lower()
+                    if 'image' in content_type or 'gif' in content_type:
+                        data = await response.read()
+                        if len(data) > 1024:
+                            gif_io = io.BytesIO(data)
+                            gif_io.name = "vip_hit.gif"
+                            return gif_io
+    except Exception:
+        pass
     return None
 
-# ====================== FORCE-SEND FUNCTIONS ======================
+# ====================== FORCE-SEND FUNCTIONS (DOUBLE LAYER) ======================
 async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=None):
-    try:
-        if use_gif or specific_gif:
-            gif_file = await fetch_gif_to_memory(specific_gif)
+    if use_gif or specific_gif:
+        target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
+        try:
+            gif_file = await fetch_gif_to_memory(target_url)
             if gif_file:
                 return await event.client.send_file(
                     event.chat_id, 
@@ -171,13 +206,23 @@ async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=No
                     parse_mode="html",
                     attributes=[DocumentAttributeAnimated()] 
                 )
-    except Exception: pass
+            else:
+                return await event.client.send_file(
+                    event.chat_id, 
+                    target_url, 
+                    caption=text, 
+                    buttons=buttons, 
+                    reply_to=event.message.id, 
+                    parse_mode="html"
+                )
+        except Exception: pass
     return await event.reply(text, buttons=buttons, parse_mode="html")
 
 async def styled_send(chat, text, buttons=None, use_gif=False, specific_gif=None):
-    try:
-        if use_gif or specific_gif:
-            gif_file = await fetch_gif_to_memory(specific_gif)
+    if use_gif or specific_gif:
+        target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
+        try:
+            gif_file = await fetch_gif_to_memory(target_url)
             if gif_file:
                 return await client_instance.send_file(
                     chat, 
@@ -187,7 +232,15 @@ async def styled_send(chat, text, buttons=None, use_gif=False, specific_gif=None
                     parse_mode="html",
                     attributes=[DocumentAttributeAnimated()] 
                 )
-    except Exception: pass
+            else:
+                return await client_instance.send_file(
+                    chat, 
+                    target_url, 
+                    caption=text, 
+                    buttons=buttons, 
+                    parse_mode="html"
+                )
+        except Exception: pass
     return await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
 
 async def styled_edit(msg, text, buttons=None):
@@ -734,7 +787,7 @@ async def start(event):
         await ensure_user(event.sender_id)
         plan = await get_user_plan(event.sender_id)
         limit = get_cc_limit(plan, event.sender_id)
-        text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪Բ𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
+        text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
 
 ├ ⦗ 💳 ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
 │ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
@@ -851,7 +904,7 @@ async def main():
     while True:
         try:
             await client.start(bot_token=BOT_TOKEN)
-            print("✅ VIP BOT STARTED WITH 100% ACCURACY AND SMART DELAY!"); await client.run_until_disconnected()
+            print("✅ VIP BOT STARTED WITH ZERO ERRORS AND BULLETPROOF GIFS!"); await client.run_until_disconnected()
         except FloodWaitError as e: await asyncio.sleep(e.seconds + 5)
         except: await asyncio.sleep(10)
 

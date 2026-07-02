@@ -1,4 +1,4 @@
-# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟭𝟮𝟬𝗪 - 𝗦𝘁𝗿𝗶𝗰𝘁 𝗣𝗿𝗼𝘅𝘆 - 𝗙𝗲𝗲𝗱𝗯𝗮𝗰𝗸 - 𝗕𝗮𝗰𝗸 - 𝗧𝗶𝗺𝗲𝗿 - 𝟭𝟬𝟬% 𝗚𝗜𝗙𝘀 - 𝗙𝗼𝗿𝗰𝗲 𝗝𝗼𝗶𝗻 𝗨𝗹𝘁𝗶𝗺𝗮𝘁𝗲)
+# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟭𝟮𝟬𝗪 - 𝗦𝘁𝗿𝗶𝗰𝘁 𝗣𝗿𝗼𝘅𝘆 - 𝗙𝗲𝗲𝗱𝗯𝗮𝗰𝗸 𝗙𝗶𝘅 - 𝗕𝗮𝗰𝗸 - 𝗧𝗶𝗺𝗲𝗿 - 𝟭𝟬𝟬% 𝗚𝗜𝗙𝘀 - 𝗙𝗼𝗿𝗰𝗲 𝗝𝗼𝗶𝗻 𝗨𝗹𝘁𝗶𝗺𝗮𝘁𝗲)
 from telethon.errors import FloodWaitError, UserNotParticipantError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantBanned
@@ -42,14 +42,14 @@ _admin_env = os.getenv("ADMIN_ID", "8879293808")
 try: ADMIN_ID = [int(x.strip()) for x in _admin_env.split(",") if x.strip()]
 except: ADMIN_ID = [8879293808]
 
-# ⚠️ جلب إعدادات الإجبار من Railway بشكل آمن
+# ⚠️ نظام الإجبار: الآن يقبل اليوزر (مثال: @YourChannel) أو الأيدي الرقمي (-100..)
 _jcid = str(os.getenv("JOIN_CHANNEL_ID", "0")).strip()
 try: JOIN_CHANNEL_ID = int(_jcid)
-except: JOIN_CHANNEL_ID = 0
+except: JOIN_CHANNEL_ID = _jcid
 
 _jgid = str(os.getenv("JOIN_GROUP_ID", "0")).strip()
 try: JOIN_GROUP_ID = int(_jgid)
-except: JOIN_GROUP_ID = 0
+except: JOIN_GROUP_ID = _jgid
 
 JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
 JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
@@ -154,13 +154,15 @@ def is_dead_site_error(error_msg):
     return any(keyword in str(error_msg).lower() for keyword in _DEAD_INDICATORS)
 
 async def check_single_chat(user_id, chat):
-    if not chat or chat == 0: return True
+    if not chat or chat == 0 or str(chat) == "0": return True
     try:
-        # جلب الكيان أولاً لتجنب ValueError، ثم فحص الاشتراك
-        try: entity = await client_instance.get_entity(chat)
-        except ValueError: entity = chat
+        # جلب الكيان بالقوة لضمان عدم حدوث خطأ Entity not found
+        try: chat_var = int(chat)
+        except: chat_var = chat
         
+        entity = await client_instance.get_entity(chat_var)
         part = await client_instance(GetParticipantRequest(channel=entity, participant=user_id))
+        
         if isinstance(part.participant, ChannelParticipantBanned): return False
         return True
     except UserNotParticipantError:
@@ -170,11 +172,8 @@ async def check_single_chat(user_id, chat):
         return False
 
 async def is_user_joined(user_id):
-    if JOIN_CHANNEL_ID == 0 and JOIN_GROUP_ID == 0: return True
-    
     c_ok = await check_single_chat(user_id, JOIN_CHANNEL_ID)
     g_ok = await check_single_chat(user_id, JOIN_GROUP_ID)
-    
     return c_ok and g_ok
 
 async def force_join_check(event):
@@ -189,10 +188,10 @@ async def force_join_check(event):
         return True
     
     kb = []
-    if JOIN_CHANNEL_LINK and JOIN_CHANNEL_ID != 0: kb.append(Button.url("📢 𝘑𝘰𝘪𝘯 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK))
-    if JOIN_GROUP_LINK and JOIN_GROUP_ID != 0: kb.append(Button.url("💬 𝘑𝘰𝘪𝘯 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK))
+    if JOIN_CHANNEL_LINK and str(JOIN_CHANNEL_ID) not in ["0", ""]: kb.append(Button.url("📢 𝘑𝘰𝘪𝘯 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK))
+    if JOIN_GROUP_LINK and str(JOIN_GROUP_ID) not in ["0", ""]: kb.append(Button.url("💬 𝘑𝘰𝘪𝘯 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK))
     
-    if not kb: return True # إذا لم يضع الأدمن روابط، يمرر المستخدم
+    if not kb: return True
     
     kb = [kb, [Button.inline("✅ 𝘝𝘦𝘳𝘪𝘧𝘺", b"check_joined")]]
     await event.reply("⦗ 🛑 ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, parse_mode="html")
@@ -513,7 +512,7 @@ async def auto_file_check_cmd(event):
         
         kb = [
             [Button.inline("🛍️ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘎𝘢𝘵𝘦𝘸𝘢𝘺", b"gate:Shopify"), Button.inline("💳 𝘚𝘵𝘳𝘪𝘱𝘦 (𝘚𝘰𝘰𝘯)", b"gate:soon_Stripe")],
-            [Button.inline("🅿️ 𝘗𝘢𝘺𝘗𝘢𝘭 (𝘚𝘰𝘰𝘯)", b"gate:soon_PayPal"), Button.inline("🌐 𝘉𝘳𝘢𝘪𝘯𝘵𝘳𝘦𝘦 (𝘚𝘰𝘰𝘯)", b"gate:soon_Braintree")],
+            [Button.inline("🅿️ 𝘗𝘢𝘺𝘗𝘢𝘭 (𝘚𝘰𝘰𝘯)", b"gate:soon_PayPal"), Button.inline("🌐 𝘉𝘳𝘢𝘪𝘯𝘵𝘳𝘦 অটো(𝘚𝘰𝘰𝘯)", b"gate:soon_Braintree")],
             [Button.inline("❌ 𝘊𝘢𝘯𝘤𝘦𝘭", b"gate:cancel")]
         ]
         
@@ -635,7 +634,7 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
     fkb = [
         [Button.inline(f"🟢 𝘊𝘩𝘢𝘳𝘨𝘦𝘥 ⇾ {charged}", b"none"), Button.inline(f"⚡ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 ⇾ {approved}", b"none")],
         [Button.inline(f"🟡 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 ⇾ {insufficient}", b"none"), Button.inline(f"🔴 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥 ⇾ {declined}", b"none")],
-        [Button.inline(f"📊 𝘛𝘰𝘵ষ্ঠ 𝘊𝘩𝘦𝘤𝘬𝘦𝘥 ⇾ {checked} / {total}", b"none")],
+        [Button.inline(f"📊 𝘛𝘰𝘵𝘢𝘭 𝘊𝘩𝘦𝘤𝘬𝘦𝘥 ⇾ {checked} / {total}", b"none")],
         [Button.inline(f"⏱ 𝘛𝘪𝘮𝘦 𝘛𝘢𝘬𝘦𝘯 ⇾ {h}𝘩 {m}𝘮 {s}𝘴", b"none")]
     ]
     try: await styled_edit(msg_obj, f"{final_header}\n\n├ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n╰ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘊𝘭𝘰𝘴𝘦𝘥. 𝘌𝘯𝘫𝘰𝘺 𝘺𝘰𝘶𝘳 𝘦𝘹𝘤𝘭𝘶𝘴𝘪𝘷𝘦 𝘩𝘪𝘵𝘴 𝘢𝘣𝘰𝘷𝘦 👑", buttons=fkb)
@@ -670,7 +669,7 @@ async def stop_chk_cb(event):
             if not t.done(): t.cancel()
     await event.answer("Stopping Process...", alert=True)
 
-# ====================== FEEDBACK COMMAND ======================
+# ====================== FEEDBACK COMMAND (FIXED) ======================
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]fb(?:\s+(.*))?'))
 async def feedback_cmd(event):
     if not await force_join_check(event): return
@@ -683,9 +682,21 @@ async def feedback_cmd(event):
     admin = ADMIN_ID[0] if ADMIN_ID else None
     if admin:
         try:
-            await client_instance.forward_messages(admin, event.message)
-            await client_instance.send_message(admin, f"📩 <b>𝗡𝗲𝘄 𝗙𝗲𝗲𝗱𝗯𝗮𝗰𝗸 𝗳𝗿𝗼𝗺:</b> <code>{uid}</code>", parse_mode="html")
-        except: pass
+            if event.is_reply:
+                # إذا قام بالرد على رسالة/صيدة، نقوم بتوجيه الرسالة الأصلية للأدمن
+                replied_msg = await event.get_reply_message()
+                await client_instance.forward_messages(admin, replied_msg)
+                
+                if text: # إذا كتب تعليق مع الرد
+                    await client_instance.send_message(admin, f"💬 <b>Note:</b> {text}\n\n📩 <b>From:</b> <code>{uid}</code>", parse_mode="html")
+                else: # إذا أرسل الرد بدون تعليق
+                    await client_instance.send_message(admin, f"📩 <b>Feedback From:</b> <code>{uid}</code>", parse_mode="html")
+            else:
+                # إذا أرسل رسالة أو صورة مباشرة مع الأمر /fb
+                await client_instance.forward_messages(admin, event.message)
+                await client_instance.send_message(admin, f"📩 <b>Feedback From:</b> <code>{uid}</code>", parse_mode="html")
+        except Exception as e:
+            logging.error(f"FB Error: {e}")
 
     reply_text = "⦗ ✨ ⦘ 𝘠𝘰𝘶𝘳 𝘧𝘦𝘦𝘥𝘣𝘢𝘤𝘬 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘴𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘴𝘦𝘯𝘵 𝘵𝘰 𝘵𝘩𝘦 𝘰𝘸𝘯𝘦𝘳. 𝘛𝘩𝘢𝘯𝘬 𝘺𝘰𝘶 𝘧𝘰𝘳 𝘺𝘰𝘶𝘳 𝘴𝘶𝘱𝘱𝘰𝘳𝘵! 👑"
     gif_io = await fetch_random_gif()

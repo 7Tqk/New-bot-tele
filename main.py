@@ -11,7 +11,7 @@ import random
 import time
 import json
 import re
-import uuid
+import io
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -59,7 +59,7 @@ GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.
 # --- SPEED CONFIG ---
 WORKERS = 120 
 API_TIMEOUT = 60  
-DELAY = 0.05
+DELAY = 0.02
 HIT_DELAY = 0.5
 
 _SITE_ERRORS_COUNT = {}
@@ -131,94 +131,77 @@ _DEAD_INDICATORS = (
     'session_error', 'session expired'
 )
 
-# ====================== STRICT PHYSICAL GIF PROTOCOL ======================
-async def download_gif_physically(specific_url=None):
-    url = specific_url if specific_url else random.choice(ANIME_GIFS)
-    filename = f"temp_gif_{uuid.uuid4().hex[:8]}.gif"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=15) as response:
-                if response.status == 200:
-                    async with aiofiles.open(filename, 'wb') as f:
-                        await f.write(await response.read())
-                    return filename, url
-    except Exception as e:
-        print(f"⚠️ خطأ أثناء التحميل: {e}")
-    return None, url
-
-# ====================== DOUBLE-LAYER SENDING PROTOCOL ======================
-async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=None):
-    file_path = None
-    gif_url = None
+# ====================== ZERO-LAG INFINITY GIF PROTOCOL ======================
+async def fetch_gif_to_memory(specific_url=None):
+    """
+    المنظومة النهائية: جلب الـ GIF وحفظه في الرام مباشرة (BytesIO) بسرعة خارقة.
+    تقوم بـ 4 محاولات كحد أقصى لضمان عدم إرسال رابط معطوب.
+    """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8"
+    }
     
-    if use_gif or specific_gif:
-        file_path, gif_url = await download_gif_physically(specific_gif)
-        
+    for attempt in range(4):
+        url = specific_url if specific_url else random.choice(ANIME_GIFS)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=8, allow_redirects=True) as response:
+                    if response.status == 200:
+                        content_type = response.headers.get('Content-Type', '').lower()
+                        # التأكد الصارم أن المحتوى صورة وليس صفحة HTML
+                        if 'image' in content_type or 'gif' in content_type:
+                            data = await response.read()
+                            if len(data) > 1024:
+                                gif_io = io.BytesIO(data)
+                                gif_io.name = "vip_hit.gif" # إجبار الاسم ليعرفه تيليجرام
+                                return gif_io
+        except Exception:
+            pass # فشل جلب الرابط، انتقل للرابط التالي فوراً
+            
+        if specific_url: 
+            break # إذا كانت الصورة مخصصة (كالترحيب)، لا تبحث عن بديل
+            
+    return None
+
+# ====================== FORCE-SEND FUNCTIONS ======================
+async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=None):
     try:
-        if file_path and os.path.exists(file_path) and os.path.getsize(file_path) > 1024:
-            return await event.client.send_file(
-                event.chat_id, 
-                file_path, 
-                caption=text, 
-                buttons=buttons, 
-                reply_to=event.message.id, 
-                parse_mode="html",
-                attributes=[DocumentAttributeAnimated()] 
-            )
-        elif gif_url:
-            return await event.client.send_file(
-                event.chat_id, 
-                gif_url, 
-                caption=text, 
-                buttons=buttons, 
-                reply_to=event.message.id, 
-                parse_mode="html"
-            )
-        else:
-            return await event.reply(text, buttons=buttons, parse_mode="html")
+        if use_gif or specific_gif:
+            gif_file = await fetch_gif_to_memory(specific_gif)
+            if gif_file:
+                return await event.client.send_file(
+                    event.chat_id, 
+                    gif_file, 
+                    caption=text, 
+                    buttons=buttons, 
+                    reply_to=event.message.id, 
+                    parse_mode="html",
+                    attributes=[DocumentAttributeAnimated()] # فرض العرض كـ GIF غصباً
+                )
     except Exception as e:
-        print(f"⚠️ [styled_reply] فشل إرسال الـ GIF: {e}")
-        return await event.reply(text, buttons=buttons, parse_mode="html")
-    finally:
-        if file_path and os.path.exists(file_path):
-            try: os.remove(file_path)
-            except: pass
+        print(f"⚠️ [styled_reply] GIF Engine Error: {e}")
+        
+    # الخطة البديلة المباشرة إذا فشل الإرسال (إرسال نصي فوري)
+    return await event.reply(text, buttons=buttons, parse_mode="html")
 
 async def styled_send(chat, text, buttons=None, use_gif=False, specific_gif=None):
-    file_path = None
-    gif_url = None
-    
-    if use_gif or specific_gif:
-        file_path, gif_url = await download_gif_physically(specific_gif)
-        
     try:
-        if file_path and os.path.exists(file_path) and os.path.getsize(file_path) > 1024:
-            return await client_instance.send_file(
-                chat, 
-                file_path, 
-                caption=text, 
-                buttons=buttons, 
-                parse_mode="html",
-                attributes=[DocumentAttributeAnimated()] 
-            )
-        elif gif_url:
-            return await client_instance.send_file(
-                chat, 
-                gif_url, 
-                caption=text, 
-                buttons=buttons, 
-                parse_mode="html"
-            )
-        else:
-            return await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
+        if use_gif or specific_gif:
+            gif_file = await fetch_gif_to_memory(specific_gif)
+            if gif_file:
+                return await client_instance.send_file(
+                    chat, 
+                    gif_file, 
+                    caption=text, 
+                    buttons=buttons, 
+                    parse_mode="html",
+                    attributes=[DocumentAttributeAnimated()] # فرض العرض كـ GIF غصباً
+                )
     except Exception as e:
-        print(f"⚠️ [styled_send] فشل إرسال الـ GIF: {e}")
-        return await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
-    finally:
-        if file_path and os.path.exists(file_path):
-            try: os.remove(file_path)
-            except: pass
+        print(f"⚠️ [styled_send] GIF Engine Error: {e}")
+        
+    return await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
 
 async def styled_edit(msg, text, buttons=None):
     return await msg.edit(text, buttons=buttons, parse_mode="html")
@@ -510,7 +493,7 @@ async def auto_file_check_cmd(event):
             [Button.inline("🅿️ 𝘗𝘢𝘺𝘗𝘢𝘭 (𝘚𝘰𝘰𝘯)", b"gate:soon_PayPal"), Button.inline("🌐 𝘉𝘳𝘢𝘪𝘯𝘵𝘳𝘦𝘦 (𝘚𝘰𝘰𝘯)", b"gate:soon_Braintree")],
             [Button.inline("❌ 𝘊𝘢𝘯𝘤𝘦𝘭", b"gate:cancel")]
         ]
-        await styled_reply(event, f"⦗ ⚙️ ⦘ 𝘍𝘪𝘭𝘦 𝘓𝘰𝘢𝘥𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺\n\n├ 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴: <code>{len(cards)}</code>\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘦𝘭𝘦𝘤𝘵 𝘢 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵:", buttons=kb)
+        await styled_reply(event, f"⦗ ⚙️ ⦘ 𝘍𝘪𝘭𝘦 𝘓𝘰𝘢𝘥𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺\n\n├ 𝘛𝘰𝘵ষ্ঠ 𝘊𝘊𝘴: <code>{len(cards)}</code>\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘦𝘭𝘦𝘤𝘵 𝘢 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵:", buttons=kb)
     except Exception as e: await event.reply(f"⚠️ Error: {e}")
 
 @client.on(events.CallbackQuery(pattern=rb"gate:(.*)"))
@@ -616,7 +599,7 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
     
     process_store.pop(uid, None)
     await cleanup_user_http_session(uid, sem_type)
-    cleanup_user_sem(uid)  # تم إضافة التنظيف الكامل للـ Semaphore للحفاظ على استقرار الـ RAM
+    cleanup_user_sem(uid)
 
 async def _send_mass_hit(card, status, message, price, gateway, uid, elapsed):
     await asyncio.sleep(HIT_DELAY)
@@ -647,7 +630,7 @@ async def feedback_cmd(event):
     if not await force_join_check(event): return
     uid = event.sender_id
     text = event.pattern_match.group(1)
-    if not text and not event.is_reply and not getattr(event.message, 'media', None): return await styled_reply(event, "⚠️ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘧𝘦𝘦𝘥𝘣𝘢𝘤𝘬 𝘵𝘦𝘹𝘵 𝘰𝘳 𝘳𝘦𝘱𝘭𝘺 𝘵𝘰 𝘢 𝘱𝘩𝘰𝘵𝘰/𝘮𝘦𝘴ারী.")
+    if not text and not event.is_reply and not getattr(event.message, 'media', None): return await styled_reply(event, "⚠️ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘧𝘦𝘦𝘥𝘣𝘢𝘤𝘬 𝘵𝘦𝘹𝘵 𝘰𝘳 𝘳𝘦𝘱𝘭𝘺 𝘵𝘰 𝘢 𝘱𝘩𝘰𝘵𝘰/𝘮𝘦𝘴𝘴𝘢𝘨𝘦.")
     admin = ADMIN_ID[0] if ADMIN_ID else None
     if admin:
         try:
@@ -687,19 +670,25 @@ async def add_proxy_cmd(event):
                 fp = await rm.download_media()
                 if fp:
                     try:
-                        async with aiofiles.open(fp, "r", encoding="utf-8") as f: lines = [l.strip() for l in (await f.read()).splitlines() if l.strip()]
+                        async with aiofiles.open(fp, "r", encoding="utf-8") as f: 
+                            lines = (await f.read()).split()
                         os.remove(fp)
                     except: pass
-            elif rm.text: lines = [l.strip() for l in rm.text.splitlines() if l.strip()]
+            elif rm.text: 
+                lines = rm.text.split()
         else:
             p = event.raw_text.split(maxsplit=1)
-            if len(p) == 2: lines = [l.strip() for l in p[1].splitlines() if l.strip()]
+            if len(p) == 2: 
+                lines = p[1].split() 
             else: return await styled_reply(event, "⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹: <code>/addpxy ip:port:user:pass</code>")
+        
         if not lines: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘧𝘰𝘶𝘯𝘥.")
         cc = await get_proxy_count(event.sender_id)
         if cc >= 100: return await styled_reply(event, "⚠️ 𝘓𝘪𝘮𝘪𝘵 100/100 𝘙𝘦𝘢𝘤𝘩𝘦𝘥. 𝘗𝘭𝘦𝘢𝘴𝘦 𝘳𝘦𝘮𝘰𝘷𝘦 𝘴𝘰𝘮𝘦 𝘧𝘪𝘳𝘴𝘵.")
+        
         parsed = [parse_proxy_format(l) for l in lines if parse_proxy_format(l)]
         if not parsed: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘷𝘢𝘭𝘪𝘥 𝘱𝘳𝘰𝘹𝘪𝘦𝘴.")
+        
         parsed = parsed[:100-cc]
         tm = await styled_reply(event, f"⦗ ⚙️ ⦘ 𝘈𝘥𝘥𝘪𝘯𝘨 {len(parsed)} 𝘗𝘳𝘰𝘹𝘪𝘦𝘴...")
         added = 0
@@ -867,7 +856,7 @@ async def main():
     while True:
         try:
             await client.start(bot_token=BOT_TOKEN)
-            print("✅ VIP BOT STARTED WITH THE FORCE GIF PROTOCOL & INSTANT STOP!"); await client.run_until_disconnected()
+            print("✅ VIP BOT STARTED WITH ZERO-LAG INFINITY GIF PROTOCOL!"); await client.run_until_disconnected()
         except FloodWaitError as e: await asyncio.sleep(e.seconds + 5)
         except: await asyncio.sleep(10)
 

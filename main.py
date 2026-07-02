@@ -1,4 +1,4 @@
-# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟭𝟮𝟬𝗪 - 𝗦𝘁𝗿𝗶𝗰𝘁 𝗣𝗿𝗼𝘅𝘆 - 𝗙𝗲𝗲𝗱𝗯𝗮𝗰𝗸 - 𝗙𝗼𝗿𝗰𝗲 𝗝𝗼𝗶𝗻 - 𝗭𝗲𝗿𝗼 𝗘𝗿𝗿𝗼𝗿𝘀)
+# 𝙎𝙝𝙤𝙥𝙞𝙛𝙮 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟭𝟮𝟬𝗪 - 𝗦𝘁𝗿𝗶𝗰𝘁 𝗣𝗿𝗼𝘅𝘆 - 𝗙𝗲𝗲𝗱𝗯𝗮𝗰𝗸 - 𝗕𝗮𝗰𝗸 - 𝗧𝗶𝗺𝗲𝗿 - 𝟭𝟬𝟬% 𝗚𝗜𝗙𝘀 - 𝗙𝗼𝗿𝗰𝗲 𝗝𝗼𝗶𝗻 𝗨𝗹𝘁𝗶𝗺𝗮𝘁𝗲)
 from telethon.errors import FloodWaitError, UserNotParticipantError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantBanned
@@ -30,7 +30,7 @@ from database2 import (
     remove_joined_mark, get_total_users, get_premium_count
 )
 
-# ====================== CONFIG (إعدادات البوت) ======================
+# ====================== CONFIG ======================
 API_ID = int(os.getenv('API_ID', 0))
 API_HASH = os.getenv('API_HASH', '').strip()
 BOT_TOKEN = os.getenv('BOT_TOKEN', '').strip()
@@ -42,20 +42,23 @@ _admin_env = os.getenv("ADMIN_ID", "8879293808")
 try: ADMIN_ID = [int(x.strip()) for x in _admin_env.split(",") if x.strip()]
 except: ADMIN_ID = [8879293808]
 
-# ⚠️ نظام الإجبار (الدرع الملكي) - ضع الايديهات والروابط هنا مباشرة
-# استبدل الصفر بأيدي القناة (يجب أن يبدأ بـ -100) وتأكد أن البوت "أدمن" في القناة!
-JOIN_CHANNEL_ID = -1004416063771  # 👈 مثال: -1001234567890
-JOIN_CHANNEL_LINK = "https://t.me/hgffrrddrddf" # 👈 رابط القناة
+# ⚠️ جلب إعدادات الإجبار من Railway بشكل آمن
+_jcid = str(os.getenv("JOIN_CHANNEL_ID", "0")).strip()
+try: JOIN_CHANNEL_ID = int(_jcid)
+except: JOIN_CHANNEL_ID = 0
 
-# إذا لا تريد إجبار لجروب ثاني، اترك الجروب 0
-JOIN_GROUP_ID = -1004466775890    
-JOIN_GROUP_LINK = "https://t.me/jonvhddrrd"
+_jgid = str(os.getenv("JOIN_GROUP_ID", "0")).strip()
+try: JOIN_GROUP_ID = int(_jgid)
+except: JOIN_GROUP_ID = 0
+
+JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
+JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
 
 CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
 PROXY_FILE = 'proxy.txt'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 
-# --- MAX SPEED (120 WORKERS) ---
+# --- SPEED CONFIG ---
 WORKERS = 120 
 API_TIMEOUT = 60  
 DELAY = 0.05
@@ -63,21 +66,17 @@ HIT_DELAY = 0.5
 
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 4
+_JOIN_CACHE = {}
 
 # ====================== VIP EMOJIS, FLAGS & GIFS ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
 
 VIP_EMOJIS = {
-    "charged": "5039644681583985437",
-    "approved": "5039793437776282663",
-    "insufficient": "5042176294222037888",
-    "card": "5042101437237036298",
-    "bank": "5042334757040423886",
-    "country_default": "5042186567783809934",
-    "time": "5042306247047513767",
-    "price": "5042050649248760772",
-    "gateway": "5042186567783809934",
-    "msg": "5039649904264217620"
+    "charged": "5039644681583985437", "approved": "5039793437776282663",
+    "insufficient": "5042176294222037888", "card": "5042101437237036298",
+    "bank": "5042334757040423886", "country_default": "5042186567783809934",
+    "time": "5042306247047513767", "price": "5042050649248760772",
+    "gateway": "5042186567783809934", "msg": "5039649904264217620"
 }
 
 CUSTOM_COUNTRY_EMOJIS = {
@@ -134,9 +133,8 @@ _DEAD_INDICATORS = (
     'session_error', 'session expired'
 )
 
-# ====================== 100% RELIABLE GIF FETCHER ======================
+# ====================== RELIABLE GIF FETCHER ======================
 async def fetch_random_gif(specific_url=None):
-    # تحميل الصورة فعلياً كملف بالذاكرة لضمان عملها بنسبة 100% بدون أي أخطاء من تيليجرام
     url = specific_url if specific_url else random.choice(ANIME_GIFS)
     try:
         async with aiohttp.ClientSession() as session:
@@ -155,45 +153,48 @@ def is_dead_site_error(error_msg):
     if not error_msg: return True
     return any(keyword in str(error_msg).lower() for keyword in _DEAD_INDICATORS)
 
+async def check_single_chat(user_id, chat):
+    if not chat or chat == 0: return True
+    try:
+        # جلب الكيان أولاً لتجنب ValueError، ثم فحص الاشتراك
+        try: entity = await client_instance.get_entity(chat)
+        except ValueError: entity = chat
+        
+        part = await client_instance(GetParticipantRequest(channel=entity, participant=user_id))
+        if isinstance(part.participant, ChannelParticipantBanned): return False
+        return True
+    except UserNotParticipantError:
+        return False
+    except Exception as e:
+        print(f"⚠️ [JOIN ERROR] Cannot check user {user_id} in {chat}: {e}")
+        return False
+
 async def is_user_joined(user_id):
     if JOIN_CHANNEL_ID == 0 and JOIN_GROUP_ID == 0: return True
     
-    # فحص صارم للقناة
-    if JOIN_CHANNEL_ID != 0:
-        try:
-            part = await client_instance(GetParticipantRequest(channel=JOIN_CHANNEL_ID, participant=user_id))
-            if isinstance(part.participant, ChannelParticipantBanned): return False
-        except UserNotParticipantError:
-            return False
-        except Exception as e:
-            print(f"⚠️ [JOIN CHECK] Make sure the bot is ADMIN in channel {JOIN_CHANNEL_ID}. Error: {e}")
-            return False
-            
-    # فحص صارم للجروب
-    if JOIN_GROUP_ID != 0:
-        try:
-            part = await client_instance(GetParticipantRequest(channel=JOIN_GROUP_ID, participant=user_id))
-            if isinstance(part.participant, ChannelParticipantBanned): return False
-        except UserNotParticipantError:
-            return False
-        except Exception as e:
-            print(f"⚠️ [JOIN CHECK] Make sure the bot is ADMIN in group {JOIN_GROUP_ID}. Error: {e}")
-            return False
-            
-    return True
+    c_ok = await check_single_chat(user_id, JOIN_CHANNEL_ID)
+    g_ok = await check_single_chat(user_id, JOIN_GROUP_ID)
+    
+    return c_ok and g_ok
 
 async def force_join_check(event):
     uid = event.sender_id
-    if uid in ADMIN_ID: return True  # استثناء الأدمن من الإجبار
+    if uid in ADMIN_ID: return True  # استثناء الأدمن 100%
     
-    if await is_user_joined(uid): return True
+    now = time.time()
+    if uid in _JOIN_CACHE and now - _JOIN_CACHE[uid] < 600: return True
     
-    # رسالة الإجبار بالخط الملكي تظهر فقط لمن لم يشترك
+    if await is_user_joined(uid):
+        _JOIN_CACHE[uid] = now
+        return True
+    
     kb = []
     if JOIN_CHANNEL_LINK and JOIN_CHANNEL_ID != 0: kb.append(Button.url("📢 𝘑𝘰𝘪𝘯 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK))
     if JOIN_GROUP_LINK and JOIN_GROUP_ID != 0: kb.append(Button.url("💬 𝘑𝘰𝘪𝘯 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK))
-    kb = [kb, [Button.inline("✅ 𝘝𝘦𝘳𝘪𝘧𝘺", b"check_joined")]]
     
+    if not kb: return True # إذا لم يضع الأدمن روابط، يمرر المستخدم
+    
+    kb = [kb, [Button.inline("✅ 𝘝𝘦𝘳𝘪𝘧𝘺", b"check_joined")]]
     await event.reply("⦗ 🛑 ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, parse_mode="html")
     return False
 
@@ -488,7 +489,6 @@ async def auto_file_check_cmd(event):
         
         plan = await get_user_plan(uid)
         
-        # حماية صارمة: لا فحص بدون بروكسي إطلاقاً
         db_proxies = await get_all_user_proxies(uid)
         proxies = [p['proxy_url'] for p in db_proxies]
         if not proxies:
@@ -581,11 +581,8 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
     for c in cards: queue.put_nowait(c)
 
     royal_status_map = {
-        'Charged': '𝘊𝘩𝘢𝘳𝘨𝘦𝘥 🟢',
-        'Approved': '𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 ⚡',
-        'Insufficient': '𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 🟡',
-        'Site Error': '𝘌𝘳𝘳𝘰𝘳 ⚠️',
-        'Dead': '𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥 🔴'
+        'Charged': '𝘊𝘩𝘢𝘳𝘨𝘦𝘥 🟢', 'Approved': '𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 ⚡', 'Insufficient': '𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 🟡',
+        'Site Error': '𝘌𝘳𝘳𝘰𝘳 ⚠️', 'Dead': '𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥 🔴'
     }
 
     async def worker():
@@ -638,7 +635,7 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
     fkb = [
         [Button.inline(f"🟢 𝘊𝘩𝘢𝘳𝘨𝘦𝘥 ⇾ {charged}", b"none"), Button.inline(f"⚡ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 ⇾ {approved}", b"none")],
         [Button.inline(f"🟡 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 ⇾ {insufficient}", b"none"), Button.inline(f"🔴 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥 ⇾ {declined}", b"none")],
-        [Button.inline(f"📊 𝘛𝘰𝘵𝘢𝘭 𝘊𝘩𝘦𝘤𝘬𝘦𝘥 ⇾ {checked} / {total}", b"none")],
+        [Button.inline(f"📊 𝘛𝘰𝘵ষ্ঠ 𝘊𝘩𝘦𝘤𝘬𝘦𝘥 ⇾ {checked} / {total}", b"none")],
         [Button.inline(f"⏱ 𝘛𝘪𝘮𝘦 𝘛𝘢𝘬𝘦𝘯 ⇾ {h}𝘩 {m}𝘮 {s}𝘴", b"none")]
     ]
     try: await styled_edit(msg_obj, f"{final_header}\n\n├ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n╰ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘊𝘭𝘰𝘴𝘦𝘥. 𝘌𝘯𝘫𝘰𝘺 𝘺𝘰𝘶𝘳 𝘦𝘹𝘤𝘭𝘶𝘴𝘪𝘷𝘦 𝘩𝘪𝘵𝘴 𝘢𝘣𝘰𝘷𝘦 👑", buttons=fkb)
@@ -707,7 +704,7 @@ async def check_joined_cb(event):
         await event.answer(f"✅ Successfully Verified!", alert=True)
         try: await event.delete()
         except: pass
-        await styled_send(event.chat_id, f"⦗ ✨ ⦘ 𝘞𝘦𝘭𝘤𝘰𝘮𝘦\n𝘚𝘦𝘯𝘥 /start 𝘵𝘰 𝘴𝘦𝘦 𝘤𝘰𝘮𝘮𝘢𝘯𝘥𝘴.")
+        await styled_send(event.chat_id, f"⦗ ✨ ⦘ 𝘞𝘦𝘭𝘤𝘰𝘮𝘦\n╰ 𝘚𝘦𝘯𝘥 /start 𝘵𝘰 𝘴𝘦𝘦 𝘤𝘰𝘮𝘮𝘢𝘯𝘥𝘴.")
     else: await event.answer(f"❌ You are not joined!", alert=True)
 
 # ====================== PROXY COMMANDS ======================

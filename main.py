@@ -1,4 +1,4 @@
-# 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮 - (𝟰𝟬𝗪 - 𝟭𝟬𝟬% 𝘈𝘤𝘤𝘶𝘳𝘢𝘤𝘺 - 𝘡𝘦𝘳𝘰-𝘓𝘢𝘵𝘦𝘯𝘤𝘺 - 𝘜𝘭𝘵𝘳𝘢 𝘗𝘳𝘦𝘮𝘪𝘶𝘮 𝘜𝘐 + 𝘒𝘦𝘺 𝘛𝘳𝘢𝘤𝘬𝘦𝘳)
+# 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮 - (𝟰𝟬𝗪 - 𝟭𝟬𝟬% 𝘈𝘤𝘤𝘶𝘳𝘢𝘤𝘺 - 𝘡𝘦𝘳𝘰-𝘓𝘢𝘵𝘦𝘯𝘤𝘺 - 𝘜𝘭𝘵𝘳𝘢 𝘗𝘳𝘦𝘮𝘪𝘶𝘮 𝘜𝘐)
 from telethon.errors import FloodWaitError, UserNotParticipantError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantBanned, DocumentAttributeAnimated
@@ -59,7 +59,7 @@ PROXY_FILE = 'proxy.txt'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-# --- ACCURACY & SPEED CONFIG ---
+# --- SPEED CONFIG ---
 WORKERS = 40  
 API_TIMEOUT = 30  
 DELAY = 0.5  
@@ -70,7 +70,7 @@ _MAX_SITE_ERRORS = 4
 _JOIN_CACHE = {}
 _MAINTENANCE_MODE = False
 
-# ====================== VIP PREMIUM ANIMATED EMOJIS IDs ======================
+# ====================== VIP PREMIUM ANIMATED EMOJIS ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
 
 VIP_EMOJIS = {
@@ -117,7 +117,6 @@ ANIME_GIFS = [
     "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif"
 ]
 
-# ====================== PLANS CONFIGURATION ======================
 PLANS = {
     "plan1": {"name": "𝘊𝘰𝘳𝘦 𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "Core", "duration_days": 7, "emoji": "🛠️", "price": "$5.00"},
     "plan2": {"name": "𝘌𝘭𝘪𝘵𝘦 𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "Elite", "duration_days": 15, "emoji": "👑", "price": "$10.00"},
@@ -161,19 +160,28 @@ async def save_keys(keys_data):
         async with aiofiles.open(KEYS_FILE, 'w') as f:
             await f.write(json.dumps(keys_data, indent=4))
 
-def is_paid_plan(plan):
-    return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
-
 def get_cc_limit(plan, uid=0):
     if uid in ADMIN_ID: return 50000
     plan_lower = str(plan).lower() if plan else "bronze"
     if "x" in plan_lower: return 10000
-    if "root" in plan_lower: return 2000
-    if "elite" in plan_lower: return 500
+    if "root" in plan_lower: return 5000
+    if "elite" in plan_lower: return 3000
     if "core" in plan_lower: return 1000
     return 15
 
-# ====================== ANTI-FLOOD & GIF FUNCTIONS ======================
+def is_paid_plan(plan):
+    return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
+
+# ====================== EMOJIS & GIFS ======================
+def get_custom_emoji(key, fallback=""):
+    eid = VIP_EMOJIS.get(key, "")
+    return f'<tg-emoji emoji-id="{eid}">{fallback}</tg-emoji>' if eid else fallback
+
+def get_country_emoji(c_code, default_flag):
+    eid = CUSTOM_COUNTRY_EMOJIS.get(c_code, 0)
+    if eid != 0: return f'<tg-emoji emoji-id="{eid}">{default_flag}</tg-emoji>'
+    return get_custom_emoji("country_default", default_flag)
+
 async def fetch_gif_to_memory(target_url):
     headers = {"User-Agent": "Mozilla/5.0", "Accept": "image/*,*/*;q=0.8"}
     try:
@@ -187,15 +195,6 @@ async def fetch_gif_to_memory(target_url):
                         return gif_io
     except: pass
     return None
-
-def get_custom_emoji(key, fallback=""):
-    eid = VIP_EMOJIS.get(key, "")
-    return f'<tg-emoji emoji-id="{eid}">{fallback}</tg-emoji>' if eid else fallback
-
-def get_country_emoji(c_code, default_flag):
-    eid = CUSTOM_COUNTRY_EMOJIS.get(c_code, 0)
-    if eid != 0: return f'<tg-emoji emoji-id="{eid}">{default_flag}</tg-emoji>'
-    return get_custom_emoji("country_default", default_flag)
 
 async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=None):
     lock = await get_msg_lock()
@@ -246,7 +245,88 @@ async def styled_edit(msg, text, buttons=None):
             return None 
         except Exception: return None
 
-# ====================== HELPER FUNCTIONS ======================
+# ====================== SESSIONS & EXTRACTION ======================
+_USER_HTTP_SESSIONS = {}
+
+async def get_user_http_session(uid, purpose="general"):
+    key = f"{uid}_{purpose}"
+    session = _USER_HTTP_SESSIONS.get(key)
+    if session is None or session.closed:
+        connector = aiohttp.TCPConnector(limit=300, ssl=False, enable_cleanup_closed=True)
+        session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30, connect=10, sock_read=15), connector=connector)
+        _USER_HTTP_SESSIONS[key] = session
+    return session
+
+async def cleanup_user_http_session(uid, purpose="general"):
+    key = f"{uid}_{purpose}"
+    session = _USER_HTTP_SESSIONS.pop(key, None)
+    if session and not session.closed:
+        try: await session.close()
+        except: pass
+
+def extract_cc(text):
+    if not text: return []
+    cards = []
+    for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2,4})[\s|/\\:]+(\d{3,4})', text):
+        if len(y) == 2: y = '20' + y
+        cards.append(f"{c}|{m}|{y}|{cv}")
+    if not cards:
+        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text): cards.append(f"{c}|{m}|{y}|{cv}")
+    if not cards:
+        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
+    return list(dict.fromkeys(cards))
+
+def parse_proxy_format(proxy):
+    proxy = proxy.strip()
+    pt = 'http'
+    pm = re.match(r'^(socks5|socks4|http|https)://(.+)$', proxy, re.IGNORECASE)
+    if pm: pt, proxy = pm.group(1).lower(), pm.group(2)
+    h = p = u = pw = ''
+    if re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy):
+        u, pw, h, p = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
+    elif re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy):
+        ph, pp, pu, ppw = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy).groups()
+        if 0 < int(pp) <= 65535: h, p, u, pw = ph, pp, pu, ppw
+    elif re.match(r'^([^:@]+):(\d+)$', proxy):
+        h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups()
+    else: return None
+    if not h or not p: return None
+    pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
+    return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
+
+def format_proxy_for_api(proxy):
+    if not proxy: return ""
+    if isinstance(proxy, dict):
+        if proxy.get('username') and proxy.get('password'): return f"{proxy['username']}:{proxy['password']}@{proxy['ip']}:{proxy['port']}"
+        return f"{proxy['ip']}:{proxy['port']}"
+    if isinstance(proxy, str):
+        clean = proxy.strip()
+        if "://" in clean:
+            try: return urlparse(clean).netloc
+            except: return clean
+        return clean
+    return ""
+
+_CACHED_SITES = []
+_LAST_SITES_FETCH = 0
+async def get_github_sites():
+    global _CACHED_SITES, _LAST_SITES_FETCH
+    now = time.time()
+    if _CACHED_SITES and (now - _LAST_SITES_FETCH < 600): return _CACHED_SITES
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(GITHUB_SITES_URL, timeout=10) as r:
+                if r.status == 200:
+                    _CACHED_SITES = list(set([re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in (await r.text()).split('\n') if line.strip()]))
+                    _LAST_SITES_FETCH = now
+    except: pass
+    if not _CACHED_SITES and os.path.exists('sites.txt'):
+        try:
+            with open('sites.txt', 'r', encoding='utf-8') as f: _CACHED_SITES = list(set([re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in f if line.strip()]))
+        except: pass
+    return _CACHED_SITES
+
+# ====================== HELPER & SECURITY FUNCTIONS ======================
 _DEAD_INDICATORS = ('receipt id is empty', 'handle is empty', 'product id is empty', 'cloudflare', 'connection failed', 'timed out', 'empty reply from server', 'bad gateway', 'service unavailable', 'gateway timeout', 'site dead', 'proxy dead', 'session_error')
 
 def is_dead_site_error(error_msg):
@@ -336,87 +416,6 @@ def format_card_result(status, card, gateway, response, price="-", bin_info=None
 
 ⦗ {get_custom_emoji('time', '⏱')} ⦘ 𝘛𝘰𝘰𝘬 ⇾ <code>{elapsed:.2f}s</code>"""
 
-# ====================== SESSIONS & EXTRACTION ======================
-_USER_HTTP_SESSIONS = {}
-
-async def get_user_http_session(uid, purpose="general"):
-    key = f"{uid}_{purpose}"
-    session = _USER_HTTP_SESSIONS.get(key)
-    if session is None or session.closed:
-        connector = aiohttp.TCPConnector(limit=300, ssl=False, enable_cleanup_closed=True)
-        session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30, connect=10, sock_read=15), connector=connector)
-        _USER_HTTP_SESSIONS[key] = session
-    return session
-
-async def cleanup_user_http_session(uid, purpose="general"):
-    key = f"{uid}_{purpose}"
-    session = _USER_HTTP_SESSIONS.pop(key, None)
-    if session and not session.closed:
-        try: await session.close()
-        except: pass
-
-def extract_cc(text):
-    if not text: return []
-    cards = []
-    for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2,4})[\s|/\\:]+(\d{3,4})', text):
-        if len(y) == 2: y = '20' + y
-        cards.append(f"{c}|{m}|{y}|{cv}")
-    if not cards:
-        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text): cards.append(f"{c}|{m}|{y}|{cv}")
-    if not cards:
-        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
-    return list(dict.fromkeys(cards))
-
-def parse_proxy_format(proxy):
-    proxy = proxy.strip()
-    pt = 'http'
-    pm = re.match(r'^(socks5|socks4|http|https)://(.+)$', proxy, re.IGNORECASE)
-    if pm: pt, proxy = pm.group(1).lower(), pm.group(2)
-    h = p = u = pw = ''
-    if re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy):
-        u, pw, h, p = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
-    elif re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy):
-        ph, pp, pu, ppw = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy).groups()
-        if 0 < int(pp) <= 65535: h, p, u, pw = ph, pp, pu, ppw
-    elif re.match(r'^([^:@]+):(\d+)$', proxy):
-        h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups()
-    else: return None
-    if not h or not p: return None
-    pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
-    return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
-
-def format_proxy_for_api(proxy):
-    if not proxy: return ""
-    if isinstance(proxy, dict):
-        if proxy.get('username') and proxy.get('password'): return f"{proxy['username']}:{proxy['password']}@{proxy['ip']}:{proxy['port']}"
-        return f"{proxy['ip']}:{proxy['port']}"
-    if isinstance(proxy, str):
-        clean = proxy.strip()
-        if "://" in clean:
-            try: return urlparse(clean).netloc
-            except: return clean
-        return clean
-    return ""
-
-_CACHED_SITES = []
-_LAST_SITES_FETCH = 0
-async def get_github_sites():
-    global _CACHED_SITES, _LAST_SITES_FETCH
-    now = time.time()
-    if _CACHED_SITES and (now - _LAST_SITES_FETCH < 600): return _CACHED_SITES
-    try:
-        async with aiohttp.ClientSession() as s:
-            async with s.get(GITHUB_SITES_URL, timeout=10) as r:
-                if r.status == 200:
-                    _CACHED_SITES = list(set([re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in (await r.text()).split('\n') if line.strip()]))
-                    _LAST_SITES_FETCH = now
-    except: pass
-    if not _CACHED_SITES and os.path.exists('sites.txt'):
-        try:
-            with open('sites.txt', 'r', encoding='utf-8') as f: _CACHED_SITES = list(set([re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in f if line.strip()]))
-        except: pass
-    return _CACHED_SITES
-
 # ====================== CHECKER CORE ======================
 async def check_card_api(card, site, proxy, session, gateway_name):
     try:
@@ -481,9 +480,9 @@ async def _send_global_hit(status, gateway, message, price, uid):
         ps = f"${str(price).replace('$', '')}" if price and str(price) != "-" else ""
         
         if status == "Charged": 
-            header = f"⦗ {get_custom_emoji('charged', '🟢')} ⦘ 𝘊𝘩𝘢𝘳𝘨𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺"
+            header = f"⦗ {get_custom_emoji('charged', '🟢')} ⦘ 𝘊𝘏𝘈𝘙𝘎𝘌𝘋 𝘚𝘜𝘊𝘊𝘌𝘚𝘚𝘍𝘜𝘓𝘓𝘠"
         elif status == "Insufficient": 
-            header = f"⦗ {get_custom_emoji('insufficient', '🟡')} ⦘ 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 𝘍𝘶𝘯𝘥𝘴"
+            header = f"⦗ {get_custom_emoji('insufficient', '🟡')} ⦘ 𝘐𝘕𝘚𝘜𝘍𝘍𝘐𝘊𝘐𝘌𝘕𝘛 𝘍𝘜𝘕𝘋𝘚"
         else: return 
         
         text = f"""{header}
@@ -494,6 +493,172 @@ async def _send_global_hit(status, gateway, message, price, uid):
 
         await client_instance.send_message(HITS_GROUP_ID, text, parse_mode="html", link_preview=False)
     except: pass
+
+# ====================== COMMANDS / USER HANDLERS ======================
+@client.on(events.NewMessage(pattern=r'(?i)^[/.](start|cmds?|commands?)$'))
+async def start(event):
+    if await is_maintenance(event): return
+    try:
+        if not await force_join_check(event): return
+        await ensure_user(event.sender_id)
+        plan = await get_user_plan(event.sender_id); limit = get_cc_limit(plan, event.sender_id)
+        text = f"""⦗ {get_custom_emoji('speed', '⚡')} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
+
+├ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
+│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
+
+├ ⦗ {get_custom_emoji('bank', '⚙️')} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
+│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+
+╰ ⦗ {get_custom_emoji('user', '👤')} ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
+  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
+  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺
+  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴
+
+⦗ {get_custom_emoji('vip', '💎')} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
+        kb = [[Button.inline("⦗ 💎 ⦘ 𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", b"show_plans")], [Button.url("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK), Button.url("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK)]]
+        await styled_reply(event, text, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
+    except Exception as e: await event.reply(f"⚠️ Error: {e}")
+
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]info$'))
+async def info_cmd(event):
+    if await is_maintenance(event): return
+    if not await force_join_check(event): return
+    plan = await get_user_plan(event.sender_id); limit = get_cc_limit(plan, event.sender_id)
+    text = f"""⦗ {get_custom_emoji('user', '👤')} ⦘ 𝘗𝘳𝘰𝘧𝘪𝘭𝘦 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯
+
+├ ⦗ 🆔 ⦘ 𝘐𝘋: <code>{event.sender_id}</code>
+├ ⦗ {get_custom_emoji('approved', '⚡')} ⦘ 𝘚𝘵𝘢𝘵𝘶𝘴: <code>{'Active' if is_paid_plan(plan) else 'Free'}</code>
+├ ⦗ {get_custom_emoji('vip', '💎')} ⦘ 𝘗𝘭𝘢𝘯: <code>{plan.title() if plan else 'Bronze'}</code>
+╰ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘓𝘪𝘮𝘪𝘵: <code>{limit} 𝘊𝘊𝘴</code>"""
+    await styled_reply(event, text, use_gif=True)
+
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]plan$'))
+async def show_plans(event):
+    if await is_maintenance(event): return
+    if not await force_join_check(event): return
+    cp = await get_user_plan(event.sender_id)
+    plans_text = f"⦗ {get_custom_emoji('vip', '💎')} ⦘ 𝘝𝘐𝘗 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘗𝘭𝘢𝘯𝘴\n\n"
+    for pid, pi in PLANS.items():
+        plan_emoji = get_custom_emoji(f"plan_{pi['tier'].lower()}", pi['emoji'])
+        plans_text += f"├ ⦗ {plan_emoji} ⦘ <code>{pi['name']}</code>\n"
+        plans_text += f"│ ├ ⦗ {get_custom_emoji('time', '⏱')} ⦘ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n"
+        plans_text += f"│ ├ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n"
+        plans_text += f"│ ╰ ⦗ {get_custom_emoji('price', '💲')} ⦘ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
+    plans_text += f"╰ ⦗ {get_custom_emoji('user', '👤')} ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
+    kb = [[Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘉𝘶𝘺", "https://t.me/Dddadddyttt")], [Button.inline("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", b"back_start")]]
+    await styled_reply(event, plans_text, buttons=kb, use_gif=True)
+
+@client.on(events.CallbackQuery(data=b"show_plans"))
+async def plans_cb(event):
+    if await is_maintenance(event): return
+    cp = await get_user_plan(event.sender_id)
+    plans_text = f"⦗ {get_custom_emoji('vip', '💎')} ⦘ 𝘝𝘐𝘗 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘗𝘭𝘢𝘯𝘴\n\n"
+    for pid, pi in PLANS.items():
+        plan_emoji = get_custom_emoji(f"plan_{pi['tier'].lower()}", pi['emoji'])
+        plans_text += f"├ ⦗ {plan_emoji} ⦘ <code>{pi['name']}</code>\n"
+        plans_text += f"│ ├ ⦗ {get_custom_emoji('time', '⏱')} ⦘ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n"
+        plans_text += f"│ ├ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n"
+        plans_text += f"│ ╰ ⦗ {get_custom_emoji('price', '💲')} ⦘ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
+    plans_text += f"╰ ⦗ {get_custom_emoji('user', '👤')} ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
+    kb = [[Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘉𝘶𝘺", "https://t.me/Dddadddyttt")], [Button.inline("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", b"back_start")]]
+    await styled_edit(event, plans_text, buttons=kb)
+
+@client.on(events.CallbackQuery(data=b"back_start"))
+async def back_start_cb(event):
+    if await is_maintenance(event): return
+    uid = event.sender_id; plan = await get_user_plan(uid); limit = get_cc_limit(plan, uid)
+    text = f"""⦗ {get_custom_emoji('speed', '⚡')} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
+
+├ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
+│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
+
+├ ⦗ {get_custom_emoji('bank', '⚙️')} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
+│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+
+╰ ⦗ {get_custom_emoji('user', '👤')} ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
+  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
+  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺
+  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴
+
+⦗ {get_custom_emoji('vip', '💎')} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
+    kb = [[Button.inline("⦗ 💎 ⦘ 𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", b"show_plans")], [Button.url("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK), Button.url("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK)]]
+    await styled_edit(event, text, buttons=kb)
+
+# ====================== PROXIES COMMANDS ======================
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]addpxy'))
+async def add_proxy_cmd(event):
+    if await is_maintenance(event): return
+    try:
+        if not await force_join_check(event): return
+        lines = []
+        if event.is_reply:
+            rm = await event.get_reply_message()
+            if rm.file:
+                fp = await rm.download_media()
+                try:
+                    async with aiofiles.open(fp, "r", encoding="utf-8") as f: lines = (await f.read()).split()
+                    os.remove(fp)
+                except: pass
+            elif rm.text: lines = rm.text.split()
+        else:
+            p = event.raw_text.split(maxsplit=1)
+            if len(p) == 2: lines = p[1].split()
+            else: return await styled_reply(event, "⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹 error.", use_gif=True)
+        
+        if not lines: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘱𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
+        db_proxies = await get_all_user_proxies(event.sender_id)
+        existing_urls = {p['proxy_url'] for p in db_proxies} if db_proxies else set()
+        cc = len(existing_urls)
+        if cc >= 100: return await styled_reply(event, "⚠️ 𝘓𝘪𝘮𝘪𝘵 100/100 𝘳𝘦𝘢𝘤𝘩𝘦𝘥.", use_gif=True)
+        parsed = []
+        for l in lines:
+            px = parse_proxy_format(l)
+            if px and px['proxy_url'] not in existing_urls: parsed.append(px); existing_urls.add(px['proxy_url'])
+        if not parsed: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '♻️')} ⦘ 𝘋𝘶𝘱𝘭𝘪𝘤𝘢𝘵𝘦 𝘱𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
+        parsed = parsed[:100-cc]
+        tm = await styled_reply(event, f"⦗ {get_custom_emoji('card', '⚙️')} ⦘ 𝘈𝘥𝘥𝘪𝘯𝘨...")
+        added = 0
+        for pd2 in parsed: await add_proxy_db(event.sender_id, pd2); added += 1
+        await styled_edit(tm, f"✅ 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘈𝘥𝘥𝘦𝘥: <code>{added}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴")
+    except Exception as e: await event.reply(f"⚠️ Error: {e}")
+
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]proxy$'))
+async def view_proxies(event):
+    if await is_maintenance(event): return
+    try:
+        if not await force_join_check(event): return
+        proxies = await get_all_user_proxies(event.sender_id)
+        if not proxies: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 𝘍𝘰𝘶𝘯𝘥.", use_gif=True)
+        text = f"⦗ {get_custom_emoji('bank', '🛡️')} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 ({len(proxies)}/100)\n\n"
+        for i, p in enumerate(proxies[:30], 1): text += f"<code>{i}.</code> <code>{p['ip']}:{p['port']}</code>\n"
+        if len(proxies) > 30: text += f"\n<i>+{len(proxies)-30} 𝘮𝘰𝘳𝘦...</i>"
+        await styled_reply(event, text, use_gif=True)
+    except Exception as e: await event.reply(f"⚠️ Error: {e}")
+
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]rmpxy'))
+async def remove_proxy_cmd(event):
+    if await is_maintenance(event): return
+    try:
+        if not await force_join_check(event): return
+        proxies = await get_all_user_proxies(event.sender_id)
+        if not proxies: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
+        p = event.raw_text.split(maxsplit=1)
+        if len(p) == 1: return await styled_reply(event, "⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹 error.", use_gif=True)
+        arg = p[1].strip().lower()
+        if arg == 'all':
+            c = await clear_all_proxies(event.sender_id); return await styled_reply(event, f"✅ 𝘊𝘭𝘦𝘢𝘳𝘦𝘥 <code>{c}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
+        try:
+            idx = int(arg) - 1
+            if 0 <= idx < len(proxies):
+                rm = await remove_proxy_by_index(event.sender_id, idx); await styled_reply(event, f"✅ 𝘙𝘦𝘮𝘰𝘷𝘦𝘥.", use_gif=True)
+            else: await styled_reply(event, "⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥.", use_gif=True)
+        except: await styled_reply(event, "⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥.", use_gif=True)
+    except Exception as e: await event.reply(f"⚠️ Error: {e}")
 
 # ====================== REDEEM KEY ENGINE ======================
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]gen\s+(plan[1-4])(?:\s+(\d+))?'))
@@ -579,17 +744,14 @@ async def redeem_key_cmd(event):
         if ADMIN_ID: await styled_send(ADMIN_ID[0], admin_notification, use_gif=True)
     except: pass
 
-@client.on(events.NewMessage(pattern=r'(?i)^[/.]vipkey(?:\s+(.+))?'))
-async def check_key_cmd(event):
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]validate(?:\s+(.+))?'))
+async def validate_key_cmd(event):
     if event.sender_id not in ADMIN_ID: return
-    code = event.pattern_match.group(1)
-    if not code: return await styled_reply(event, f"⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹: <code>/vipkey [𝘒𝘦𝘺]</code>", use_gif=True)
-    
-    code = code.strip()
+    code = (event.pattern_match.group(1) or "").strip()
     keys_db = await load_keys()
     
-    if code not in keys_db:
-        return await styled_reply(event, f"⦗ {get_custom_emoji('error', '❌')} ⦘ 𝘒𝘦𝘺 𝘯𝘰𝘵 𝘧𝘰𝘶𝘯𝘥 𝘪𝘯 𝘝𝘢𝘶𝘭𝘵.", use_gif=True)
+    if not code: return await styled_reply(event, f"⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹: <code>/validate [𝘒𝘦𝘺]</code>", use_gif=True)
+    if code not in keys_db: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '❌')} ⦘ 𝘒𝘦𝘺 𝘯𝘰𝘵 𝘧𝘰𝘶𝘯𝘥 𝘪𝘯 𝘥𝘢𝘵𝘢𝘣𝘢𝘴𝘦.", use_gif=True)
     
     kinfo = keys_db[code]
     tier = kinfo.get("tier", "Unknown")
@@ -602,7 +764,7 @@ async def check_key_cmd(event):
     status_emoji = get_custom_emoji('error', '🔴') if used else get_custom_emoji('approved', '🟢')
     status_text = "𝘜𝘴𝘦𝘥" if used else "𝘈𝘤𝘵𝘪𝘷𝘦 (𝘕𝘰𝘵 𝘜𝘴𝘦𝘥)"
     
-    msg = f"""⦗ {get_custom_emoji('vip', '🔑')} ⦘ 𝘝𝘐𝘗 𝘒𝘦𝘺 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯
+    msg = f"""⦗ {get_custom_emoji('vip', '🔑')} ⦘ 𝘒𝘦𝘺 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯
 
 ├ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘒𝘦𝘺: <code>{code}</code>
 ├ ⦗ {status_emoji} ⦘ 𝘚𝘵𝘢𝘵𝘶𝘴: <code>{status_text}</code>
@@ -633,7 +795,7 @@ async def auto_file_check_cmd(event):
         
         plan = await get_user_plan(uid)
         db_proxies = await get_all_user_proxies(uid)
-        if len(db_proxies) == 0: return await styled_edit(processing_msg, f"<b>⚠️ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘢𝘥𝘥 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘧𝘪𝘳𝘴𝘵!</b>")
+        if len(db_proxies) == 0: return await styled_edit(processing_msg, f"<b>⚠️ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘢𝘥𝘥 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘧𝘪𝘳𝘴𝘵! 𝘜𝘴𝘦 <code>/addpxy</code></b>")
         
         fp = await event.download_media()
         content = ""
@@ -790,7 +952,7 @@ async def stop_chk_cb(event):
             if not t.done(): t.cancel()
     await event.answer("🛑 Stopped!", alert=True)
 
-# ====================== COMMANDS & CORE UI INTERFACES ======================
+# ====================== FEEDBACK & ADMIN PANEL ======================
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]fb(?:\s+(.*))?'))
 async def feedback_cmd(event):
     if await is_maintenance(event): return
@@ -819,171 +981,6 @@ async def check_joined_cb(event):
         await styled_send(event.chat_id, f"⦗ {get_custom_emoji('vip', '✨')} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮\n╰ 𝘚𝘦𝘯𝘥 /start 𝘵𝘰 𝘷𝘪𝘦𝘸 𝘵𝘩𝘦 𝘮𝘦𝘯𝘶.", use_gif=True)
     else: await event.answer("❌ Not joined yet!", alert=True)
 
-@client.on(events.NewMessage(pattern=r'(?i)^[/.]addpxy'))
-async def add_proxy_cmd(event):
-    if await is_maintenance(event): return
-    try:
-        if not await force_join_check(event): return
-        lines = []
-        if event.is_reply:
-            rm = await event.get_reply_message()
-            if rm.file:
-                fp = await rm.download_media()
-                try:
-                    async with aiofiles.open(fp, "r", encoding="utf-8") as f: lines = (await f.read()).split()
-                    os.remove(fp)
-                except: pass
-            elif rm.text: lines = rm.text.split()
-        else:
-            p = event.raw_text.split(maxsplit=1)
-            if len(p) == 2: lines = p[1].split()
-            else: return await styled_reply(event, "⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹 error.", use_gif=True)
-        
-        if not lines: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘱𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
-        db_proxies = await get_all_user_proxies(event.sender_id)
-        existing_urls = {p['proxy_url'] for p in db_proxies} if db_proxies else set()
-        cc = len(existing_urls)
-        if cc >= 100: return await styled_reply(event, "⚠️ 𝘓𝘪𝘮𝘪𝘵 100/100 𝘳𝘦𝘢𝘤𝘩𝘦𝘥.", use_gif=True)
-        parsed = []
-        for l in lines:
-            px = parse_proxy_format(l)
-            if px and px['proxy_url'] not in existing_urls: parsed.append(px); existing_urls.add(px['proxy_url'])
-        if not parsed: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '♻️')} ⦘ 𝘋𝘶𝘱𝘭𝘪𝘤𝘢𝘵𝘦 𝘱𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
-        parsed = parsed[:100-cc]
-        tm = await styled_reply(event, f"⦗ {get_custom_emoji('card', '⚙️')} ⦘ 𝘈𝘥𝘥𝘪𝘯𝘨...")
-        added = 0
-        for pd2 in parsed: await add_proxy_db(event.sender_id, pd2); added += 1
-        await styled_edit(tm, f"✅ 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘈𝘥𝘥𝘦𝘥: <code>{added}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴")
-    except Exception as e: await event.reply(f"⚠️ Error: {e}")
-
-@client.on(events.NewMessage(pattern=r'(?i)^[/.]proxy$'))
-async def view_proxies(event):
-    if await is_maintenance(event): return
-    try:
-        if not await force_join_check(event): return
-        proxies = await get_all_user_proxies(event.sender_id)
-        if not proxies: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 𝘍𝘰𝘶𝘯𝘥.", use_gif=True)
-        text = f"⦗ {get_custom_emoji('bank', '🛡️')} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 ({len(proxies)}/100)\n\n"
-        for i, p in enumerate(proxies[:30], 1): text += f"<code>{i}.</code> <code>{p['ip']}:{p['port']}</code>\n"
-        if len(proxies) > 30: text += f"\n<i>+{len(proxies)-30} 𝘮𝘰𝘳𝘦...</i>"
-        await styled_reply(event, text, use_gif=True)
-    except Exception as e: await event.reply(f"⚠️ Error: {e}")
-
-@client.on(events.NewMessage(pattern=r'(?i)^[/.]rmpxy'))
-async def remove_proxy_cmd(event):
-    if await is_maintenance(event): return
-    try:
-        if not await force_join_check(event): return
-        proxies = await get_all_user_proxies(event.sender_id)
-        if not proxies: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
-        p = event.raw_text.split(maxsplit=1)
-        if len(p) == 1: return await styled_reply(event, "⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹 error.", use_gif=True)
-        arg = p[1].strip().lower()
-        if arg == 'all':
-            c = await clear_all_proxies(event.sender_id); return await styled_reply(event, f"✅ 𝘊𝘭𝘦𝘢𝘳𝘦𝘥 <code>{c}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
-        try:
-            idx = int(arg) - 1
-            if 0 <= idx < len(proxies):
-                rm = await remove_proxy_by_index(event.sender_id, idx); await styled_reply(event, f"✅ 𝘙𝘦𝘮𝘰𝘷𝘦𝘥.", use_gif=True)
-            else: await styled_reply(event, "⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥.", use_gif=True)
-        except: await styled_reply(event, "⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥.", use_gif=True)
-    except Exception as e: await event.reply(f"⚠️ Error: {e}")
-
-@client.on(events.NewMessage(pattern=r'(?i)^[/.](start|cmds?|commands?)$'))
-async def start(event):
-    if await is_maintenance(event): return
-    try:
-        if not await force_join_check(event): return
-        await ensure_user(event.sender_id)
-        plan = await get_user_plan(event.sender_id); limit = get_cc_limit(plan, event.sender_id)
-        text = f"""⦗ {get_custom_emoji('speed', '⚡')} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
-
-├ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
-│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
-
-├ ⦗ {get_custom_emoji('bank', '⚙️')} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
-│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-
-╰ ⦗ {get_custom_emoji('user', '👤')} ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
-  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
-  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺
-  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴
-
-⦗ {get_custom_emoji('vip', '💎')} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
-        kb = [[Button.inline("⦗ 💎 ⦘ 𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", b"show_plans")], [Button.url("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK), Button.url("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK)]]
-        await styled_reply(event, text, buttons=kb, specific_gif=WELCOME_GIF)
-    except Exception as e: await event.reply(f"⚠️ Error: {e}")
-
-@client.on(events.CallbackQuery(data=b"back_start"))
-async def back_start_cb(event):
-    if await is_maintenance(event): return
-    uid = event.sender_id; plan = await get_user_plan(uid); limit = get_cc_limit(plan, uid)
-    text = f"""⦗ {get_custom_emoji('speed', '⚡')} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
-
-├ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
-│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
-
-├ ⦗ {get_custom_emoji('bank', '⚙️')} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
-│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-
-╰ ⦗ {get_custom_emoji('user', '👤')} ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
-  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
-  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺
-  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴
-
-⦗ {get_custom_emoji('vip', '💎')} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
-    kb = [[Button.inline("⦗ 💎 ⦘ 𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", b"show_plans")], [Button.url("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK), Button.url("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK)]]
-    await styled_edit(event, text, buttons=kb)
-
-@client.on(events.NewMessage(pattern=r'(?i)^[/.]info$'))
-async def info_cmd(event):
-    if await is_maintenance(event): return
-    if not await force_join_check(event): return
-    plan = await get_user_plan(event.sender_id); limit = get_cc_limit(plan, event.sender_id)
-    text = f"""⦗ {get_custom_emoji('user', '👤')} ⦘ 𝘗𝘳𝘰𝘧𝘪𝘭𝘦 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯
-
-├ ⦗ 🆔 ⦘ 𝘐𝘋: <code>{event.sender_id}</code>
-├ ⦗ {get_custom_emoji('approved', '⚡')} ⦘ 𝘚𝘵𝘢𝘵𝘶𝘴: <code>{'Active' if is_paid_plan(plan) else 'Free'}</code>
-├ ⦗ {get_custom_emoji('vip', '💎')} ⦘ 𝘗𝘭𝘢𝘯: <code>{plan.title() if plan else 'Bronze'}</code>
-╰ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘓𝘪𝘮𝘪𝘵: <code>{limit} 𝘊𝘊𝘴</code>"""
-    await styled_reply(event, text, use_gif=True)
-
-@client.on(events.CallbackQuery(data=b"show_plans"))
-async def plans_cb(event):
-    if await is_maintenance(event): return
-    cp = await get_user_plan(event.sender_id)
-    plans_text = f"⦗ {get_custom_emoji('vip', '💎')} ⦘ 𝘝𝘐𝘗 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘗𝘭𝘢𝘯𝘴\n\n"
-    for pid, pi in PLANS.items():
-        plan_emoji = get_custom_emoji(f"plan_{pi['tier'].lower()}", pi['emoji'])
-        plans_text += f"├ ⦗ {plan_emoji} ⦘ <code>{pi['name']}</code>\n"
-        plans_text += f"│ ├ ⦗ {get_custom_emoji('time', '⏱')} ⦘ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n"
-        plans_text += f"│ ├ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n"
-        plans_text += f"│ ╰ ⦗ {get_custom_emoji('price', '💲')} ⦘ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
-    plans_text += f"╰ ⦗ {get_custom_emoji('user', '👤')} ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
-    kb = [[Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘉𝘶𝘺", "https://t.me/Dddadddyttt")], [Button.inline("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", b"back_start")]]
-    await styled_edit(event, plans_text, buttons=kb)
-
-@client.on(events.NewMessage(pattern=r'(?i)^[/.]plan$'))
-async def show_plans(event):
-    if await is_maintenance(event): return
-    if not await force_join_check(event): return
-    cp = await get_user_plan(event.sender_id)
-    plans_text = f"⦗ {get_custom_emoji('vip', '💎')} ⦘ 𝘝𝘐𝘗 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘗𝘭𝘢𝘯𝘴\n\n"
-    for pid, pi in PLANS.items():
-        plan_emoji = get_custom_emoji(f"plan_{pi['tier'].lower()}", pi['emoji'])
-        plans_text += f"├ ⦗ {plan_emoji} ⦘ <code>{pi['name']}</code>\n"
-        plans_text += f"│ ├ ⦗ {get_custom_emoji('time', '⏱')} ⦘ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n"
-        plans_text += f"│ ├ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n"
-        plans_text += f"│ ╰ ⦗ {get_custom_emoji('price', '💲')} ⦘ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
-    plans_text += f"╰ ⦗ {get_custom_emoji('user', '👤')} ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
-    kb = [[Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘉𝘶𝘺", "https://t.me/Dddadddyttt")], [Button.inline("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", b"back_start")]]
-    await styled_reply(event, plans_text, buttons=kb, use_gif=True)
-
-# ====================== SYSTEM CONTROL (ADMIN PANEL) ======================
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]maint(?: (on|off))?'))
 async def maint_cmd(event):
     global _MAINTENANCE_MODE

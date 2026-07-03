@@ -12,3 +12,4 @@ aiofiles
 aiogram
 apscheduler
 psutil
+upgrade telethon

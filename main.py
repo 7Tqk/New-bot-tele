@@ -103,7 +103,13 @@ VIP_EMOJIS = {
 }
 
 CUSTOM_COUNTRY_EMOJIS = {
-    "US": 0, "GB": 0, "SA": 0, "AE": 0
+    "US": 0, "GB": 0, "CA": 0, "AU": 0, "DE": 0, "FR": 0, "IT": 0, "ES": 0, "BR": 0, "IN": 0,
+    "SA": 0, "AE": 0, "KW": 0, "QA": 0, "BH": 0, "OM": 0, "EG": 0, "JO": 0, "MA": 0, "DZ": 0,
+    "TR": 0, "RU": 0, "CN": 0, "JP": 0, "KR": 0, "MX": 0, "AR": 0, "CO": 0, "CL": 0, "PE": 0,
+    "ZA": 0, "NG": 0, "KE": 0, "SE": 0, "NO": 0, "DK": 0, "FI": 0, "NL": 0, "BE": 0, "CH": 0,
+    "AT": 0, "PT": 0, "GR": 0, "PL": 0, "CZ": 0, "HU": 0, "RO": 0, "BG": 0, "IE": 0, "NZ": 0,
+    "SG": 0, "MY": 0, "TH": 0, "VN": 0, "ID": 0, "PH": 0, "PK": 0, "BD": 0, "LK": 0, "NP": 0,
+    "IL": 0, "IR": 0, "IQ": 0, "SY": 0, "LB": 0, "YE": 0, "SD": 0, "LY": 0, "TN": 0, "MR": 0
 }
 
 ANIME_GIFS = [
@@ -130,7 +136,6 @@ ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
 HIT_BUTTON = [[Button.url("⇾ 𝘖𝘸𝘯𝘦𝘳 ⇽", "https://t.me/Dddadddyttt")]]
 
-# ====================== LOCKS ======================
 _MSG_LOCK = None
 _EDIT_LOCK = None
 _KEYS_LOCK = None
@@ -677,8 +682,9 @@ async def feedback_cmd(event):
     if not await force_join_check(event): return
     uid = event.sender_id
     text = event.pattern_match.group(1)
+    
     if not text and not event.is_reply and not getattr(event.message, 'media', None): 
-        return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘵𝘦𝘹𝘵 𝘰𝘳 𝘳𝘦𝘱𝘭𝘺 𝘵𝘰 𝘢 𝘮𝘦𝘴𝘴𝘢𝘨𝘦.", use_gif=True)
+        return await styled_reply(event, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘢 𝘮𝘦𝘴𝘴𝘢𝘨𝘦 𝘵𝘰 𝘴𝘦𝘯𝘥 𝘰𝘳 𝘳𝘦𝘱𝘭𝘺 𝘵𝘰 𝘰𝘯𝘦.", use_gif=True)
     
     admin = ADMIN_ID[0] if ADMIN_ID else None
     if admin:
@@ -686,14 +692,17 @@ async def feedback_cmd(event):
             if event.is_reply:
                 rm = await event.get_reply_message()
                 await client_instance.forward_messages(admin, rm)
-                if text: await client_instance.send_message(admin, f"💬 <b>Note:</b> {text}\n📩 <b>From:</b> <code>{uid}</code>", parse_mode="html")
-                else: await client_instance.send_message(admin, f"📩 <b>Feedback From:</b> <code>{uid}</code>", parse_mode="html")
+                if text:
+                    await client_instance.send_message(admin, f"💬 <b>Note:</b> {text}\n📩 <b>From:</b> <code>{uid}</code>", parse_mode="html")
+                else:
+                    await client_instance.send_message(admin, f"📩 <b>Feedback From:</b> <code>{uid}</code>", parse_mode="html")
             else:
                 await client_instance.forward_messages(admin, event.message)
                 await client_instance.send_message(admin, f"📩 <b>Feedback From:</b> <code>{uid}</code>", parse_mode="html")
         except Exception:
             pass
-    await styled_reply(event, f"⦗ {get_custom_emoji('approved', '✨')} ⦘ 𝘊𝘰𝘯𝘧𝘪𝘳𝘮𝘦𝘥! 𝘠𝘰𝘶𝘳 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘴𝘦𝘯𝘵.", use_gif=True)
+            
+    await styled_reply(event, f"⦗ ✨ ⦘ 𝘠𝘰𝘶𝘳 𝘮𝘦𝘴𝘴𝘢𝘨𝘦 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘥𝘦𝘭𝘪𝘷𝘦𝘳𝘦𝘥 𝘵𝘰 𝘵𝘩𝘦 𝘖𝘸𝘯𝘦𝘳. 𝘛𝘩𝘢𝘯𝘬 𝘺𝘰𝘶!", use_gif=True)
 
 @client.on(events.CallbackQuery(data=b"check_joined"))
 async def check_joined_cb(event):
@@ -730,10 +739,12 @@ async def add_proxy_cmd(event):
                 lines = rm.text.split()
         else:
             p = event.raw_text.split(maxsplit=1)
-            if len(p) == 2: lines = p[1].split()
-            else: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘚𝘺𝘯𝘵𝘢𝘹 𝘌𝘳𝘳𝘰𝘳.", use_gif=True)
+            if len(p) == 2:
+                lines = p[1].split()
+            else:
+                return await styled_reply(event, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘵𝘩𝘦 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘤𝘰𝘳𝘳𝘦𝘤𝘵𝘭𝘺.", use_gif=True)
         
-        if not lines: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘕𝘰 𝘱𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
+        if not lines: return await styled_reply(event, f"⦗ 💎 ⦘ 𝘕𝘰 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘧𝘰𝘶𝘯𝘥 𝘪𝘯 𝘺𝘰𝘶𝘳 𝘮𝘦𝘴𝘴𝘢𝘨𝘦.", use_gif=True)
         db_proxies = await get_all_user_proxies(event.sender_id)
         existing_urls = {p['proxy_url'] for p in db_proxies} if db_proxies else set()
         cc = len(existing_urls)
@@ -746,7 +757,7 @@ async def add_proxy_cmd(event):
                 parsed.append(px)
                 existing_urls.add(px['proxy_url'])
                 
-        if not parsed: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '♻️')} ⦘ 𝘋𝘶𝘱𝘭𝘪𝘤𝘢𝘵𝘦 𝘱𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
+        if not parsed: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '♻️')} ⦘ 𝘈𝘭𝘭 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘢𝘳𝘦 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘢𝘥𝘥𝘦𝘥 𝘰𝘳 𝘪𝘯𝘷𝘢𝘭𝘪𝘥.", use_gif=True)
         parsed = parsed[:100-cc]
         tm = await styled_reply(event, f"⦗ {get_custom_emoji('card', '⚙️')} ⦘ 𝘈𝘥𝘥𝘪𝘯𝘨...")
         added = 0
@@ -763,7 +774,7 @@ async def view_proxies(event):
     try:
         if not await force_join_check(event): return
         proxies = await get_all_user_proxies(event.sender_id)
-        if not proxies: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 𝘍𝘰𝘶𝘯𝘥.", use_gif=True)
+        if not proxies: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘠𝘰𝘶 𝘥𝘰𝘯'𝘵 𝘩𝘢𝘷𝘦 𝘢𝘯𝘺 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘴𝘢𝘷𝘦𝘥.", use_gif=True)
         text = f"⦗ {get_custom_emoji('bank', '🛡️')} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 ({len(proxies)}/100)\n\n"
         for i, p in enumerate(proxies[:30], 1):
             text += f"<code>{i}.</code> <code>{p['ip']}:{p['port']}</code>\n"
@@ -778,22 +789,22 @@ async def remove_proxy_cmd(event):
     try:
         if not await force_join_check(event): return
         proxies = await get_all_user_proxies(event.sender_id)
-        if not proxies: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
+        if not proxies: return await styled_reply(event, f"⦗ 💎 ⦘ 𝘕𝘰 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘵𝘰 𝘳𝘦𝘮𝘰𝘷𝘦.", use_gif=True)
         p = event.raw_text.split(maxsplit=1)
-        if len(p) == 1: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘚𝘺𝘯𝘵𝘢𝘹 𝘌𝘳𝘳𝘰𝘳.", use_gif=True)
+        if len(p) == 1: return await styled_reply(event, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘱𝘦𝘤𝘪𝘧𝘺 'all' 𝘰𝘳 𝘵𝘩𝘦 𝘱𝘳𝘰𝘹𝘺 𝘯𝘶𝘮𝘣𝘦𝘳.", use_gif=True)
         arg = p[1].strip().lower()
         if arg == 'all':
             c = await clear_all_proxies(event.sender_id)
-            return await styled_reply(event, f"⦗ {get_custom_emoji('approved', '✅')} ⦘ 𝘊𝘭𝘦𝘢𝘳𝘦𝘥 <code>{c}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
+            return await styled_reply(event, f"⦗ {get_custom_emoji('approved', '✅')} ⦘ 𝘊𝘭𝘦𝘢𝘳𝘦𝘥 <code>{c}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 𝘴𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺.", use_gif=True)
         try:
             idx = int(arg) - 1
             if 0 <= idx < len(proxies):
                 rm = await remove_proxy_by_index(event.sender_id, idx)
-                await styled_reply(event, f"⦗ {get_custom_emoji('approved', '✅')} ⦘ 𝘙𝘦𝘮𝘰𝘷𝘦𝘥.", use_gif=True)
+                await styled_reply(event, f"⦗ {get_custom_emoji('approved', '✅')} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘳𝘦𝘮𝘰𝘷𝘦𝘥.", use_gif=True)
             else:
-                await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘐𝘯𝘥𝘦𝘹.", use_gif=True)
+                await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘱𝘳𝘰𝘹𝘺 𝘯𝘶𝘮𝘣𝘦𝘳.", use_gif=True)
         except Exception:
-            await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘐𝘯𝘥𝘦𝘹.", use_gif=True)
+            await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘱𝘳𝘰𝘹𝘺 𝘯𝘶𝘮𝘣𝘦𝘳.", use_gif=True)
     except Exception as e:
         await event.reply(f"⚠️ Error: {e}")
 
@@ -806,7 +817,7 @@ async def generate_keys_cmd(event):
     amount = int(amount_str) if amount_str else 1
     
     if plan_key not in PLANS: 
-        return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘗𝘭𝘢𝘯. 𝘜𝘴𝘦: plan1, plan2, plan3, plan4", use_gif=True)
+        return await styled_reply(event, f"⦗ 💎 ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘗𝘭𝘢𝘯. 𝘗𝘭𝘦𝘢𝘴𝘦 𝘶𝘴𝘦: plan1, plan2, plan3, plan4", use_gif=True)
         
     pi = PLANS[plan_key]
     keys_db = await load_keys()
@@ -836,17 +847,17 @@ async def redeem_key_cmd(event):
     if not await force_join_check(event): return
     
     code = (event.pattern_match.group(1) or "").strip()
-    if not code: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘚𝘺𝘯𝘵𝘢𝘹: <code>/redeem [𝘠𝘰𝘶𝘳-𝘒𝘦𝘺]</code>", use_gif=True)
+    if not code: return await styled_reply(event, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘺𝘰𝘶𝘳 𝘬𝘦𝘺: <code>/redeem [𝘒𝘦𝘺]</code>", use_gif=True)
     
     keys_db = await load_keys()
     uid = event.sender_id
     
     if code not in keys_db:
-        return await styled_reply(event, f"⦗ {get_custom_emoji('error', '❌')} ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘒𝘦𝘺!", use_gif=True)
+        return await styled_reply(event, f"⦗ {get_custom_emoji('error', '❌')} ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘒𝘦𝘺. 𝘗𝘭𝘦𝘢𝘴𝘦 𝘤𝘩𝘦𝘤𝘬 𝘢𝘯𝘥 𝘵𝘳𝘺 𝘢𝘨𝘢𝘪𝘯.", use_gif=True)
     
     kinfo = keys_db[code]
     if kinfo["used"]:
-        return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘛𝘩𝘪𝘴 𝘒𝘦𝘺 𝘩𝘢𝘴 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘣𝘦𝘦𝘯 𝘶𝘴𝘦𝘥.", use_gif=True)
+        return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘛𝘩𝘪𝘴 𝘒𝘦𝘺 𝘩𝘢𝘴 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘣𝘦𝘦𝘯 𝘳𝘦𝘥𝘦𝘦𝘮𝘦𝘥.", use_gif=True)
     
     tier = kinfo["tier"]
     days = kinfo["days"]
@@ -895,7 +906,7 @@ async def validate_key_cmd(event):
     code = (event.pattern_match.group(1) or "").strip()
     keys_db = await load_keys()
     
-    if not code: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘚𝘺𝘯𝘵𝘢𝘹: <code>/validate [𝘒𝘦𝘺]</code>", use_gif=True)
+    if not code: return await styled_reply(event, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘵𝘩𝘦 𝘬𝘦𝘺: <code>/validate [𝘒𝘦𝘺]</code>", use_gif=True)
     if code not in keys_db: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '❌')} ⦘ 𝘒𝘦𝘺 𝘯𝘰𝘵 𝘧𝘰𝘶𝘯𝘥 𝘪𝘯 𝘥𝘢𝘵𝘢𝘣𝘢𝘴𝘦.", use_gif=True)
     
     kinfo = keys_db[code]
@@ -947,7 +958,7 @@ async def admin_users_cmd(event):
 async def revoke_plan_cmd(event):
     if event.sender_id not in ADMIN_ID: return
     try: target_uid = int(event.pattern_match.group(1))
-    except Exception: return await styled_reply(event, f"⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘐𝘋", use_gif=True)
+    except Exception: return await styled_reply(event, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘢 𝘷𝘢𝘭𝘪𝘥 𝘐𝘋.", use_gif=True)
     await set_user_plan(target_uid, "Free", 0)
     proc = ACTIVE_MTXT_PROCESSES.get(target_uid)
     if proc:
@@ -969,7 +980,7 @@ async def auto_file_check_cmd(event):
     
     try:
         if uid in ACTIVE_MTXT_PROCESSES and not ACTIVE_MTXT_PROCESSES[uid].get("stopped", True): 
-            return await styled_edit(processing_msg, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘈 𝘱𝘳𝘰𝘤𝘦𝘴𝘴 𝘪𝘴 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘢𝘤𝘵𝘪𝘷𝘦! 𝘗𝘭𝘦𝘢𝘴𝘦 𝘸𝘢𝘪𝘵.")
+            return await styled_edit(processing_msg, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘈 𝘱𝘳𝘰𝘤𝘦𝘴𝘴 𝘪𝘴 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘢𝘤𝘵𝘪𝘷𝘦! 𝘗𝘭𝘦𝘢𝘴𝘦 𝘸𝘢𝘪𝘵 𝘧𝘰𝘳 𝘪𝘵 𝘵𝘰 𝘧𝘪𝘯𝘪𝘴𝘩.")
             
         if getattr(event.document, 'size', 0) > 2 * 1024 * 1024:
             return await styled_edit(processing_msg, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘍𝘪𝘭𝘦 𝘵𝘰𝘰 𝘭𝘢𝘳𝘨𝘦! (𝘔𝘢𝘹 2𝘔𝘉)")
@@ -990,7 +1001,7 @@ async def auto_file_check_cmd(event):
             
         cards = extract_cc(content)
         if not cards:
-            return await styled_edit(processing_msg, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘕𝘰 𝘷𝘢𝘭𝘪𝘥 𝘤𝘢𝘳𝘥𝘴 𝘧𝘰𝘶𝘯𝘥 𝘪𝘯 𝘧𝘪𝘭𝘦.")
+            return await styled_edit(processing_msg, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘕𝘰 𝘷𝘢𝘭𝘪𝘥 𝘤𝘢𝘳𝘥𝘴 𝘧𝘰𝘶𝘯𝘥 𝘪𝘯 𝘵𝘩𝘦 𝘧𝘪𝘭𝘦.")
         
         cl = get_cc_limit(plan, uid)
         if len(cards) > cl: cards = cards[:cl]

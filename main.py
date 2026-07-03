@@ -21,12 +21,11 @@ try:
 except ImportError:
     PSUTIL_AVAILABLE = False
 
+# استدعاء الدوال المستخدمة فقط لتجنب أي تعارض أو أخطاء
 from database2 import (
     init_db, ensure_user, get_user_plan, set_user_plan,
-    is_premium_user, is_banned_user, get_all_user_proxies,
-    get_proxy_count, add_proxy_db, remove_proxy_by_index,
-    clear_all_proxies, is_user_marked_joined, mark_user_joined,
-    remove_joined_mark, get_total_users, get_premium_count
+    get_all_user_proxies, get_proxy_count, add_proxy_db,
+    remove_proxy_by_index, clear_all_proxies, mark_user_joined
 )
 
 # ====================== CONFIG ======================
@@ -154,9 +153,20 @@ ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
 HIT_BUTTON = [[Button.url("⇾ 𝘖𝘸𝘯𝘦𝘳 ⇽", "https://t.me/Dddadddyttt")]]
 
-# أقفال التحكم بالمرور (Anti-Flood Shields)
-_MSG_LOCK = asyncio.Lock()
-_EDIT_LOCK = asyncio.Lock()
+# 🔴 الحل الجذري لمشكلة بايثون 3.10+ في Railway 🔴
+# سيتم تهيئة الأقفال داخل الدالة الرئيسية لكي لا يتحطم الكود عند بدء التشغيل
+_MSG_LOCK = None
+_EDIT_LOCK = None
+
+async def get_msg_lock():
+    global _MSG_LOCK
+    if _MSG_LOCK is None: _MSG_LOCK = asyncio.Lock()
+    return _MSG_LOCK
+
+async def get_edit_lock():
+    global _EDIT_LOCK
+    if _EDIT_LOCK is None: _EDIT_LOCK = asyncio.Lock()
+    return _EDIT_LOCK
 
 _DEAD_INDICATORS = (
     'receipt id is empty', 'handle is empty', 'product id is empty', 'tax amount is empty', 
@@ -196,103 +206,92 @@ async def fetch_gif_to_memory(target_url):
 
 # ====================== ANTI-FLOOD FORCE-SEND FUNCTIONS ======================
 async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=None):
-    async with _MSG_LOCK: 
+    lock = await get_msg_lock()
+    async with lock:
         if use_gif or specific_gif:
-            while True:
+            for _ in range(7): # يحاول 7 مرات إجبارياً لإرسال الـ GIF
                 target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
                 try:
                     gif_file = await fetch_gif_to_memory(target_url)
                     if gif_file:
                         res = await event.client.send_file(
-                            event.chat_id, 
-                            gif_file, 
-                            caption=text, 
-                            buttons=buttons, 
-                            reply_to=event.message.id, 
-                            parse_mode="html",
-                            attributes=[DocumentAttributeAnimated()] 
+                            event.chat_id, gif_file, caption=text, buttons=buttons, 
+                            reply_to=event.message.id, parse_mode="html", attributes=[DocumentAttributeAnimated()]
                         )
                     else:
                         res = await event.client.send_file(
-                            event.chat_id, 
-                            target_url, 
-                            caption=text, 
-                            buttons=buttons, 
-                            reply_to=event.message.id, 
-                            parse_mode="html"
+                            event.chat_id, target_url, caption=text, buttons=buttons, 
+                            reply_to=event.message.id, parse_mode="html"
                         )
                     await asyncio.sleep(0.5) 
                     return res
                 except FloodWaitError as e:
-                    print(f"⏳ [Anti-Flood Shield] تم حظر البوت مؤقتاً. جاري حفظ الصيدة والانتظار لـ {e.seconds} ثانية...")
                     await asyncio.sleep(e.seconds + 1)
-                except Exception:
+                except Exception as e:
+                    # إذا حظرنا المستخدم، نتوقف تماماً لكي لا يتجمد السيرفر
+                    if "blocked" in str(e).lower() or "forbidden" in str(e).lower() or "deactivated" in str(e).lower():
+                        return None
                     await asyncio.sleep(0.5)
+            # لن يرسل الصيدة بدون GIF أبداً
+            return None
         else:
-            while True:
-                try:
-                    res = await event.reply(text, buttons=buttons, parse_mode="html")
-                    await asyncio.sleep(0.3)
-                    return res
-                except FloodWaitError as e:
-                    await asyncio.sleep(e.seconds + 1)
-                except Exception:
-                    return None
-
-async def styled_send(chat, text, buttons=None, use_gif=False, specific_gif=None):
-    async with _MSG_LOCK: 
-        if use_gif or specific_gif:
-            while True:
-                target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
-                try:
-                    gif_file = await fetch_gif_to_memory(target_url)
-                    if gif_file:
-                        res = await client_instance.send_file(
-                            chat, 
-                            gif_file, 
-                            caption=text, 
-                            buttons=buttons, 
-                            parse_mode="html",
-                            attributes=[DocumentAttributeAnimated()] 
-                        )
-                    else:
-                        res = await client_instance.send_file(
-                            chat, 
-                            target_url, 
-                            caption=text, 
-                            buttons=buttons, 
-                            parse_mode="html"
-                        )
-                    await asyncio.sleep(0.5) 
-                    return res
-                except FloodWaitError as e:
-                    print(f"⏳ [Anti-Flood Shield] تم حظر البوت مؤقتاً. جاري حفظ الصيدة والانتظار لـ {e.seconds} ثانية...")
-                    await asyncio.sleep(e.seconds + 1)
-                except Exception:
-                    await asyncio.sleep(0.5)
-        else:
-            while True:
-                try:
-                    res = await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
-                    await asyncio.sleep(0.3)
-                    return res
-                except FloodWaitError as e:
-                    await asyncio.sleep(e.seconds + 1)
-                except Exception:
-                    return None
-
-async def styled_edit(msg, text, buttons=None):
-    async with _EDIT_LOCK: 
-        while True:
             try:
-                res = await msg.edit(text, buttons=buttons, parse_mode="html")
-                await asyncio.sleep(1) 
+                res = await event.reply(text, buttons=buttons, parse_mode="html")
+                await asyncio.sleep(0.3)
                 return res
             except FloodWaitError as e:
                 await asyncio.sleep(e.seconds + 1)
-                return None 
             except Exception:
                 return None
+
+async def styled_send(chat, text, buttons=None, use_gif=False, specific_gif=None):
+    lock = await get_msg_lock()
+    async with lock:
+        if use_gif or specific_gif:
+            for _ in range(7): # إجبار إرسال الـ GIF للصيدات
+                target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
+                try:
+                    gif_file = await fetch_gif_to_memory(target_url)
+                    if gif_file:
+                        res = await client_instance.send_file(
+                            chat, gif_file, caption=text, buttons=buttons, 
+                            parse_mode="html", attributes=[DocumentAttributeAnimated()]
+                        )
+                    else:
+                        res = await client_instance.send_file(
+                            chat, target_url, caption=text, buttons=buttons, parse_mode="html"
+                        )
+                    await asyncio.sleep(0.5) 
+                    return res
+                except FloodWaitError as e:
+                    await asyncio.sleep(e.seconds + 1)
+                except Exception as e:
+                    if "blocked" in str(e).lower() or "forbidden" in str(e).lower() or "deactivated" in str(e).lower():
+                        return None
+                    await asyncio.sleep(0.5)
+            return None
+        else:
+            try:
+                res = await client_instance.send_message(chat, text, buttons=buttons, parse_mode="html")
+                await asyncio.sleep(0.3)
+                return res
+            except FloodWaitError as e:
+                await asyncio.sleep(e.seconds + 1)
+            except Exception:
+                return None
+
+async def styled_edit(msg, text, buttons=None):
+    lock = await get_edit_lock()
+    async with lock:
+        try:
+            res = await msg.edit(text, buttons=buttons, parse_mode="html")
+            await asyncio.sleep(1) 
+            return res
+        except FloodWaitError as e:
+            await asyncio.sleep(e.seconds + 1)
+            return None 
+        except Exception:
+            return None
 
 # ====================== HELPER FUNCTIONS ======================
 def is_dead_site_error(error_msg):
@@ -756,4 +755,235 @@ async def check_joined_cb(event):
     else: await event.answer(f"❌ You are not joined!", alert=True)
 
 # ====================== PROXY COMMANDS ======================
-# ... rest of your code ...
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]addpxy'))
+async def add_proxy_cmd(event):
+    try:
+        if not await force_join_check(event): return
+        lines = []
+        if event.is_reply:
+            rm = await event.get_reply_message()
+            if rm.file:
+                fp = await rm.download_media()
+                if fp:
+                    try:
+                        async with aiofiles.open(fp, "r", encoding="utf-8") as f: 
+                            lines = (await f.read()).split()
+                        os.remove(fp)
+                    except: pass
+            elif rm.text: 
+                lines = rm.text.split()
+        else:
+            p = event.raw_text.split(maxsplit=1)
+            if len(p) == 2: 
+                lines = p[1].split() 
+            else: return await styled_reply(event, "⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹: <code>/addpxy ip:port:user:pass</code>")
+        
+        if not lines: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘧𝘰𝘶𝘯𝘥.")
+        
+        # استدعاء البروكسيات القديمة لمنع التكرار
+        db_proxies = await get_all_user_proxies(event.sender_id)
+        existing_urls = {p['proxy_url'] for p in db_proxies} if db_proxies else set()
+        
+        cc = len(existing_urls)
+        if cc >= 100: return await styled_reply(event, "⚠️ 𝘓𝘪𝘮𝘪𝘵 100/100 𝘙𝘦𝘢𝘤𝘩𝘦𝘥. 𝘗𝘭𝘦𝘢𝘴𝘦 𝘳𝘦𝘮𝘰𝘷𝘦 𝘴𝘰𝘮𝘦 𝘧𝘪𝘳𝘴𝘵.")
+        
+        # فلترة البروكسيات المدخلة وإزالة المكرر منها ومن الداتا بيس
+        parsed = []
+        for l in lines:
+            px = parse_proxy_format(l)
+            if px and px['proxy_url'] not in existing_urls:
+                parsed.append(px)
+                existing_urls.add(px['proxy_url']) # تحديث القائمة المحلية لمنع التكرار في نفس الملف
+                
+        if not parsed: 
+            return await styled_reply(event, "⦗ ♻️ ⦘ 𝘋𝘶𝘱𝘭𝘪𝘤𝘢𝘵𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 𝘋𝘦𝘵𝘦𝘤𝘵𝘦𝘥\n├ 𝘛𝘩𝘦𝘴𝘦 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘢𝘳𝘦 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘪𝘯 𝘺𝘰𝘶𝘳 𝘭𝘪𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘯𝘦𝘸 𝘰𝘯𝘦𝘴.")
+        
+        parsed = parsed[:100-cc]
+        tm = await styled_reply(event, f"⦗ ⚙️ ⦘ 𝘈𝘥𝘥𝘪𝘯𝘨 {len(parsed)} 𝘗𝘳𝘰𝘹𝘪𝘦𝘴...")
+        added = 0
+        for pd2 in parsed:
+            await add_proxy_db(event.sender_id, pd2); added += 1
+        await styled_edit(tm, f"✅ 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘈𝘥𝘥𝘦𝘥: <code>{added}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴")
+    except Exception as e: await event.reply(f"⚠️ Error: {e}")
+
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]proxy$'))
+async def view_proxies(event):
+    try:
+        if not await force_join_check(event): return
+        proxies = await get_all_user_proxies(event.sender_id)
+        if not proxies: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 𝘍𝘰𝘶𝘯𝘥.")
+        text = f"⦗ 🛡️ ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 ({len(proxies)}/100)\n\n"
+        for i, p in enumerate(proxies[:30], 1): text += f"<code>{i}.</code> <code>{p['ip']}:{p['port']}</code>\n"
+        if len(proxies) > 30: text += f"\n<i>+{len(proxies)-30} 𝘮𝘰𝘳𝘦...</i>"
+        text += f"\n\n╰ 𝘜𝘴𝘦 <code>/rmpxy all</code> 𝘵𝘰 𝘤𝘭𝘦𝘢𝘳."
+        await styled_reply(event, text)
+    except Exception as e: await event.reply(f"⚠️ Error: {e}")
+
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]rmpxy'))
+async def remove_proxy_cmd(event):
+    try:
+        if not await force_join_check(event): return
+        proxies = await get_all_user_proxies(event.sender_id)
+        if not proxies: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 𝘍𝘰𝘶𝘯𝘥.")
+        p = event.raw_text.split(maxsplit=1)
+        if len(p) == 1: return await styled_reply(event, "⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹: <code>/rmpxy index</code> 𝘰𝘳 <code>all</code>")
+        arg = p[1].strip().lower()
+        if arg == 'all':
+            c = await clear_all_proxies(event.sender_id)
+            return await styled_reply(event, f"✅ 𝘊𝘭𝘦𝘢𝘳𝘦𝘥 <code>{c}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴.")
+        try:
+            idx = int(arg) - 1
+            if 0 <= idx < len(proxies):
+                rm = await remove_proxy_by_index(event.sender_id, idx)
+                await styled_reply(event, f"✅ 𝘙𝘦𝘮𝘰𝘷𝘦𝘥: <code>{rm['ip']}:{rm['port']}</code>")
+            else: await styled_reply(event, "⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘐𝘯𝘥𝘦𝘹.")
+        except: await styled_reply(event, "⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘐𝘯𝘥𝘦𝘹.")
+    except Exception as e: await event.reply(f"⚠️ Error: {e}")
+
+# ====================== UI / PLANS ======================
+@client.on(events.NewMessage(pattern=r'(?i)^[/.](start|cmds?|commands?)$'))
+async def start(event):
+    try:
+        if not await force_join_check(event): return
+        await ensure_user(event.sender_id)
+        plan = await get_user_plan(event.sender_id)
+        limit = get_cc_limit(plan, event.sender_id)
+        text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
+
+├ ⦗ 💳 ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
+│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
+
+├ ⦗ ⚙️ ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
+│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+
+╰ ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
+  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
+  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬
+  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴
+
+⦗ 💎 ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
+        kb = [
+            [Button.inline("⦗ 💎 ⦘ 𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", b"show_plans")],
+            [Button.url("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK), Button.url("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK)]
+        ]
+        await styled_reply(event, text, buttons=kb, specific_gif=WELCOME_GIF)
+    except Exception as e: await event.reply(f"⚠️ Error: {e}")
+
+@client.on(events.CallbackQuery(data=b"back_start"))
+async def back_start_cb(event):
+    uid = event.sender_id; plan = await get_user_plan(uid); limit = get_cc_limit(plan, uid)
+    text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
+
+├ ⦗ 💳 ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
+│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
+
+├ ⦗ ⚙️ ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
+│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+
+╰ ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
+  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
+  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬
+  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴
+
+⦗ 💎 ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
+    kb = [
+        [Button.inline("⦗ 💎 ⦘ 𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", b"show_plans")],
+        [Button.url("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", JOIN_CHANNEL_LINK), Button.url("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", JOIN_GROUP_LINK)]
+    ]
+    await styled_edit(event, text, buttons=kb)
+
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]info$'))
+async def info_cmd(event):
+    if not await force_join_check(event): return
+    plan = await get_user_plan(event.sender_id); limit = get_cc_limit(plan, event.sender_id)
+    text = f"""⦗ 👤 ⦘ 𝘗𝘳𝘰𝘧𝘪𝘭𝘦 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯
+
+├ 𝘐𝘋: <code>{event.sender_id}</code>
+├ 𝘚𝘵𝘢𝘵𝘶𝘴: <code>{'Active' if is_paid_plan(plan) else 'Free'}</code>
+├ 𝘗𝘭𝘢𝘯: <code>{plan.title() if plan else 'Bronze'}</code>
+╰ 𝘓𝘪𝘮𝘪𝘵: <code>{limit} 𝘊𝘊𝘴</code>"""
+    await styled_reply(event, text)
+
+@client.on(events.CallbackQuery(data=b"show_plans"))
+async def plans_cb(event):
+    cp = await get_user_plan(event.sender_id)
+    plans_text = f"⦗ 💎 ⦘ 𝘝𝘐𝘗 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘗𝘭𝘢𝘯𝘴\n\n"
+    for pid, pi in PLANS.items(): plans_text += f"├ {pi['emoji']} {pi['name']}\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
+    plans_text += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
+    
+    kb = [
+        [Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘜𝘱𝘨𝘳𝘢𝘥𝘦", "https://t.me/Dddadddyttt")],
+        [Button.inline("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", b"back_start")]
+    ]
+    await styled_edit(event, plans_text, buttons=kb)
+
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]plan$'))
+async def show_plans(event):
+    if not await force_join_check(event): return
+    cp = await get_user_plan(event.sender_id)
+    plans_text = f"⦗ 💎 ⦘ 𝘝𝘐𝘗 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘗𝘭𝘢𝘯𝘴\n\n"
+    for pid, pi in PLANS.items(): plans_text += f"├ {pi['emoji']} {pi['name']}\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
+    plans_text += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
+    
+    kb = [
+        [Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘜𝘱𝘨𝘳𝘢𝘥𝘦", "https://t.me/Dddadddyttt")],
+        [Button.inline("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", b"back_start")]
+    ]
+    await styled_reply(event, plans_text, buttons=kb)
+
+# ====================== ADMIN COMMANDS ======================
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]plan[1-4]\b'))
+async def assign_plan_cmd(event):
+    if event.sender_id not in ADMIN_ID: return
+    cmd = event.raw_text.split()
+    if len(cmd) < 2: return await styled_reply(event, "⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹: <code>/plan(1-4) user_id</code>")
+    plan_key = "plan" + event.raw_text[5]
+    try: target_uid = int(cmd[1])
+    except: return await styled_reply(event, "⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘐𝘋")
+    
+    pi = PLANS[plan_key]
+    await set_user_plan(target_uid, pi["tier"], pi["duration_days"])
+    expiry_date = (datetime.now() + timedelta(days=pi["duration_days"])).strftime('%Y-%m-%d %H:%M:%S')
+    
+    await styled_reply(event, f"✅ 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘶𝘱𝘨𝘳𝘢𝘥𝘦𝘥 𝘶𝘴𝘦𝘳 <code>{target_uid}</code>")
+    
+    user_msg = f"""⦗ 👑 ⦘ 𝘝𝘐𝘗 𝘜𝘱𝘨𝘳𝘢𝘥𝘦 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭!\n\n🎉 𝘊𝘰𝘯𝘨𝘳𝘢𝘵𝘶𝘭𝘢𝘵𝘪𝘰𝘯𝘴! 𝘠𝘰𝘶𝘳 𝘢𝘤𝘤𝘰𝘶𝘯𝘵 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘶𝘱𝘨𝘳𝘢𝘥𝘦𝘥.\n\n⦗ 💎 ⦘ 𝘗𝘭𝘢𝘯 𝘋𝘦𝘵𝘢𝘪𝘭𝘴 ⇾\n├ 𝘗𝘭𝘢𝘯: {pi['emoji']} <code>{pi['name']}</code>\n├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n├ 𝘔𝘢𝘴𝘴 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n╰ 𝘌𝘹𝘱𝘪𝘳𝘦𝘴 𝘖𝘯: <code>{expiry_date}</code>\n\n⦗ 🚀 ⦘ 𝘌𝘯𝘫𝘰𝘺 𝘶𝘭𝘵𝘳𝘢-𝘧𝘢𝘴𝘵 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨 𝘸𝘪𝘵𝘩 <code>{WORKERS}</code> 𝘞𝘰𝘳𝘬𝘦𝘳𝘴!\n𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘯𝘰𝘸 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵."""
+    
+    await styled_send(target_uid, user_msg, use_gif=True)
+
+# ====================== MAIN LOOP ======================
+async def main():
+    global client_instance; client_instance = client; 
+    
+    # تهيئة الأقفال الآمنة
+    await get_msg_lock()
+    await get_edit_lock()
+    
+    try: await init_db()
+    except Exception as e: print(f"❌ Database Error: {e}")
+        
+    try:
+        async with aiohttp.ClientSession() as session: 
+            await session.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true")
+    except: pass
+    
+    await get_github_sites()
+    
+    while True:
+        try:
+            print("🔄 Attempting to start bot...")
+            await client.start(bot_token=BOT_TOKEN)
+            print("✅ VIP BOT STARTED SUCCESSFULLY!")
+            await client.run_until_disconnected()
+        except FloodWaitError as e: 
+            print(f"⏳ Telegram FloodWait: Sleeping for {e.seconds}s")
+            await asyncio.sleep(e.seconds + 5)
+        except Exception as e: 
+            print(f"⚠️ FATAL ERROR: {e}")
+            await asyncio.sleep(10)
+
+if __name__ == "__main__": asyncio.run(main())

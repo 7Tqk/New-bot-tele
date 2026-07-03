@@ -152,7 +152,12 @@ async def load_keys():
                     content = await f.read()
                     if content: return json.loads(content)
             except: return {}
-        return {}
+        else:
+            try:
+                async with aiofiles.open(KEYS_FILE, 'w') as f: await f.write(json.dumps({}))
+                return {}
+            except: return {}
+    return {}
 
 async def save_keys(keys_data):
     async with _KEYS_LOCK:
@@ -611,7 +616,7 @@ async def feedback_cmd(event):
                 await client_instance.forward_messages(admin, event.message)
                 await client_instance.send_message(admin, f"📩 <b>Feedback From:</b> <code>{uid}</code>", parse_mode="html")
         except: pass
-    await styled_reply(event, f"⦗ {get_custom_emoji('approved', '✨')} ⦘ 𝘊𝘰𝘯𝘧𝘪𝘳𝘮𝘦𝘥! 𝘠𝘰𝘶𝘳 𝘧𝘦𝘦𝘥𝘣𝘢𝘤𝘬 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘴𝘦𝘯𝘵.", use_gif=True)
+    await styled_reply(event, f"⦗ {get_custom_emoji('approved', '✨')} ⦘ 𝘊𝘰𝘯𝘧𝘪𝘳𝘮𝘦𝘥! 𝘠𝘰𝘶𝘳 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘴𝘦𝘯𝘵.", use_gif=True)
 
 @client.on(events.CallbackQuery(data=b"check_joined"))
 async def check_joined_cb(event):
@@ -685,7 +690,7 @@ async def remove_proxy_cmd(event):
         proxies = await get_all_user_proxies(event.sender_id)
         if not proxies: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘕𝘰 𝘗𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
         p = event.raw_text.split(maxsplit=1)
-        if len(p) == 1: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘚𝘺𝘯𝘵𝘢𝘹 error.", use_gif=True)
+        if len(p) == 1: return await styled_reply(event, f"⦗ {get_custom_emoji('error', '⚠️')} ⦘ 𝘚𝘺𝘯𝘵𝘢𝘹 𝘦𝘳𝘳𝘰𝘳.", use_gif=True)
         arg = p[1].strip().lower()
         if arg == 'all':
             c = await clear_all_proxies(event.sender_id); return await styled_reply(event, f"⦗ {get_custom_emoji('approved', '✅')} ⦘ 𝘊𝘭𝘦𝘢𝘳𝘦𝘥 <code>{c}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
@@ -801,7 +806,7 @@ async def validate_key_cmd(event):
     red_time = kinfo.get("redeemed_at", "Not yet")
 
     status_emoji = get_custom_emoji('error', '🔴') if used else get_custom_emoji('approved', '🟢')
-    status_text = "𝘜𝘴𝘦𝘥" if used else "𝘈𝘤𝘵𝘪𝘷𝘦 (𝘕𝘰𝘵 𝘜𝘴𝘦𝘥)"
+    status_text = "𝘜𝘴𝘦𝘥" if used else "𝘈𝘤𝘵𝘪𝘷𝘦"
     
     msg = f"""⦗ {get_custom_emoji('vip', '🔑')} ⦘ 𝘒𝘦𝘺 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯
 
@@ -903,7 +908,6 @@ async def gateway_selection_cb(event):
     if gate_name.startswith("soon_"): return await event.answer(f"⏳ Gateway is coming soon!", alert=True)
     
     original_msg = await event.get_message()
-    
     if gate_name == "cancel":
         PENDING_FILES.pop(uid, None)
         return await styled_edit(original_msg, f"⦗ {get_custom_emoji('error', '❌')} ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘊𝘢𝘯𝘤𝘦𝘭𝘭𝘦𝘥.", buttons=None)
@@ -1041,6 +1045,10 @@ async def stop_chk_cb(event):
             if not t.done(): t.cancel()
     await event.answer("🛑 𝘚𝘵𝘰𝘱𝘱𝘦𝘥 𝘐𝘮𝘮𝘦𝘥𝘪𝘢𝘵𝘦𝘭𝘺!", alert=True)
 
+@client.on(events.CallbackQuery(pattern=rb"none"))
+async def empty_callback_handler(event):
+    await event.answer()
+
 # ====================== MAIN INITIALIZATION ENGINE ======================
 async def check_sites_loop():
     while True:
@@ -1054,26 +1062,4 @@ async def main():
     await get_edit_lock()
     
     try: await init_db()
-    except Exception as e: print(f"❌ Database Error: {e}")
-        
-    try:
-        async with aiohttp.ClientSession() as session: 
-            await session.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true")
-    except: pass
-    
-    asyncio.create_task(check_sites_loop())
-    
-    while True:
-        try:
-            print("🔄 Starting...")
-            await client.start(bot_token=BOT_TOKEN)
-            print("✅ VIP BOT IS FULLY OPERATIONAL WITH ALL PREMIUM ASSETS AND ZERO ERRORS!")
-            await client.run_until_disconnected()
-        except FloodWaitError as e: 
-            print(f"⏳ Telegram FloodWait: Sleeping for {e.seconds}s")
-            await asyncio.sleep(e.seconds + 5)
-        except Exception as e: 
-            print(f"⚠️ FATAL ERROR: {e}")
-            await asyncio.sleep(10)
-
-if __name__ == "__main__": asyncio.run(main())
+    except Exception as e: print(f

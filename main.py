@@ -68,8 +68,8 @@ KEYS_FILE = "redeem_keys.json"
 
 WORKERS = 40  
 API_TIMEOUT = 30  
-DELAY = 1.5  
-HIT_DELAY = 0.5
+DELAY = 0.5  
+HIT_DELAY = 0.1
 
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 4

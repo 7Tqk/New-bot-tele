@@ -1,4 +1,4 @@
-# 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢 - (𝟰𝟬𝗪 - 𝟭𝟬𝟬% 𝘈𝘤𝘤𝘶𝘳𝘢𝘤𝘺 - 𝘡𝘦𝘳𝘰-𝘓𝘢𝘵𝘦𝘯𝘤𝘺 - 𝘗𝘳𝘦𝘮𝘪𝘶𝘮 𝘜𝘐)
+# 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮 - (𝟰𝟬𝗪 - 𝟭𝟬𝟬% 𝘈𝘤𝘤𝘶𝘳𝘢𝘤𝘺 - 𝘡𝘦𝘳𝘰-𝘓𝘢𝘵𝘦𝘯𝘤𝘺 - 𝘗𝘳𝘦𝘮𝘪𝘶𝘮 𝘙𝘦𝘥𝘦𝘦𝘮)
 from telethon.errors import FloodWaitError, UserNotParticipantError
 from telethon import TelegramClient, events, Button
 from telethon.tl.types import ChannelParticipantBanned, DocumentAttributeAnimated
@@ -57,6 +57,7 @@ JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
 CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
 PROXY_FILE = 'proxy.txt'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
+KEYS_FILE = "redeem_keys.json"
 
 # --- ACCURACY & SPEED CONFIG ---
 WORKERS = 40  
@@ -67,18 +68,18 @@ HIT_DELAY = 0.1
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 4
 _JOIN_CACHE = {}
-
 _MAINTENANCE_MODE = False
 
-# ====================== VIP EMOJIS, FLAGS & GIFS ======================
+# ====================== VIP EMOJIS ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
 
+# آيديهات الإيموجيات المتحركة لجميع حالات الفحص لضمان الفخامة المطلقة
 VIP_EMOJIS = {
     "charged": "5039644681583985437", 
     "approved": "5039793437776282663",
     "insufficient": "5042176294222037888", 
-    "declined": "", 
-    "error": "",
+    "declined": "5042211756541674402", 
+    "error": "5042220456184116238",
     "card": "5042101437237036298", 
     "bank": "5042334757040423886", 
     "country_default": "5042186567783809934",
@@ -86,8 +87,8 @@ VIP_EMOJIS = {
     "price": "5042050649248760772", 
     "gateway": "5042186567783809934", 
     "msg": "5039649904264217620", 
-    "total": "", 
-    "speed": ""
+    "total": "5042212959149474775", 
+    "speed": "5042187654402122602"
 }
 
 CUSTOM_COUNTRY_EMOJIS = {
@@ -111,11 +112,12 @@ ANIME_GIFS = [
     "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif"
 ]
 
+# ====================== PLANS CONFIGURATION ======================
 PLANS = {
     "plan1": {"name": "𝘊𝘰𝘳𝘦 𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "Core", "duration_days": 7, "emoji": "🛠️", "price": "$8.00"},
-    "plan2": {"name": "𝘌𝘭𝘪𝘵𝘦 𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "Elite", "duration_days": 15, "emoji": "👑", "price": "$14.00"},
+    "plan2": {"name": "𝘌𝘭𝘪𝘵𝘦 𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "Elite", "duration_days": 15, "emoji": "👑", "price": "$15.00"},
     "plan3": {"name": "𝘙𝘰𝘰𝘵 𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "Root", "duration_days": 30, "emoji": "⭐", "price": "$25.00"},
-    "plan4": {"name": "𝘟-𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "X", "duration_days": 90, "emoji": "💎", "price": "$60.00"},
+    "plan4": {"name": "𝘟-𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "X", "duration_days": 60, "emoji": "💎", "price": "$50.00"},
 }
 PAID_TIERS = ["Core", "Elite", "Root", "X"]
 
@@ -126,6 +128,7 @@ HIT_BUTTON = [[Button.url("⇾ 𝘖𝘸𝘯𝘦𝘳 ⇽", "https://t.me/Dddadddy
 
 _MSG_LOCK = None
 _EDIT_LOCK = None
+_KEYS_LOCK = asyncio.Lock()  # حماية قوية لملف الأكواد
 
 async def get_msg_lock():
     global _MSG_LOCK
@@ -137,43 +140,49 @@ async def get_edit_lock():
     if _EDIT_LOCK is None: _EDIT_LOCK = asyncio.Lock()
     return _EDIT_LOCK
 
-_DEAD_INDICATORS = (
-    'receipt id is empty', 'handle is empty', 'product id is empty', 'tax amount is empty', 
-    'payment method identifier is empty', 'invalid url', 'error in 1st req', 'error in 1 req',
-    'cloudflare', 'connection failed', 'timed out', 'access denied', 'tlsv1 alert', 'ssl routines',
-    'could not resolve', 'domain name not found', 'name or service not known', 'openssl ssl_connect',
-    'empty reply from server', 'httperror504', 'http error', 'timeout', 'unreachable', 'ssl error',
-    '502', '503', '504', 'bad gateway', 'service unavailable', 'gateway timeout', 'network error', 
-    'connection reset', 'failed to detect product', 'failed to create checkout', 'failed to tokenize card', 
-    'failed to get proposal data', 'submit rejected', 'handle error', 'http 404', 'url rejected',
-    'malformed input', 'amount_too_small', 'amount too small', 'site dead', 'captcha_required', 
-    'site errors', 'failed', 'all products sold out', 'no_session_token', 'tokenize_fail',
-    'proxy dead', 'proxy error', 'proxy connection', 'bad proxy', 'connection timeout failed', 
-    'session_error', 'session expired'
-)
+# ====================== REDEEM SYSTEM MANAGER ======================
+async def load_keys():
+    async with _KEYS_LOCK:
+        if os.path.exists(KEYS_FILE):
+            try:
+                async with aiofiles.open(KEYS_FILE, 'r') as f:
+                    content = await f.read()
+                    if content: return json.loads(content)
+            except: return {}
+        return {}
 
-# ====================== ZERO-LAG BULLETPROOF GIF PROTOCOL ======================
+async def save_keys(keys_data):
+    async with _KEYS_LOCK:
+        async with aiofiles.open(KEYS_FILE, 'w') as f:
+            await f.write(json.dumps(keys_data, indent=4))
+
+def is_paid_plan(plan):
+    return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
+
+def get_cc_limit(plan, uid=0):
+    if uid in ADMIN_ID: return 50000
+    plan_lower = str(plan).lower() if plan else "bronze"
+    if "x" in plan_lower: return 10000
+    if "root" in plan_lower: return 2000
+    if "elite" in plan_lower: return 500
+    if "core" in plan_lower: return 100
+    return 15
+
+# ====================== ANTI-FLOOD & GIF FUNCTIONS ======================
 async def fetch_gif_to_memory(target_url):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8"
-    }
+    headers = {"User-Agent": "Mozilla/5.0", "Accept": "image/*,*/*;q=0.8"}
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(target_url, headers=headers, timeout=5, allow_redirects=True) as response:
+            async with session.get(target_url, headers=headers, timeout=5) as response:
                 if response.status == 200:
-                    content_type = response.headers.get('Content-Type', '').lower()
-                    if 'image' in content_type or 'gif' in content_type:
-                        data = await response.read()
-                        if len(data) > 1024:
-                            gif_io = io.BytesIO(data)
-                            gif_io.name = "vip_hit.gif"
-                            return gif_io
-    except Exception:
-        pass
+                    data = await response.read()
+                    if len(data) > 1024:
+                        gif_io = io.BytesIO(data)
+                        gif_io.name = "vip.gif"
+                        return gif_io
+    except: pass
     return None
 
-# ====================== ANTI-FLOOD FORCE-SEND FUNCTIONS ======================
 async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=None):
     lock = await get_msg_lock()
     async with lock:
@@ -182,17 +191,13 @@ async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=No
                 target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
                 try:
                     gif_file = await fetch_gif_to_memory(target_url)
-                    if gif_file:
-                        res = await event.client.send_file(event.chat_id, gif_file, caption=text, buttons=buttons, reply_to=event.message.id, parse_mode="html", attributes=[DocumentAttributeAnimated()])
-                    else:
-                        res = await event.client.send_file(event.chat_id, target_url, caption=text, buttons=buttons, reply_to=event.message.id, parse_mode="html")
-                    return res
+                    if gif_file: return await event.client.send_file(event.chat_id, gif_file, caption=text, buttons=buttons, reply_to=event.message.id, parse_mode="html", attributes=[DocumentAttributeAnimated()])
+                    else: return await event.client.send_file(event.chat_id, target_url, caption=text, buttons=buttons, reply_to=event.message.id, parse_mode="html")
                 except FloodWaitError as e: await asyncio.sleep(e.seconds + 1)
                 except Exception: await asyncio.sleep(0.5)
             return None
         else:
-            try:
-                return await event.reply(text, buttons=buttons, parse_mode="html")
+            try: return await event.reply(text, buttons=buttons, parse_mode="html")
             except FloodWaitError as e:
                 await asyncio.sleep(e.seconds + 1)
                 return await event.reply(text, buttons=buttons, parse_mode="html")
@@ -206,11 +211,8 @@ async def styled_send(chat, text, buttons=None, use_gif=False, specific_gif=None
                 target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
                 try:
                     gif_file = await fetch_gif_to_memory(target_url)
-                    if gif_file:
-                        res = await client_instance.send_file(chat, gif_file, caption=text, buttons=buttons, parse_mode="html", attributes=[DocumentAttributeAnimated()])
-                    else:
-                        res = await client_instance.send_file(chat, target_url, caption=text, buttons=buttons, parse_mode="html")
-                    return res
+                    if gif_file: return await client_instance.send_file(chat, gif_file, caption=text, buttons=buttons, parse_mode="html", attributes=[DocumentAttributeAnimated()])
+                    else: return await client_instance.send_file(chat, target_url, caption=text, buttons=buttons, parse_mode="html")
                 except FloodWaitError as e: await asyncio.sleep(e.seconds + 1)
                 except Exception: await asyncio.sleep(0.5)
             return None
@@ -224,21 +226,21 @@ async def styled_send(chat, text, buttons=None, use_gif=False, specific_gif=None
 async def styled_edit(msg, text, buttons=None):
     lock = await get_edit_lock()
     async with lock:
-        try:
-            return await msg.edit(text, buttons=buttons, parse_mode="html")
+        try: return await msg.edit(text, buttons=buttons, parse_mode="html")
         except FloodWaitError as e:
             await asyncio.sleep(e.seconds + 1)
             return None 
-        except Exception:
-            return None
+        except Exception: return None
 
 # ====================== HELPER FUNCTIONS ======================
+_DEAD_INDICATORS = ('receipt id is empty', 'handle is empty', 'product id is empty', 'cloudflare', 'connection failed', 'timed out', 'empty reply from server', 'bad gateway', 'service unavailable', 'gateway timeout', 'site dead', 'proxy dead', 'session_error')
+
 def is_dead_site_error(error_msg):
     if not error_msg: return True
     return any(keyword in str(error_msg).lower() for keyword in _DEAD_INDICATORS)
 
 async def check_single_chat(user_id, chat):
-    if not chat or chat == 0 or str(chat) == "0": return True
+    if not chat or str(chat) == "0": return True
     try:
         try: chat_var = int(chat)
         except: chat_var = chat
@@ -254,12 +256,9 @@ async def is_user_joined(user_id):
 
 async def is_maintenance(event):
     if _MAINTENANCE_MODE and event.sender_id not in ADMIN_ID:
-        msg = "⦗ 🛠️ ⦘ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦\n\n╰ 𝘛𝘩𝘦 𝘣𝘰𝘵 𝘪𝘴 𝘤𝘶𝘳𝘳𝘦𝘯𝘵𝘭𝘺 𝘶𝘯𝘥𝘦𝘳𝘨𝘰𝘪𝘯𝘨 𝘶𝘱𝘨𝘳𝘢𝘥𝘦𝘴.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘵𝘳𝘺 𝘢𝘨𝘢𝘪𝘯 𝘭𝘢𝘵𝘦𝗿."
-        if isinstance(event, events.CallbackQuery.Event):
-            await event.answer("🛠️ Maintenance Break!", alert=True)
-            await styled_edit(event, msg)
-        else:
-            await styled_reply(event, msg)
+        msg = "⦗ 🛠️ ⦘ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦\n\n╰ 𝘛𝘩𝘦 𝘣𝘰𝘵 𝘪𝘴 𝘤𝘶𝘳𝘳𝘦𝘯𝘵𝘭𝘺 𝘶𝘯𝘥𝘦𝘳𝘨𝘰𝘪𝘯𝘨 𝘶𝘱𝘨𝘳𝘢𝘥𝘦𝘴.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘵𝘳𝘺 𝘢𝘨𝘢𝘪𝘯 𝘭𝘢𝘵𝘦𝘳."
+        if isinstance(event, events.CallbackQuery.Event): await event.answer("🛠️ Maintenance Break!", alert=True); await styled_edit(event, msg)
+        else: await styled_reply(event, msg)
         return True
     return False
 
@@ -267,7 +266,6 @@ async def force_join_check(event):
     uid = event.sender_id
     if uid in ADMIN_ID: return True
     now = time.time()
-    
     USER_LAST_REQ[uid] = now
     if uid in _JOIN_CACHE and now - _JOIN_CACHE[uid] < 600: return True
     if await is_user_joined(uid):
@@ -282,18 +280,6 @@ async def force_join_check(event):
     await styled_reply(event, "⦗ 🛑 ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb)
     return False
 
-def is_paid_plan(plan):
-    return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
-
-def get_cc_limit(plan, uid=0):
-    if uid in ADMIN_ID: return 50000
-    plan_lower = str(plan).lower() if plan else "bronze"
-    if "x" in plan_lower: return 10000
-    if "root" in plan_lower: return 2000
-    if "elite" in plan_lower: return 500
-    if "core" in plan_lower: return 100
-    return 15
-
 async def get_bin_info(bin_code):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
@@ -301,10 +287,8 @@ async def get_bin_info(bin_code):
                 if r.status == 200:
                     data = await r.json()
                     return {
-                        "brand": data.get("brand", "-"), "type": data.get("type", "-"),
-                        "level": data.get("level", "-"), "bank": data.get("bank", "-"),
-                        "country": data.get("country_name", "-"), "country_code": data.get("country", "-"),
-                        "flag": data.get("country_flag", "🏳️")
+                        "brand": data.get("brand", "-"), "type": data.get("type", "-"), "level": data.get("level", "-"), "bank": data.get("bank", "-"),
+                        "country": data.get("country_name", "-"), "country_code": data.get("country", "-"), "flag": data.get("country_flag", "🏳️")
                     }
     except: pass
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "-", "flag": "🏳️"}
@@ -325,7 +309,7 @@ def format_card_result(status, card, gateway, response, price="-", bin_info=None
     if status == "Charged": header = f"⦗ {get_custom_emoji('charged', '🟢')} ⦘ 𝘊𝘩𝘢𝘳𝘨𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺"
     elif status == "Approved": header = f"⦗ {get_custom_emoji('approved', '⚡')} ⦘ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 𝘊𝘝𝘝"
     elif status == "Insufficient": header = f"⦗ {get_custom_emoji('insufficient', '🟡')} ⦘ 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 𝘍𝘶𝘯𝘥𝘴"
-    else: header = f"⦗ 🔴 ⦘ 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥"
+    else: header = f"⦗ {get_custom_emoji('declined', '🔴')} ⦘ 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥"
         
     c_code = bi.get('country_code', '')
     country_display = f"{bi.get('country', '-')} {get_country_emoji(c_code, bi.get('flag', '🏳️'))}"
@@ -347,7 +331,7 @@ def format_card_result(status, card, gateway, response, price="-", bin_info=None
 
 ⦗ {get_custom_emoji('time', '⏱')} ⦘ 𝘛𝘰𝘰𝘬 ⇾ <code>{elapsed:.2f}s</code>"""
 
-# ====================== SESSIONS ======================
+# ====================== SESSIONS & EXTRACTION ======================
 _USER_HTTP_SESSIONS = {}
 
 async def get_user_http_session(uid, purpose="general"):
@@ -366,7 +350,6 @@ async def cleanup_user_http_session(uid, purpose="general"):
         try: await session.close()
         except: pass
 
-# ====================== EXTRACTION ======================
 def extract_cc(text):
     if not text: return []
     cards = []
@@ -425,8 +408,7 @@ async def get_github_sites():
     except: pass
     if not _CACHED_SITES and os.path.exists('sites.txt'):
         try:
-            with open('sites.txt', 'r', encoding='utf-8') as f:
-                _CACHED_SITES = list(set([re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in f if line.strip()]))
+            with open('sites.txt', 'r', encoding='utf-8') as f: _CACHED_SITES = list(set([re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in f if line.strip()]))
         except: pass
     return _CACHED_SITES
 
@@ -472,10 +454,7 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
     available_proxies = list(proxies) if proxies else []
     for attempt in range(max_retries):
         active_sites = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
-        if not active_sites:
-            _SITE_ERRORS_COUNT.clear()
-            active_sites = sites
-            
+        if not active_sites: _SITE_ERRORS_COUNT.clear(); active_sites = sites
         site = random.choice(active_sites)
         proxy = random.choice(available_proxies) if available_proxies else None
         
@@ -483,52 +462,112 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
         if not result.get('retry'): 
             if result.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: _SITE_ERRORS_COUNT[site] = 0
             return result
-            
         last_result = result
         if attempt < max_retries - 1: await asyncio.sleep(DELAY) 
-            
     if last_result: return {'status': 'Dead', 'message': f'{str(last_result["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': last_result.get('price', '-')}
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
 
-# ====================== GLOBAL HITS BROADCASTER ======================
 async def _send_global_hit(status, gateway, message, price, uid):
     try:
         if str(HITS_GROUP_ID) in ["0", ""]: return
-        try:
-            user = await client_instance.get_entity(uid)
-            user_name = user.first_name if user.first_name else f"User {uid}"
+        try: user = await client_instance.get_entity(uid); user_name = user.first_name if user.first_name else f"User {uid}"
         except: user_name = f"User {uid}"
-            
-        plan = await get_user_plan(uid)
-        plan_name = plan.title() if plan else "Free"
+        plan = await get_user_plan(uid); plan_name = plan.title() if plan else "Free"
         ps = f"${str(price).replace('$', '')}" if price and str(price) != "-" else ""
-        
         if status == "Charged": header = "⭐ ⭐ 𝘊𝘏𝘈𝘙𝘎𝘌𝘋 ⭐"
         elif status == "Insufficient": header = "⭐ ⭐ 𝘐𝘕𝘚𝘜𝘍𝘍𝘐𝘊𝘐𝘌𝘕𝘛 𝘍𝘜𝘕𝘋𝘚 ⭐"
         else: return 
-            
-        text = f"""{header}
-𝘎𝘢𝘵𝘦𝘸𝘢𝘺 ⭐ {gateway} {ps}
-𝘙𝘦𝘴𝘱𝘰𝘯𝘴𝘦 ⭐ {message}
-𝘜𝘴𝘦𝘳 ⭐ <a href="tg://user?id={uid}">{user_name}</a> ({plan_name})"""
-
+        text = f"""{header}\n𝘎𝘢𝘵𝘦𝘸𝘢𝘺 ⭐ {gateway} {ps}\n𝘙𝘦𝘴𝘱𝘰𝘯𝘴𝘦 ⭐ {message}\n𝘜𝘴𝘦𝘳 ⭐ <a href="tg://user?id={uid}">{user_name}</a> ({plan_name})"""
         await client_instance.send_message(HITS_GROUP_ID, text, parse_mode="html", link_preview=False)
     except Exception: pass
 
-# ====================== FILE UPLOAD & GATEWAY ======================
+# ====================== REDEEM & ADMIN KEY GENERATOR ======================
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]gen\s+(plan[1-4])(?:\s+(\d+))?'))
+async def generate_keys_cmd(event):
+    if event.sender_id not in ADMIN_ID: return
+    plan_key = event.pattern_match.group(1).lower()
+    amount_str = event.pattern_match.group(2)
+    amount = int(amount_str) if amount_str else 1
+    
+    if plan_key not in PLANS: return await styled_reply(event, "⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘗𝘭𝘢𝘯. 𝘜𝘴𝘦: plan1, plan2, plan3, plan4")
+    
+    pi = PLANS[plan_key]
+    keys_db = await load_keys()
+    generated_codes = []
+    
+    for _ in range(amount):
+        rand_str = ''.join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=10))
+        code = f"𝘚𝘩𝘰𝘱𝘪𝘧𝘺-{rand_str[:5]}-{rand_str[5:]}"
+        keys_db[code] = {"tier": pi["tier"], "days": pi["duration_days"], "used": False, "used_by": None, "generated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        generated_codes.append(code)
+        
+    await save_keys(keys_db)
+    
+    text = f"⦗ ✅ ⦘ 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘎𝘦𝘯𝘦𝘳𝘢𝘵𝘦𝘥 <code>{amount}</code> 𝘒𝘦𝘺(𝘴)!\n\n├ 𝘗𝘭𝘢𝘯: {pi['emoji']} {pi['name']}\n├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n╰ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n\n"
+    for c in generated_codes:
+        text += f"<code>{c}</code>\n"
+        
+    await styled_reply(event, text)
+
+@client.on(events.NewMessage(pattern=r'(?i)^[/.]redeem(?:\s+(.+))?'))
+async def redeem_key_cmd(event):
+    if await is_maintenance(event): return
+    if not await force_join_check(event): return
+    
+    code = event.pattern_match.group(1)
+    if not code: return await styled_reply(event, "⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹: <code>/redeem [𝘠𝘰𝘶𝘳-𝘒𝘦𝘺]</code>")
+    
+    code = code.strip()
+    keys_db = await load_keys()
+    uid = event.sender_id
+    
+    if code not in keys_db: return await styled_reply(event, "⦗ ❌ ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘒𝘦𝘺! 𝘗𝘭𝘦𝘢𝘴𝘦 𝘤𝘩𝘦𝘤𝘬 𝘢𝘯𝘥 𝘵𝘳𝘺 𝘢𝘨𝘢𝘪𝘯.")
+    kinfo = keys_db[code]
+    if kinfo["used"]: return await styled_reply(event, "⦗ ⚠️ ⦘ 𝘛𝘩𝘪𝘴 𝘒𝘦𝘺 𝘩𝘢𝘴 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘣𝘦𝘦𝘯 𝘶𝘴𝘦𝘥.")
+    
+    tier = kinfo["tier"]
+    days = kinfo["days"]
+    
+    await set_user_plan(uid, tier, days)
+    
+    keys_db[code]["used"] = True
+    keys_db[code]["used_by"] = uid
+    keys_db[code]["redeemed_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    await save_keys(keys_db)
+    
+    expiry_date = (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d')
+    
+    msg = f"""⦗ 👑 ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮 𝘈𝘤𝘵𝘪𝘷𝘢𝘵𝘦𝘥!
+
+🎉 𝘊𝘰𝘯𝘨𝘳𝘢𝘵𝘶𝘭𝘢𝘵𝘪𝘰𝘯𝘴! 𝘠𝘰𝘶𝘳 𝘬𝘦𝘺 𝘸𝘢𝘴 𝘴𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘳𝘦𝘥𝘦𝘦𝘮𝘦𝘥.
+
+⦗ 💎 ⦘ 𝘗𝘭𝘢𝘯 𝘋𝘦𝘵𝘢𝘪𝘭𝘴 ⇾
+├ 𝘛𝘪𝘦𝘳: <code>{tier}</code>
+├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{days} 𝘋𝘢𝘺𝘴</code>
+├ 𝘔𝘢𝘴𝘴 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(tier)} 𝘊𝘊𝘴</code>
+╰ 𝘌𝘹𝘱𝘪𝘳𝘦𝘴 𝘖𝘯: <code>{expiry_date}</code>
+
+⦗ 🚀 ⦘ 𝘌𝘯𝘫𝘰𝘺 𝘶𝘭𝘵𝘳𝘢-𝘧𝘢𝘴𝘵 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨 𝘸𝘪𝘵𝘩 <code>{WORKERS}</code> 𝘞𝘰𝘳𝘬𝘦𝘳𝘴!"""
+    await styled_reply(event, msg, use_gif=True)
+
+# ====================== FILE UPLOAD & MASS PROCESS ======================
 @client.on(events.NewMessage(func=lambda e: getattr(e, 'document', None) and e.document.mime_type.startswith('text/')))
 async def auto_file_check_cmd(event):
     if await is_maintenance(event): return
+    uid = event.sender_id
+    
+    processing_msg = await styled_reply(event, "⦗ ⏳ ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴𝘪𝘯𝘨 𝘧𝘪𝘭𝘦 𝘥𝘢𝘵𝘢...")
+    
     try:
-        uid = event.sender_id
         if uid in ACTIVE_MTXT_PROCESSES and not ACTIVE_MTXT_PROCESSES[uid].get("stopped", True): 
-            return await styled_reply(event, "⚠️ 𝘈 𝘱𝘳𝘰𝘤𝘦𝘴𝘴 𝘪𝘴 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘢𝘤𝘵𝘪𝘷𝘦! 𝘗𝘭𝘦𝘢𝘴𝘦 𝘸𝘢𝘪𝘵.")
+            return await styled_edit(processing_msg, "⚠️ 𝘈 𝘱𝘳𝘰𝘤𝘦𝘴𝘴 𝘪𝘴 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘢𝘤𝘵𝘪𝘷𝘦! 𝘗𝘭𝘦𝘢𝘴𝘦 𝘸𝘢𝘪𝘵.")
             
-        if getattr(event.document, 'size', 0) > 2 * 1024 * 1024: return await styled_reply(event, "⚠️ 𝘍𝘪𝘭𝘦 𝘵𝘰𝘰 𝘭𝘢𝘳𝘨𝘦! (𝘔𝘢𝘹 2𝘔𝘉)")
-        if not await force_join_check(event): return
+        if getattr(event.document, 'size', 0) > 2 * 1024 * 1024: return await styled_edit(processing_msg, "⚠️ 𝘍𝘪𝘭𝘦 𝘵𝘰𝘰 𝘭𝘢𝘳𝘨𝘦! (𝘔𝘢𝘹 2𝘔𝘉)")
+        if not await force_join_check(event): return await processing_msg.delete()
+        
         plan = await get_user_plan(uid)
         db_proxies = await get_all_user_proxies(uid)
-        if len(db_proxies) == 0: return await styled_reply(event, "<b>⚠️ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘢𝘥𝘥 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘣𝘦𝘧𝘰𝘳𝘦 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨! 𝘜𝘴𝘦 <code>/addpxy</code> 𝘵𝘰 𝘢𝘥𝘥.</b>")
+        if len(db_proxies) == 0: return await styled_edit(processing_msg, "<b>⚠️ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘢𝘥𝘥 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘣𝘦𝘧𝘰𝘳𝘦 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨! 𝘜𝘴𝘦 <code>/addpxy</code> 𝘵𝘰 𝘢𝘥𝘥.</b>")
         
         fp = await event.download_media()
         content = ""
@@ -538,7 +577,8 @@ async def auto_file_check_cmd(event):
             if os.path.exists(fp): os.remove(fp)
             
         cards = extract_cc(content)
-        if not cards: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘷𝘢𝘭𝘪𝘥 𝘤𝘢𝘳𝘥𝘴 𝘧𝘰𝘶𝘯𝘥 𝘪𝘯 𝘧𝘪𝘭𝘦.")
+        if not cards: return await styled_edit(processing_msg, "⚠️ 𝘕𝘰 𝘷𝘢𝘭𝘪𝘥 𝘤𝘢𝘳𝘥𝘴 𝘧𝘰𝘶𝘯𝘥 𝘪𝘯 𝘧𝘪𝘭𝘦.")
+        
         cl = get_cc_limit(plan, uid)
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
@@ -548,8 +588,8 @@ async def auto_file_check_cmd(event):
             [Button.inline("💳 𝘚𝘵𝘳𝘪𝘱𝘦 (𝘚𝘰𝘰𝘯)", b"gate:soon_Stripe"), Button.inline("🅿️ 𝘗𝘢𝘺𝘗𝘢𝘭 (𝘚𝘰𝘰𝘯)", b"gate:soon_PayPal")],
             [Button.inline("❌ 𝘊𝘢𝘯𝘤𝘦𝘭", b"gate:cancel")]
         ]
-        await styled_reply(event, f"⦗ ⚙️ ⦘ 𝘍𝘪𝘭𝘦 𝘓𝘰𝘢𝘥𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺\n\n├ 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴: <code>{len(cards)}</code>\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘦𝘭𝘦𝘤𝘵 𝘢 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵:", buttons=kb)
-    except Exception as e: await event.reply(f"⚠️ Error: {e}")
+        await styled_edit(processing_msg, f"⦗ ⚙️ ⦘ 𝘍𝘪𝘭𝘦 𝘓𝘰𝘢𝘥𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺\n\n├ 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴: <code>{len(cards)}</code>\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘦𝘭𝘦𝘤𝘵 𝘢 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵:", buttons=kb)
+    except Exception as e: await styled_edit(processing_msg, f"⚠️ Error: {e}")
 
 @client.on(events.CallbackQuery(pattern=rb"gate:(.*)"))
 async def gateway_selection_cb(event):
@@ -565,10 +605,9 @@ async def gateway_selection_cb(event):
     if not cards: return await event.answer("⚠️ Session expired or invalid file.", alert=True)
     
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": []}
-    msg = await styled_edit(event, f"⦗ ⚡ ⦘ 𝘗𝘳𝘦𝘱𝘢𝘳𝘪𝘯𝘨 𝘚𝘦𝘴𝘴𝘪𝘰𝘯...\n\n├ 𝘓𝘰𝘢𝘥𝘦𝘥: <code>{len(cards)} 𝘊𝘊𝘴</code>\n├ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴: <code>{WORKERS}</code>\n╰ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>")
+    msg = await styled_edit(event, f"⦗ ⚡ ⦘ 𝘗𝘳𝘦𝘱𝘢𝘳𝘪𝘯𝘨 𝘚𝘦𝘴𝘴𝘪𝘰𝘯...\n\n├ 𝘓𝘰𝘢𝘥𝘦𝘥: <code>{len(cards)} 𝘊𝘊𝘴</code>\n├ 𝘛𝘩𝘳𝘦𝘢𝗱𝘴: <code>{WORKERS}</code>\n╰ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>")
     asyncio.create_task(_run_mass_process(event, msg, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gate_name))
 
-# ====================== WORKER CORE (PREMIUM UI + ZERO LATENCY) ======================
 async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, gate_name):
     uid = event.sender_id
     total = len(cards); checked = charged = approved = insufficient = declined = errors = 0
@@ -726,7 +765,7 @@ async def check_joined_cb(event):
         await event.answer(f"✅ Successfully Verified!", alert=True)
         try: await event.delete()
         except: pass
-        await styled_send(event.chat_id, f"⦗ ✨ ⦘ 𝘞𝘦𝘭𝘤𝘰𝘮𝘦\n╰ 𝘚𝘦𝘯𝘥 /start 𝘵𝘰 𝘴𝘦𝘦 𝘤𝘰𝘮𝘮𝘢𝘯𝘥𝘴.")
+        await styled_send(event.chat_id, f"⦗ ✨ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮\n╰ 𝘚𝘦𝘯𝘥 /start 𝘵𝘰 𝘴𝘦𝘦 𝘤𝘰𝘮𝘮𝘢𝘯𝘥𝘴.")
     else: await event.answer(f"❌ You are not joined!", alert=True)
 
 # ====================== PROXIES ======================
@@ -806,7 +845,7 @@ async def remove_proxy_cmd(event):
         except: await styled_reply(event, "⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘐𝘯𝘥𝘦𝘹.")
     except Exception as e: await event.reply(f"⚠️ Error: {e}")
 
-# ====================== UI / PLANS ======================
+# ====================== UI / PLANS / START ======================
 @client.on(events.NewMessage(pattern=r'(?i)^[/.](start|cmds?|commands?)$'))
 async def start(event):
     if await is_maintenance(event): return
@@ -815,7 +854,7 @@ async def start(event):
         await ensure_user(event.sender_id)
         plan = await get_user_plan(event.sender_id)
         limit = get_cc_limit(plan, event.sender_id)
-        text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢
+        text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
 
 ├ ⦗ 💳 ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
 │ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
@@ -827,7 +866,7 @@ async def start(event):
 
 ╰ ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
   ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
-  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬
+  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺
   ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴
 
 ⦗ 💎 ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
@@ -839,7 +878,7 @@ async def start(event):
 async def back_start_cb(event):
     if await is_maintenance(event): return
     uid = event.sender_id; plan = await get_user_plan(uid); limit = get_cc_limit(plan, uid)
-    text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝙑𝙄𝙋 𝙎𝙮𝙨𝙩𝙚𝙢
+    text = f"""⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
 
 ├ ⦗ 💳 ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
 │ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
@@ -851,7 +890,7 @@ async def back_start_cb(event):
 
 ╰ ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
   ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
-  ├ /fb ⇾ 𝘚𝘦𝘯𝗱 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬
+  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺
   ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴
 
 ⦗ 💎 ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
@@ -876,9 +915,9 @@ async def plans_cb(event):
     if await is_maintenance(event): return
     cp = await get_user_plan(event.sender_id)
     plans_text = f"⦗ 💎 ⦘ 𝘝𝘐𝘗 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘗𝘭𝘢𝘯𝘴\n\n"
-    for pid, pi in PLANS.items(): plans_text += f"├ {pi['emoji']} {pi['name']}\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
+    for pid, pi in PLANS.items(): plans_text += f"├ {pi['emoji']} {pi['name']}\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ├ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
     plans_text += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
-    kb = [[Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘜𝘱𝘨𝘳𝘢𝘥𝘦", "https://t.me/Dddadddyttt")], [Button.inline("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", b"back_start")]]
+    kb = [[Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘉𝘶𝘺", "https://t.me/Dddadddyttt")], [Button.inline("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", b"back_start")]]
     await styled_edit(event, plans_text, buttons=kb)
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]plan$'))
@@ -887,9 +926,9 @@ async def show_plans(event):
     if not await force_join_check(event): return
     cp = await get_user_plan(event.sender_id)
     plans_text = f"⦗ 💎 ⦘ 𝘝𝘐𝘗 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘗𝘭𝘢𝘯𝘴\n\n"
-    for pid, pi in PLANS.items(): plans_text += f"├ {pi['emoji']} {pi['name']}\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
+    for pid, pi in PLANS.items(): plans_text += f"├ {pi['emoji']} {pi['name']}\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ├ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
     plans_text += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
-    kb = [[Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘜𝘱𝘨𝘳𝘢𝘥𝘦", "https://t.me/Dddadddyttt")], [Button.inline("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", b"back_start")]]
+    kb = [[Button.url("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳 𝘛𝘰 𝘉𝘶𝘺", "https://t.me/Dddadddyttt")], [Button.inline("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", b"back_start")]]
     await styled_reply(event, plans_text, buttons=kb)
 
 # ====================== ADMIN COMMANDS ======================
@@ -901,22 +940,7 @@ async def maint_cmd(event):
     if arg: _MAINTENANCE_MODE = (arg.lower() == 'on')
     else: _MAINTENANCE_MODE = not _MAINTENANCE_MODE
     if _MAINTENANCE_MODE: await styled_reply(event, "⦗ 🛠️ ⦘ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦 𝘔𝘰𝘥𝘦: 𝘖𝘕\n╰ 𝘈𝘭𝘭 𝘶𝘴𝘦𝘳𝘴 𝘢𝘳𝘦 𝘯𝘰𝘸 𝘣𝘭𝘰𝘤𝘬𝘦𝘥.")
-    else: await styled_reply(event, "⦗ ✅ ⦘ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝗻𝘤𝘦 𝘔𝘰𝘥𝘦: 𝘖𝘍𝘍\n╰ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘪𝘴 𝘰𝘯𝘭𝘪𝘯𝘦 𝘧𝘰𝘳 𝘢𝘭𝘭 𝘶𝘴𝘦𝘳𝘴.")
-
-@client.on(events.NewMessage(pattern=r'(?i)^[/.]plan[1-4]\b'))
-async def assign_plan_cmd(event):
-    if event.sender_id not in ADMIN_ID: return
-    cmd = event.raw_text.split()
-    if len(cmd) < 2: return await styled_reply(event, "⚠️ 𝘚𝘺𝘯𝘵𝘢𝘹: <code>/plan(1-4) user_id</code>")
-    plan_key = "plan" + event.raw_text[5]
-    try: target_uid = int(cmd[1])
-    except: return await styled_reply(event, "⚠️ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘐𝘋")
-    pi = PLANS[plan_key]
-    await set_user_plan(target_uid, pi["tier"], pi["duration_days"])
-    expiry_date = (datetime.now() + timedelta(days=pi["duration_days"])).strftime('%Y-%m-%d %H:%M:%S')
-    await styled_reply(event, f"✅ 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘶𝘱𝘨𝘳𝘢𝘥𝘦𝘥 𝘶𝘴𝘦𝘳 <code>{target_uid}</code>")
-    user_msg = f"""⦗ 👑 ⦘ 𝘝𝘐𝘗 𝘜𝘱𝘨𝘳𝘢𝘥𝘦 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭!\n\n🎉 𝘊𝘰𝘯𝘨𝘳𝘢𝘵𝘶𝘭𝘢𝘵𝘪𝘰𝘯𝘴! 𝘠𝘰𝘶𝘳 𝘢𝘤𝘤𝘰𝘶𝘯𝘵 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘶𝘱𝘨𝘳𝘢𝘥𝘦𝘥.\n\n⦗ 💎 ⦘ 𝘗𝘭𝘢𝘯 𝘋𝘦𝘵𝘢𝘪𝘭𝘴 ⇾\n├ 𝘗𝘭𝘢𝘯: {pi['emoji']} <code>{pi['name']}</code>\n├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n├ 𝘔𝘢𝘴𝘴 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n╰ 𝘌𝘹𝘱𝘪𝘳𝘦𝘴 𝘖𝘯: <code>{expiry_date}</code>\n\n⦗ 🚀 ⦘ 𝘌𝘯𝘫𝘰𝘺 𝘶𝘭𝘵𝘳𝘢-𝘧𝘢𝘴𝘵 𝘤𝘩𝘦𝘤𝘬𝘪𝘯𝘨 𝘸𝘪𝘵𝘩 <code>{WORKERS}</code> 𝘞𝘰𝘳𝘬𝘦𝘳𝘴!\n𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘯𝘰𝘸 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵."""
-    await styled_send(target_uid, user_msg, use_gif=True)
+    else: await styled_reply(event, "⦗ ✅ ⦘ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦 𝘔𝘰𝘥𝘦: 𝘖𝘍𝘍\n╰ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘪𝘴 𝘰𝘯𝘭𝘪𝘯𝘦 𝘧𝘰𝘳 𝘢𝘭𝘭 𝘶𝘴𝘦𝘳𝘴.")
 
 @client.on(events.NewMessage(pattern=r'(?i)^[/.]users?$'))
 async def admin_users_cmd(event):
@@ -927,7 +951,7 @@ async def admin_users_cmd(event):
     text = f"""⦗ 🌐 ⦘ 𝘎𝘭𝘰𝘣𝘢𝘭 𝘚𝘺𝘴𝘵𝘦𝘮 𝘚𝘵𝘢𝘵𝘶𝘴
 
 ├ ⦗ ⚡ ⦘ 𝘈𝘤𝘵𝘪𝘷𝘦 𝘊𝘩𝘦𝘤𝘬𝘦𝘳𝘴 ⇾ <code>{active_count}</code>
-├ ⦗ 👥 ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘚𝘦𝘴𝘀𝘪𝗼𝗻 𝘜𝘴𝘦𝘳𝘴 ⇾ <code>{total_seen}</code>
+├ ⦗ 👥 ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘜𝘴𝘦𝘳𝘴 ⇾ <code>{total_seen}</code>
 ╰ ⦗ 🆔 ⦘ 𝘈𝘤𝘵𝘪𝘷𝘦 𝘐𝘋𝘴 ⇾ <code>{', '.join(active_uids) if active_uids else 'None'}</code>"""
     await styled_reply(event, text)
 
@@ -971,7 +995,7 @@ async def main():
         try:
             print("🔄 Attempting to start bot...")
             await client.start(bot_token=BOT_TOKEN)
-            print("✅ VIP BOT STARTED SUCCESSFULLY (PREMIUM UI ENABLED)!")
+            print("✅ VIP BOT STARTED SUCCESSFULLY (PREMIUM REDEEM SYSTEM)!")
             await client.run_until_disconnected()
         except FloodWaitError as e: 
             print(f"⏳ Telegram FloodWait: Sleeping for {e.seconds}s")

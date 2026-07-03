@@ -21,7 +21,6 @@ try:
 except ImportError:
     PSUTIL_AVAILABLE = False
 
-# استدعاء الدوال المستخدمة فقط لتجنب أي تعارض أو أخطاء
 from database2 import (
     init_db, ensure_user, get_user_plan, set_user_plan,
     get_all_user_proxies, get_proxy_count, add_proxy_db,
@@ -153,8 +152,6 @@ ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
 HIT_BUTTON = [[Button.url("⇾ 𝘖𝘸𝘯𝘦𝘳 ⇽", "https://t.me/Dddadddyttt")]]
 
-# 🔴 الحل الجذري لمشكلة بايثون 3.10+ في Railway 🔴
-# سيتم تهيئة الأقفال داخل الدالة الرئيسية لكي لا يتحطم الكود عند بدء التشغيل
 _MSG_LOCK = None
 _EDIT_LOCK = None
 
@@ -209,7 +206,7 @@ async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=No
     lock = await get_msg_lock()
     async with lock:
         if use_gif or specific_gif:
-            for _ in range(7): # يحاول 7 مرات إجبارياً لإرسال الـ GIF
+            for _ in range(7): 
                 target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
                 try:
                     gif_file = await fetch_gif_to_memory(target_url)
@@ -228,11 +225,9 @@ async def styled_reply(event, text, buttons=None, use_gif=False, specific_gif=No
                 except FloodWaitError as e:
                     await asyncio.sleep(e.seconds + 1)
                 except Exception as e:
-                    # إذا حظرنا المستخدم، نتوقف تماماً لكي لا يتجمد السيرفر
                     if "blocked" in str(e).lower() or "forbidden" in str(e).lower() or "deactivated" in str(e).lower():
                         return None
                     await asyncio.sleep(0.5)
-            # لن يرسل الصيدة بدون GIF أبداً
             return None
         else:
             try:
@@ -248,7 +243,7 @@ async def styled_send(chat, text, buttons=None, use_gif=False, specific_gif=None
     lock = await get_msg_lock()
     async with lock:
         if use_gif or specific_gif:
-            for _ in range(7): # إجبار إرسال الـ GIF للصيدات
+            for _ in range(7): 
                 target_url = specific_gif if specific_gif else random.choice(ANIME_GIFS)
                 try:
                     gif_file = await fetch_gif_to_memory(target_url)
@@ -623,11 +618,17 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
         while not is_stopped():
             await asyncio.sleep(3.5)
             if is_stopped(): break
+            
+            elapsed_now = time.time() - st
+            cpm = int((checked / elapsed_now) * 60) if elapsed_now > 0 else 0
+            
+            # 🎨 تصميم أزرار الـ VIP الجديد (تم فصل السرعة وتوسيطها للفخامة)
             kb = [
                 [Button.inline(f"⦗ 💳 ⦘ {lcd}", b"none")],
                 [Button.inline(f"🟢 𝘊𝘩𝘢𝘳𝘨𝘦𝘥 ⇾ {charged}", b"none"), Button.inline(f"⚡ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 ⇾ {approved}", b"none")],
                 [Button.inline(f"🟡 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 ⇾ {insufficient}", b"none"), Button.inline(f"🔴 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥 ⇾ {declined}", b"none")],
-                [Button.inline(f"⚠️ 𝘌𝘳𝘳𝘰𝘳 ⇾ {errors}", b"none"), Button.inline(f"📊 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴 ⇾ {checked} / {total}", b"none")],
+                [Button.inline(f"📊 𝘛𝘰𝘵𝘢𝘭 ⇾ {checked} / {total}", b"none"), Button.inline(f"⚠️ 𝘌𝘳𝘳𝘰𝘳 ⇾ {errors}", b"none")],
+                [Button.inline(f"⚡ 𝘚𝘱𝘦𝘦𝘥 ⇾ {cpm} 𝘊𝘗𝘔", b"none")],
                 [Button.inline("🛑 𝘚𝘵𝘰𝘱 𝘗𝘳𝘰𝘤𝘦𝘴𝘴", f"{stop_prefix}:{uid}".encode())]
             ]
             try: await styled_edit(msg_obj, f"⦗ ⚡ ⦘ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘈𝘤𝘵𝘪𝘷𝘦...\n\n├ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 ⇾ <code>{gate_name}</code>\n╰ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴 ⇾ <code>{WORKERS}</code>", buttons=kb)
@@ -683,12 +684,16 @@ async def _run_mass_process(event, msg_obj, cards, process_store, stop_prefix, g
     if not updater_task.done():
         updater_task.cancel()
         
-    el = int(time.time() - st); h, m, s = el // 3600, (el % 3600) // 60, el % 60
+    el = int(time.time() - st)
+    h, m, s = el // 3600, (el % 3600) // 60, el % 60
+    avg_cpm = int((checked / el) * 60) if el > 0 else 0
+    
+    # 🎨 تصميم الأزرار النهائية بشكل متناسق وفخم
     fkb = [
         [Button.inline(f"🟢 𝘊𝘩𝘢𝘳𝘨𝘦𝘥 ⇾ {charged}", b"none"), Button.inline(f"⚡ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥 ⇾ {approved}", b"none")],
         [Button.inline(f"🟡 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵 ⇾ {insufficient}", b"none"), Button.inline(f"🔴 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥 ⇾ {declined}", b"none")],
-        [Button.inline(f"📊 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴 ⇾ {checked} / {total}", b"none")],
-        [Button.inline(f"⏱ 𝘛𝘪𝘮𝘦 𝘛𝘢𝘬𝘦𝘯 ⇾ {h}𝘩 {m}𝘮 {s}𝘴", b"none")]
+        [Button.inline(f"📊 𝘛𝘰𝘵𝘢𝘭 ⇾ {checked} / {total}", b"none"), Button.inline(f"⏱ 𝘛𝘪𝘮𝘦 ⇾ {h}𝘩 {m}𝘮 {s}𝘴", b"none")],
+        [Button.inline(f"✨ 𝘈𝘷𝘦𝘳𝘢𝘨𝘦 𝘚𝘱𝘦𝘦𝘥 ⇾ {avg_cpm} 𝘊𝘗𝘔 ✨", b"none")]
     ]
     try: await styled_edit(msg_obj, f"{'⦗ 🛑 ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘍𝘰𝘳𝘤𝘦 𝘚𝘵𝘰𝘱𝘱𝘦𝘥' if is_stopped() else '⦗ ✨ ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘊𝘰𝘮𝘱𝘭𝘦𝘵𝘦𝘥'}\n\n├ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n╰ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘊𝘭𝘰𝘴𝘦𝘥. 𝘌𝘯𝘫𝘰𝘺 𝘺𝘰𝘶𝘳 𝘦𝘹𝘤𝘭𝘶𝘴𝘪𝘷𝘦 𝘩𝘪𝘵𝘴 𝘢𝘣𝘰𝘷𝘦 👑", buttons=fkb)
     except: pass
@@ -780,20 +785,18 @@ async def add_proxy_cmd(event):
         
         if not lines: return await styled_reply(event, "⚠️ 𝘕𝘰 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘧𝘰𝘶𝘯𝘥.")
         
-        # استدعاء البروكسيات القديمة لمنع التكرار
         db_proxies = await get_all_user_proxies(event.sender_id)
         existing_urls = {p['proxy_url'] for p in db_proxies} if db_proxies else set()
         
         cc = len(existing_urls)
         if cc >= 100: return await styled_reply(event, "⚠️ 𝘓𝘪𝘮𝘪𝘵 100/100 𝘙𝘦𝘢𝘤𝘩𝘦𝘥. 𝘗𝘭𝘦𝘢𝘴𝘦 𝘳𝘦𝘮𝘰𝘷𝘦 𝘴𝘰𝘮𝘦 𝘧𝘪𝘳𝘴𝘵.")
         
-        # فلترة البروكسيات المدخلة وإزالة المكرر منها ومن الداتا بيس
         parsed = []
         for l in lines:
             px = parse_proxy_format(l)
             if px and px['proxy_url'] not in existing_urls:
                 parsed.append(px)
-                existing_urls.add(px['proxy_url']) # تحديث القائمة المحلية لمنع التكرار في نفس الملف
+                existing_urls.add(px['proxy_url']) 
                 
         if not parsed: 
             return await styled_reply(event, "⦗ ♻️ ⦘ 𝘋𝘶𝘱𝘭𝘪𝘤𝘢𝘵𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴 𝘋𝘦𝘵𝘦𝘤𝘵𝘦𝘥\n├ 𝘛𝘩𝘦𝘴𝘦 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘢𝘳𝘦 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘪𝘯 𝘺𝘰𝘶𝘳 𝘭𝘪𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘯𝘦𝘸 𝘰𝘯𝘦𝘴.")
@@ -959,7 +962,6 @@ async def assign_plan_cmd(event):
 async def main():
     global client_instance; client_instance = client; 
     
-    # تهيئة الأقفال الآمنة
     await get_msg_lock()
     await get_edit_lock()
     

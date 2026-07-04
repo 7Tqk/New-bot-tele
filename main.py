@@ -122,7 +122,7 @@ async def load_keys():
             try:
                 async with aiofiles.open(KEYS_FILE, 'r', encoding='utf-8') as f:
                     c = await f.read()
-                    return json.loads(c) if c else {}
+                    if c: return json.loads(c)
             except Exception: pass
         return {}
 
@@ -135,17 +135,17 @@ async def save_keys(keys_data):
 
 def get_cc_limit(plan, uid=0):
     if uid in ADMIN_ID: return 50000
-    p = str(plan).lower() if plan else "bronze"
-    if "x" in p: return 10000
-    if "root" in p: return 5000
-    if "elite" in p: return 3000
-    if "core" in p: return 1000
+    plan_lower = str(plan).lower() if plan else "bronze"
+    if "x" in plan_lower: return 10000
+    if "root" in plan_lower: return 5000
+    if "elite" in plan_lower: return 3000
+    if "core" in plan_lower: return 1000
     return 15
 
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== OMNI-GIF STYLING ENGINE (BULLETPROOF V6) ======================
+# ====================== OMNI-GIF STYLING ENGINE ======================
 async def fetch_gif_to_memory(target_url):
     if target_url in _GIF_CACHE: 
         stream = io.BytesIO(_GIF_CACHE[target_url])
@@ -310,8 +310,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = time.time()
     if uid in _JOIN_CACHE and now - _JOIN_CACHE[uid] < 600: return True
     
-    is_joined = await is_user_joined(uid, context.bot)
-    if is_joined:
+    if await is_user_joined(uid, context.bot):
         _JOIN_CACHE[uid] = now
         return True
         
@@ -436,8 +435,9 @@ async def _send_global_hit(status, gateway, message, price, uid, bot, elapsed):
         await bot.send_message(HITS_GROUP_ID, text, parse_mode="HTML", disable_web_page_preview=True)
     except Exception: pass
 
-# ====================== CENTRALIZED CORE ROUTER (FLAWLESS) ======================
+# ====================== CENTRALIZED CORE ROUTER (FLAWLESS PARITY) ======================
 async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global _MAINTENANCE_MODE
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
     uid = update.effective_user.id
     pm = await styled_reply(update, f"⦗ {CE_14} ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴𝘪𝘯𝘨 𝘧𝘪𝘭𝘦 𝘥𝘢𝘵𝘢...", use_gif=True)
@@ -474,6 +474,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e: await styled_edit(pm, f"⚠️ Error: {e}")
 
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global _MAINTENANCE_MODE
     if not update.message: return
     uid = update.effective_user.id
     raw_text = update.message.text or update.message.caption or ""
@@ -502,19 +503,19 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         t = f"""⦗ {CE_2} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
 
-├ ⦗ {CE_8} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
-│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
+⦗ {CE_8} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
+╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
 
-├ ⦗ {CE_11} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
-│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+⦗ {CE_11} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
+├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
 
-{account_prefix} ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
-  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
-  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺
-  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬
-  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴{admin_panel}
+⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
+├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
+├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺
+├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬
+╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴{admin_panel}
 
 ⦗ {CE_9} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
         kb = [[create_native_button("⦗ 💎 ⦘ 𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", callback_data="show_plans", style="primary")], [create_native_button("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", url=JOIN_CHANNEL_LINK, style="primary"), create_native_button("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", url=JOIN_GROUP_LINK, style="primary")]]
@@ -651,8 +652,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await save_keys(kdb)
         ed = (datetime.now() + timedelta(days=d)).strftime('%Y-%m-%d')
         limit = get_cc_limit(t, uid)
-        try:
-            user_name = update.effective_user.first_name or str(uid)
+        try: user_name = update.effective_user.first_name or str(uid)
         except Exception: user_name = f"User {uid}"
         
         msg = f"""⦗ {CE_3} ⦘ 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘈𝘤𝘵𝘪𝘷𝘢𝘵𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺!
@@ -678,11 +678,10 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         u, ub = ki.get("used", False), ki.get("used_by", "None")
         se, st = ('🔴', "𝘜𝘴𝘦𝘥") if u else ('🟢', "𝘈𝘤𝘵𝘪𝘷𝘦")
         m = f"⦗ {CE_9} ⦘ 𝘒𝘦𝘺 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯\n\n├ ⦗ {CE_9} ⦘ 𝘒𝘦𝘺: <code>{c}</code>\n├ ⦗ {CE_2} ⦘ 𝘚𝘵𝘢𝘵𝘶𝘴: <code>{st}</code>\n├ ⦗ {CE_1} ⦘ 𝘗𝘭𝘢𝘯 𝘛𝘪𝘦𝘳: <code>{ki.get('tier', 'Unknown')}</code>\n├ ⦗ {CE_14} ⦘ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{ki.get('days', 0)} 𝘋𝘢𝘺𝘴</code>\n╰ ⦗ {CE_14} ⦘ 𝘎𝘦𝘯𝘦𝘳𝘢𝘵𝘦𝘥: <code>{ki.get('generated_at', 'Unknown')}</code>"
-        if u: m += f"\n\n├ ⦗ 👤 ⦘ 𝘙𝘦𝘥𝘦𝘦𝘮𝘦𝘥 𝘉𝘺: <code>{ub}</code>\n╰ ⦗ {CE_14} ⦘ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘛𝘪𝘮𝘦: <code>{ki.get('redeemed_at', 'Not yet')}</code>"
+        if u: m += f"\n\n├ ⦗ 👤 ⦘ 𝘙𝘦𝘥𝘦𝘦𝘮𝘦𝘥 𝘉𝘺: <code>{ub}</code> <a href='tg://user?id={ub}'>[𝘗𝘳𝘰𝘧𝘪𝘭𝘦]</a>\n╰ ⦗ {CE_14} ⦘ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘛𝘪𝘮𝘦: <code>{ki.get('redeemed_at', 'Not yet')}</code>"
         await styled_reply(update, m, use_gif=True)
 
     elif cmd == "maint":
-        global _MAINTENANCE_MODE
         if uid not in ADMIN_ID: return
         a = args[0].strip().lower() if args else ""
         if a: _MAINTENANCE_MODE = (a == 'on')
@@ -692,7 +691,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif cmd in ["users", "user"]:
         if uid not in ADMIN_ID: return
-        
         active_info = []
         for u, p in list(ACTIVE_MTXT_PROCESSES.items()):
             if not p.get("stopped"):
@@ -735,85 +733,29 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await styled_send(context.bot, tu, f"⦗ {CE_7} ⦘ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘈𝘭𝘦𝘳𝘵\n\n╰ 𝘠𝘰𝘶𝘳 𝘝𝘐𝘗 𝘢𝘤𝘤𝘦𝘴𝘴 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘳𝘦𝘷𝘰𝘬𝘦𝘥 𝘣𝘺 𝘵𝘩𝘦 𝘢𝘥𝘮𝘪𝘯𝘪𝘴𝘵𝘳𝘢𝘵𝘰𝘳.", use_gif=True)
         except Exception: pass
 
-# ====================== CALLBACK HANDLERS ======================
-async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
-    q = update.callback_query
-    uid = q.from_user.id
-    if uid in ADMIN_ID: return await q.answer("✅ Admin Access", show_alert=True)
-    if await is_user_joined(uid, context.bot):
-        await mark_user_joined(uid)
-        await q.answer("✅ Verified!", show_alert=True)
-        try: await q.message.delete()
-        except Exception: pass
-        await styled_send(context.bot, q.message.chat_id, f"⦗ {CE_2} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮\n╰ 𝘚𝘦𝘯𝘥 /start 𝘵𝘰 𝘷𝘪𝘦𝘸 𝘵𝘩𝘦 𝘮𝘦𝘯𝘶.", use_gif=True)
-    else: await q.answer("❌ Not joined yet!", show_alert=True)
-
-async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
-    cp = await get_user_plan(uid)
-    t = f"⦗ {CE_9} ⦘ 𝘝𝘐𝘗 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘗𝘭𝘢𝘯𝘴\n\n"
-    for _, pi in PLANS.items():
-        t += f"├ ⦗ {CE_1} ⦘ <code>{pi['name']}</code>\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ├ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
-    t += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
-    kb = [[create_native_button("⦗ 👑 ⦘ 𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳", url="https://t.me/Dddadddyttt", style="primary")], [create_native_button("⦗ 🔙 ⦘ 𝘉𝘢𝘤𝘬", callback_data="back_start", style="danger")]]
-    await styled_edit(q.message, t, buttons=kb)
-    await q.answer()
-
-async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
-    plan = await get_user_plan(uid)
-    limit = get_cc_limit(plan, uid)
-    ap = "├" if uid in ADMIN_ID else "╰"
-    ap_txt = f"\n\n╰ ⦗ {CE_3} ⦘ 𝘈𝘥𝘮𝘪𝘯 𝘗𝘢𝘯𝘦𝘭\n  ├ /gen [𝘱𝘭𝘢𝘯] [𝘲𝘵𝘺] ⇾ 𝘎𝘦𝘯𝘦𝘳𝘢𝘵𝘦 𝘒𝘦𝘺𝘴\n  ├ /validate [𝘬𝘦𝘺] ⇾ 𝘊𝘩𝘦𝘤𝘬 𝘒𝘦𝘺\n  ├ /users ⇾ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘚𝘵𝘢𝘵𝘶𝘴\n  ╰ /maint ⇾ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦 𝘔𝘰𝘥𝘦" if uid in ADMIN_ID else ""
-    t = f"⦗ {CE_2} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮\n\n⦗ {CE_8} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨\n╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬\n\n⦗ {CE_11} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳\n├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n\n⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵\n├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦\n├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺\n├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬\n╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴{ap_txt}\n\n⦗ {CE_9} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"
-    kb = [[create_native_button("⦗ 💎 ⦘ 𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", callback_data="show_plans", style="primary")], [create_native_button("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", url=JOIN_CHANNEL_LINK, style="primary"), create_native_button("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", url=JOIN_GROUP_LINK, style="primary")]]
-    await styled_edit(q.message, t, buttons=kb)
-    await q.answer()
-
 async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
     q = update.callback_query
     uid = q.from_user.id
     gn = q.data.split(":")[1]
-    if gn.startswith("soon_"): return await q.answer("⏳ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 𝘪𝘴 𝘤𝘰𝘮𝘪𝘯𝘨 𝘴𝘰𝘰𝘯!", show_alert=True)
+    if gn.startswith("soon_"): return await q.answer("⏳ Gateway is coming soon!", show_alert=True)
     await q.answer()
+    msg_obj = q.message
     if gn == "cancel":
         PENDING_FILES.pop(uid, None)
-        return await styled_edit(q.message, f"⦗ {CE_7} ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘊𝘢𝘯𝘤𝘦𝘭𝘭𝘦𝘥.", buttons=None)
+        return await styled_edit(msg_obj, f"⦗ {CE_7} ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘊𝘢𝘯𝘤𝘦𝘭𝘭𝘦𝘥.", buttons=None)
     cards = PENDING_FILES.pop(uid, None)
-    if not cards: return await q.answer("⚠️ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘦𝘹𝘱𝘪𝘳𝘦𝘥 𝘰𝘳 𝘪𝘯𝘷𝘢𝘭𝘪𝘥 𝘧𝘪𝘭𝘦.", show_alert=True)
-    
+    if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": [], "total": len(cards), "gate": gn}
-    await styled_edit(q.message, f"⦗ {CE_11} ⦘ 𝘗𝘳𝘦𝘱𝘢𝘳𝘪𝘯𝘨 𝘚𝘦𝘴𝘴𝘪𝘰𝘯...\n\n├ 𝘓𝘰𝘢𝘥𝘦𝘥: <code>{len(cards)} 𝘊𝘊𝘴</code>\n├ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴: <code>{WORKERS}</code>\n╰ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gn}</code>", buttons=None)
-    asyncio.create_task(_run_mass_process(update, q.message, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
+    await styled_edit(msg_obj, f"⦗ {CE_11} ⦘ 𝘗𝘳𝘦𝘱𝘢𝘳𝘪𝘯𝘨 𝘚𝘦𝘴𝘴𝘪𝘰𝘯...\n\n├ 𝘓𝘰𝘢𝘥𝘦𝘥: <code>{len(cards)} 𝘊𝘊𝘴</code>\n├ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴: <code>{WORKERS}</code>\n╰ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gn}</code>", buttons=None)
+    asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
 
-async def stop_chk_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    puid = int(q.data.split(":")[1])
-    if q.from_user.id != puid and q.from_user.id not in ADMIN_ID: return await q.answer("⚠️ 𝘕𝘰𝘵 𝘺𝘰𝘶𝘳𝘴!", show_alert=True)
-    proc = ACTIVE_MTXT_PROCESSES.get(puid)
-    if proc:
-        proc["stopped"] = True
-        for t in proc.get("tasks", []):
-            if not t.done(): t.cancel()
-    await q.answer("🛑 𝘚𝘵𝘰𝘱𝘱𝘦𝘥 𝘐𝘮𝘮𝘦𝘥𝘪𝘢𝘵𝘦𝘭𝘺!", show_alert=True)
-
-async def empty_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-
-# ====================== CHECKER WORKER PROCESS ======================
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
     uid = update.effective_user.id
-    total = len(cards); checked = charged = approved = insufficient = declined = errors = 0
+    tot = len(cards); chk = chg = app = ins = dec = err = 0
     st = time.time()
     sites = await get_github_sites()
-    db_proxies = await get_all_user_proxies(uid)
-    proxies = [p['proxy_url'] for p in db_proxies] if db_proxies else []
+    proxies = [p['proxy_url'] for p in await get_all_user_proxies(uid)] if await get_all_user_proxies(uid) else []
     http_session = await get_user_http_session(uid)
     lcd = "..."
     def is_stopped(): return process_store.get(uid, {}).get("stopped", False)
@@ -826,15 +768,15 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             if is_stopped(): break
             
             elapsed_now = int(time.time() - st)
-            cpm = int((checked / elapsed_now) * 60) if elapsed_now > 0 else 0
+            cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
             h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
             dt = f"⦗ {CE_2} ⦘ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘈𝘤𝘵𝘪𝘷𝘦...\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n├ ⦗ {CE_13} ⦘ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴: <code>{WORKERS}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘪𝘮𝘦: <code>{h_now}𝘩 {m_now}𝘮 {s_now}𝘴</code>"
             kb = [
                 [create_native_button(f"{lcd}", callback_data="none", style="primary")],
-                [create_native_button(f"🟢 𝘊𝘩𝘢𝘳𝘨𝘦𝘥: {charged}", callback_data="none", style="success"), create_native_button(f"⚡ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥: {approved}", callback_data="none", style="success")],
-                [create_native_button(f"🟡 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵: {insufficient}", callback_data="none", style="primary"), create_native_button(f"🔴 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥: {declined}", callback_data="none", style="danger")],
-                [create_native_button(f"📊 𝘛𝘰𝘵𝘢𝘭: {checked} / {total}", callback_data="none", style="primary"), create_native_button(f"⚠️ 𝘌𝘳𝘳𝘰𝘳: {errors}", callback_data="none", style="danger")],
+                [create_native_button(f"🟢 𝘊𝘩𝘢𝘳𝘨𝘦𝘥: {chg}", callback_data="none", style="success"), create_native_button(f"⚡ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥: {app}", callback_data="none", style="success")],
+                [create_native_button(f"🟡 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵: {ins}", callback_data="none", style="primary"), create_native_button(f"🔴 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥: {dec}", callback_data="none", style="danger")],
+                [create_native_button(f"📊 𝘛𝘰𝘵𝘢𝘭: {chk} / {tot}", callback_data="none", style="primary"), create_native_button(f"⚠️ 𝘌𝘳𝘳𝘰𝘳: {err}", callback_data="none", style="danger")],
                 [create_native_button(f"🚀 𝘚𝘱𝘦𝘦𝘥: {cpm} 𝘊𝘗𝘔", callback_data="none", style="primary")],
                 [create_native_button("🛑 𝘚𝘵𝘰𝘱 𝘗𝘳𝘰𝘤𝘦𝘴𝘴", callback_data=f"{stop_prefix}:{uid}", style="danger")]
             ]
@@ -848,7 +790,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
 
     async def worker(wid):
         await asyncio.sleep(wid * 0.1)
-        nonlocal checked, charged, approved, insufficient, declined, errors, lcd
+        nonlocal chk, chg, app, ins, dec, err, lcd
         while not queue.empty() and not is_stopped():
             try: card = queue.get_nowait()
             except Exception: break
@@ -859,28 +801,26 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 
                 c_el = time.time() - c_st
                 status = res.get('status', 'Dead')
-                checked += 1
+                chk += 1
                 
                 raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
                 short_msg = (raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg
                 royal_status_map = {'Charged': '🟢', 'Approved': '⚡', 'Insufficient': '🟡', 'Site Error': '⚠️', 'Dead': '🔴'}
                 
-                # الكلمة تظهر حية بجانب الرقم كما طلبت تماماً
                 lcd = f"⦗ 💳 ⦘ {card[:12]}.. ⇾ {royal_status_map.get(status, '🔴')} {short_msg}"
                 
                 if status == 'Charged':
-                    charged += 1
+                    chg += 1
                     asyncio.create_task(_send_mass_hit(card, "Charged", res.get('message', ''), res.get('price', '-'), gate_name, uid, c_el, bot))
                     asyncio.create_task(_send_global_hit("Charged", gate_name, res.get('message', ''), res.get('price', '-'), uid, bot, c_el))
                 elif status == 'Approved':
-                    approved += 1
-                    asyncio.create_task(_send_mass_hit(card, "Approved", res.get('message', ''), res.get('price', '-'), gate_name, uid, c_el, bot))
+                    app += 1; asyncio.create_task(_send_mass_hit(card, "Approved", res.get('message', ''), res.get('price', '-'), gate_name, uid, c_el, bot))
                 elif status == 'Insufficient':
-                    insufficient += 1
+                    ins += 1
                     asyncio.create_task(_send_mass_hit(card, "Insufficient", res.get('message', ''), res.get('price', '-'), gate_name, uid, c_el, bot))
                     asyncio.create_task(_send_global_hit("Insufficient", gate_name, res.get('message', ''), res.get('price', '-'), uid, bot, c_el))
-                elif status == 'Site Error': errors += 1
-                else: declined += 1
+                elif status == 'Site Error': err += 1
+                else: dec += 1
             except asyncio.CancelledError: break
             except Exception: err += 1; chk += 1
             finally:
@@ -894,20 +834,49 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
         
     el = int(time.time() - st)
     h, m, s = el // 3600, (el % 3600) // 60, el % 60
-    avg_cpm = int((checked / el) * 60) if el > 0 else 0
-    ft = f"⦗ {CE_7} 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘍𝘰𝘳𝘤𝘦 𝘚𝘵𝘰𝘱𝘱𝘦𝘥 ⦘\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘛𝘪𝘮𝘦: <code>{h}𝘩 {m}𝘮 {s}𝘴</code>" if is_stopped() else f"⦗ {CE_4} 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘊𝘰𝘮𝘱𝘭𝘦𝘵𝘦𝘥 ⦘\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘛𝘪𝘮𝘦: <code>{h}𝘩 {m}𝘮 {s}𝘴</code>"
+    avg_cpm = int((chk / el) * 60) if el > 0 else 0
+    
+    status_header = f"⦗ {CE_7} ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘍𝘰𝘳𝘤𝘦 𝘚𝘵𝘰𝘱𝘱𝘦𝘥" if is_stopped() else f"⦗ {CE_4} ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘊𝘰𝘮𝘱𝘭𝘦𝘵𝘦𝘥"
+    final_text = f"""{status_header}
+
+├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>
+╰ ⦗ {CE_14} ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘛𝘪𝘮𝘦: <code>{h}𝘩 {m}𝘮 {s}𝘴</code>"""
+
     fkb = [
-        [create_native_button(f"🟢 𝘊𝘩𝘢𝘳𝘨𝘦𝘥: {charged}", callback_data="none", style="success"), create_native_button(f"⚡ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥: {approved}", callback_data="none", style="success")],
-        [create_native_button(f"🟡 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵: {insufficient}", callback_data="none", style="primary"), create_native_button(f"🔴 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥: {declined}", callback_data="none", style="danger")],
-        [create_native_button(f"📊 𝘛𝘰𝘵𝘢𝘭: {checked} / {total}", callback_data="none", style="primary"), create_native_button(f"⚠️ 𝘌𝘳𝘳𝘰𝘳: {errors}", callback_data="none", style="danger")],
+        [create_native_button(f"🟢 𝘊𝘩𝘢𝘳𝘨𝘦𝘥: {chg}", callback_data="none", style="success"), create_native_button(f"⚡ 𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥: {app}", callback_data="none", style="success")],
+        [create_native_button(f"🟡 𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵: {ins}", callback_data="none", style="primary"), create_native_button(f"🔴 𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥: {dec}", callback_data="none", style="danger")],
+        [create_native_button(f"📊 𝘛𝘰𝘵𝘢𝘭: {chk} / {tot}", callback_data="none", style="primary"), create_native_button(f"⚠️ 𝘌𝘳𝘳𝘰𝘳: {err}", callback_data="none", style="danger")],
         [create_native_button(f"🚀 𝘈𝘷𝘦𝘳𝘢𝘨𝘦 𝘚𝘱𝘦𝘦𝘥: {avg_cpm} 𝘊𝘗𝘔", callback_data="none", style="primary")]
     ]
-    try: await styled_edit(msg_obj, ft, buttons=fkb)
+    
+    try: await styled_edit(msg_obj, final_text, buttons=fkb)
     except Exception: pass
+    
     process_store.pop(uid, None)
     await cleanup_user_http_session(uid)
 
-# ====================== MAIN INITIALIZATION ENGINE ======================
+async def _send_mass_hit(card, status, message, price, gateway, uid, elapsed, bot):
+    await asyncio.sleep(HIT_DELAY)
+    try:
+        bi = await get_bin_info(card.split("|")[0])
+        msg = format_card_result(status, card, gateway, message, price, bi, elapsed)
+        kb = [[create_native_button("Owner", url="https://t.me/Dddadddyttt", style="primary")]]
+        await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
+    except Exception: pass
+
+async def stop_chk_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    puid = int(q.data.split(":")[1])
+    if q.from_user.id != puid and q.from_user.id not in ADMIN_ID: return await q.answer("⚠️ 𝘕𝘰𝘵 𝘺𝘰𝘶𝘳𝘴!", show_alert=True)
+    proc = ACTIVE_MTXT_PROCESSES.get(puid)
+    if proc:
+        proc["stopped"] = True
+        for t in proc.get("tasks", []):
+            if not t.done(): t.cancel()
+    await q.answer("🛑 𝘚𝘵𝘰𝘱𝘱𝘦𝘥 𝘐𝘮𝘮𝘦𝘥𝘪𝘢𝘵𝘦𝘭𝘺!", show_alert=True)
+
+async def empty_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE): await update.callback_query.answer()
+
 async def check_sites_loop():
     while True:
         await get_github_sites()
@@ -927,10 +896,8 @@ def main():
     bot_instance = app.bot
     app.add_error_handler(global_error_handler)
     
-    # 🎯 محرك توجيه الأوامر الذكي المدمج (يلتقط النصوص + صور الـ Captions معاً بمرونة تامة)
     app.add_handler(MessageHandler(filters.ALL, master_router))
     
-    # ربط جميع الأزرار التفاعلية
     app.add_handler(CallbackQueryHandler(gateway_selection_cb, pattern=r"^gate:"))
     app.add_handler(CallbackQueryHandler(stop_chk_cb, pattern=r"^stop_chk:"))
     app.add_handler(CallbackQueryHandler(plans_cb, pattern=r"^show_plans$"))
@@ -938,7 +905,7 @@ def main():
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     
-    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH ALL PREMIUM ASSETS AND ZERO ERRORS!")
+    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH ZERO ERRORS!")
     
     while True:
         try:

@@ -73,7 +73,39 @@ def get_system_lock(name: str):
     if name not in _system_locks: _system_locks[name] = asyncio.Lock()
     return _system_locks[name]
 
-# ----------------- OMNI-GIF STYLING ENGINE (DIRECT LINK - SECURED) -----------------
+# ----------------- MISSING CORE FUNCTIONS -----------------
+def create_native_button(text, callback_data=None, url=None, style=None):
+    if url: return InlineKeyboardButton(text, url=url)
+    return InlineKeyboardButton(text, callback_data=callback_data)
+
+def get_cc_limit(plan, uid=0):
+    if uid in ADMIN_ID: return 50000
+    plan_lower = str(plan).lower() if plan else "bronze"
+    if "x" in plan_lower: return 10000
+    if "root" in plan_lower: return 5000
+    if "elite" in plan_lower: return 3000
+    if "core" in plan_lower: return 1000
+    return 15
+
+async def load_keys():
+    async with get_system_lock("keys"):
+        if os.path.exists(KEYS_FILE):
+            try:
+                async with aiofiles.open(KEYS_FILE, 'r') as f:
+                    c = await f.read()
+                    if c: return json.loads(c)
+            except: return {}
+        return {}
+
+async def save_keys(keys_data):
+    async with get_system_lock("keys"):
+        async with aiofiles.open(KEYS_FILE, 'w') as f:
+            await f.write(json.dumps(keys_data, indent=4))
+
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.error("Exception while handling an update:", exc_info=context.error)
+
+# ----------------- OMNI-GIF STYLING ENGINE -----------------
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
     async with get_system_lock("message"):
         markup = InlineKeyboardMarkup(buttons) if buttons else None
@@ -159,7 +191,8 @@ async def get_github_sites():
         async with aiohttp.ClientSession() as s:
             async with s.get(GITHUB_SITES_URL, headers=headers, timeout=10) as r:
                 if r.status == 200:
-                    _CACHED_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n'] if l.strip()]))
+                    # تم إصلاح الخطأ البرمجي في الأقواس هنا ✅
+                    _CACHED_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
                     _LAST_SITES_FETCH = now
     except: pass
     if not _CACHED_SITES and os.path.exists('sites.txt'):
@@ -204,6 +237,46 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await styled_reply(update, "⦗ 🛑 ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩են 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, use_gif=True)
     return False
+
+# ----------------- CALLBACK HANDLERS -----------------
+async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    uid = q.from_user.id
+    if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
+    cp = await get_user_plan(uid)
+    t = f"⦗ 💎 ⦘ 𝘝𝘐𝘗 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘗𝘭𝘢𝘯𝘴\n\n"
+    for _, pi in PLANS.items():
+        t += f"├ ⦗ 💎 ⦘ <code>{pi['name']}</code>\n│ ├ ⦗ ⏱ ⦘ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ├ ⦗ 💳 ⦘ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n│ ╰ ⦗ 💲 ⦘ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
+    t += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
+    kb = [[create_native_button("Contact Owner", url="https://t.me/Dddadddyttt")], [create_native_button("Back", callback_data="back_start")]]
+    await styled_edit(q.message, t, buttons=kb)
+    await q.answer()
+
+async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    uid = q.from_user.id
+    if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
+    plan = await get_user_plan(uid)
+    limit = get_cc_limit(plan, uid)
+    ap = "├" if uid in ADMIN_ID else "╰"
+    ap_txt = f"\n\n╰ ⦗ 👑 ⦘ 𝘈𝘥𝘮𝘪𝘯 𝘗𝘢𝘯𝘦𝘭\n  ├ /gen [𝘗𝘭𝘢𝘯] [𝘕𝘶𝘮𝘣𝘦𝘳]\n  ├ /validate [𝘒𝘦𝘺]\n  ├ /users\n  ╰ /maint" if uid in ADMIN_ID else ""
+    t = f"⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮\n\n├ ⦗ 💳 ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨\n│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬\n\n├ ⦗ ⚙️ ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳\n│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n\n{ap} ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵\n  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦\n  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺\n  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬\n  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴{ap_txt}\n\n⦗ 💎 ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"
+    kb = [[create_native_button("View Plans", callback_data="show_plans")], [create_native_button("Channel", url=JOIN_CHANNEL_LINK), create_native_button("Group", url=JOIN_GROUP_LINK)]]
+    await styled_edit(q.message, t, buttons=kb)
+    await q.answer()
+
+async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    uid = q.from_user.id
+    if uid in ADMIN_ID: return await q.answer("✅ Admin Access", show_alert=True)
+    if await is_user_joined(uid, context.bot):
+        await mark_user_joined(uid)
+        await q.answer("✅ Verified!", show_alert=True)
+        try: await q.message.delete()
+        except: pass
+        await styled_send(context.bot, uid, "⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮\n╰ 𝘚𝘦𝘯𝘥 /start 𝘵𝘰 𝘷𝘪𝘦𝘸 𝘵𝘩𝘦 𝘮𝘦𝘯𝘶.", use_gif=True)
+    else:
+        await q.answer("❌ Not joined yet!", show_alert=True)
 
 # ----------------- CHECKER CORE -----------------
 async def get_bin_info(bin_code):
@@ -274,7 +347,6 @@ async def _send_global_hit(status, gateway, message, price, uid, bot):
     except: pass
 
 # ====================== CENTRALIZED CORE ROUTER ======================
-# مفسر أوامر يدوي شامل لحل مشكلة الصمت البرمجي نهائياً وتعويض اختفاء context.args
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message: return
     uid = update.effective_user.id
@@ -286,10 +358,9 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     tokens = raw_text.split()
-    cmd = tokens[0][1:].lower().split('@')[0] # إزالة / أو . وإزالة اسم البوت إن وجد
+    cmd = tokens[0][1:].lower().split('@')[0]
     args = tokens[1:]
 
-    # تجميع الردود والخطوط والـ GIFs لتطابق لغة السورس بالملي
     if cmd in ["start", "cmds", "commands"]:
         if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await styled_reply(update, "⦗ 🛠️ ⦘ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤ェ 𝘔𝘰𝘥𝘦", use_gif=True)
         if not await force_join_check(update, context): return
@@ -298,8 +369,8 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         limit = get_cc_limit(plan, uid)
         ap = "├" if uid in ADMIN_ID else "╰"
         ap_txt = f"\n\n╰ ⦗ 👑 ⦘ 𝘈𝘥𝘮𝘪𝘯 𝘗𝘢𝘯𝘦𝘭\n  ├ /gen [𝘗𝘭𝘢𝘯] [𝘕𝘶𝘮𝘣𝘦𝘳]\n  ├ /validate [𝘒𝘦𝘺]\n  ├ /users\n  ╰ /maint" if uid in ADMIN_ID else ""
-        t = f"⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮\n\n├ ⦗ 💳 ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨\n│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬\n\n├ ⦗ ⚙️ ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳\n│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n\n{ap} ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵\n  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦\n  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺\n  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬\n  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴{ap_txt}\n\n⦗ 💎 ⦘ 𝘘𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"
-        kb = [[create_native_button("View Plans", callback_data="show_plans", style="primary")], [create_native_button("Channel", url=JOIN_CHANNEL_LINK, style="primary"), create_native_button("Group", url=JOIN_GROUP_LINK, style="primary")]]
+        t = f"⦗ ⚡ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮\n\n├ ⦗ 💳 ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨\n│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬\n\n├ ⦗ ⚙️ ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳\n│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n\n{ap} ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵\n  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦\n  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺\n  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬\n  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴{ap_txt}\n\n⦗ 💎 ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"
+        kb = [[create_native_button("View Plans", callback_data="show_plans")], [create_native_button("Channel", url=JOIN_CHANNEL_LINK), create_native_button("Group", url=JOIN_GROUP_LINK)]]
         await styled_reply(update, t, buttons=kb, specific_gif=WELCOME_GIF)
 
     elif cmd == "info":
@@ -317,7 +388,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for _, pi in PLANS.items():
             t += f"├ ⦗ 💎 ⦘ <code>{pi['name']}</code>\n│ ├ ⦗ ⏱ ⦘ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ├ ⦗ 💳 ⦘ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n│ ╰ ⦗ 💲 ⦘ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
         t += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
-        kb = [[create_native_button("Contact Owner", url="https://t.me/Dddadddyttt", style="primary")], [create_native_button("Back", callback_data="back_start", style="danger")]]
+        kb = [[create_native_button("Contact Owner", url="https://t.me/Dddadddyttt")], [create_native_button("Back", callback_data="back_start")]]
         await styled_reply(update, t, buttons=kb, use_gif=True)
 
     elif cmd == "fb":
@@ -424,7 +495,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await save_keys(kdb)
         ed = (datetime.now() + timedelta(days=d)).strftime('%Y-%m-%d')
         msg = f"⦗ 👑 ⦘ <b>𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘈𝘤𝘵𝘪𝘷𝘢𝘵𝘦𝘥!</b>\n\n├ 𝘛𝘪𝘦𝘳: <code>{t}</code>\n├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{d} 𝘋𝘢𝘺𝘴</code>\n├ 𝘔𝘢𝘴𝘴 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(t, uid)} 𝘊𝘊𝘴</code>\n╰ 𝘌𝘹𝘱𝘪𝘳𝘦𝘴: <code>{ed}</code>"
-        kb = [[create_native_button("🚀 Start Checking", callback_data="back_start", style="success")]]
+        kb = [[create_native_button("🚀 Start Checking", callback_data="back_start")]]
         await styled_reply(update, msg, buttons=kb, specific_gif=ACTIVATION_GIF)
 
     elif cmd == "validate":
@@ -491,9 +562,9 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
         kb = [
-            [create_native_button("Shopify (Charge)", callback_data="gate:Shopify", style="primary"), create_native_button("Braintree (Soon)", callback_data="gate:soon_Braintree", style="primary")],
-            [create_native_button("Stripe (Soon)", callback_data="gate:soon_Stripe", style="primary"), create_native_button("PayPal (Soon)", callback_data="gate:soon_PayPal", style="primary")],
-            [create_native_button("Cancel", callback_data="gate:cancel", style="danger")]
+            [create_native_button("Shopify (Charge)", callback_data="gate:Shopify"), create_native_button("Braintree (Soon)", callback_data="gate:soon_Braintree")],
+            [create_native_button("Stripe (Soon)", callback_data="gate:soon_Stripe"), create_native_button("PayPal (Soon)", callback_data="gate:soon_PayPal")],
+            [create_native_button("Cancel", callback_data="gate:cancel")]
         ]
         await styled_edit(pm, f"⦗ ⚙️ ⦘ 𝘍𝘪𝘭𝘦 𝘓𝘰𝘢𝘥𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺\n\n├ 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴: <code>{len(cards)}</code>\n╰ 𝘗安全𝘴𝘦𝘭𝘦𝘤𝘵 𝘢 𝘎𝘢𝘵𝘦𝘸𝘢𝘺:", buttons=kb)
     except Exception as e: await styled_edit(pm, f"⚠️ Error: {e}")
@@ -536,12 +607,12 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             cpm = int((chk / el_n) * 60) if el_n > 0 else 0
             dt = f"⦗ ⚡ ⦘ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘈𝘤𝘵𝘪𝘷𝘦...\n\n├ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 ⇾ <code>{gate_name}</code>\n╰ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴 ⇾ <code>{WORKERS}</code>"
             kb = [
-                [create_native_button(f"{lcd}", callback_data="none", style="primary")],
-                [create_native_button(f"🟢 Charged: {chg}", callback_data="none", style="success"), create_native_button(f"⚡ Approved: {app}", callback_data="none", style="success")],
-                [create_native_button(f"🟡 Insufficient: {ins}", callback_data="none", style="primary"), create_native_button(f"🔴 Declined: {dec}", callback_data="none", style="danger")],
-                [create_native_button(f"📊 Total: {chk} / {tot}", callback_data="none", style="primary"), create_native_button(f"⚠️ Error: {err}", callback_data="none", style="danger")],
-                [create_native_button(f"🚀 Speed: {cpm} CPM", callback_data="none", style="primary")],
-                [create_native_button("🛑 Stop Process", callback_data=f"{stop_prefix}:{uid}", style="danger")]
+                [create_native_button(f"{lcd}", callback_data="none")],
+                [create_native_button(f"🟢 Charged: {chg}", callback_data="none"), create_native_button(f"⚡ Approved: {app}", callback_data="none")],
+                [create_native_button(f"🟡 Insufficient: {ins}", callback_data="none"), create_native_button(f"🔴 Declined: {dec}", callback_data="none")],
+                [create_native_button(f"📊 Total: {chk} / {tot}", callback_data="none"), create_native_button(f"⚠️ Error: {err}", callback_data="none")],
+                [create_native_button(f"🚀 Speed: {cpm} CPM", callback_data="none")],
+                [create_native_button("🛑 Stop Process", callback_data=f"{stop_prefix}:{uid}")]
             ]
             try: await styled_edit(msg_obj, dt, buttons=kb)
             except: pass
@@ -597,10 +668,10 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     avg_cpm = int((chk / el) * 60) if el > 0 else 0
     ft = f"⦗ {'💎 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘍𝘰𝘳𝘤𝘦 𝘚𝘵𝘰𝘱𝘱𝘦𝘥' if is_stopped() else '✨ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘊𝘰𝘮𝘱𝘭𝘦𝘵𝘦𝘥'} ⦘\n\n├ 🌐 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 ⇾ <code>{gate_name}</code>\n╰ ⏱ 𝘛𝘪𝘮𝘦 ⇾ <code>{h}𝘩 {m}𝘮 {s}𝘴</code>"
     fkb = [
-        [create_native_button(f"🟢 Charged: {chg}", callback_data="none", style="success"), create_native_button(f"⚡ Approved: {app}", callback_data="none", style="success")],
-        [create_native_button(f"🟡 Insufficient: {ins}", callback_data="none", style="primary"), create_native_button(f"🔴 Declined: {dec}", callback_data="none", style="danger")],
-        [create_native_button(f"📊 Total: {chk} / {tot}", callback_data="none", style="primary"), create_native_button(f"⚠️ Error: {err}", callback_data="none", style="danger")],
-        [create_native_button(f"🚀 Average Speed: {avg_cpm} CPM", callback_data="none", style="primary")]
+        [create_native_button(f"🟢 Charged: {chg}", callback_data="none"), create_native_button(f"⚡ Approved: {app}", callback_data="none")],
+        [create_native_button(f"🟡 Insufficient: {ins}", callback_data="none"), create_native_button(f"🔴 Declined: {dec}", callback_data="none")],
+        [create_native_button(f"📊 Total: {chk} / {tot}", callback_data="none"), create_native_button(f"⚠️ Error: {err}", callback_data="none")],
+        [create_native_button(f"🚀 Average Speed: {avg_cpm} CPM", callback_data="none")]
     ]
     try: await styled_edit(msg_obj, ft, buttons=fkb)
     except: pass
@@ -612,7 +683,7 @@ async def _send_mass_hit(card, status, message, price, gateway, uid, elapsed, bo
     try:
         bi = await get_bin_info(card.split("|")[0])
         msg = format_card_result(status, card, gateway, message, price, bi, elapsed)
-        kb = [[create_native_button("Owner", url="https://t.me/Dddadddyttt", style="primary")]]
+        kb = [[create_native_button("Owner", url="https://t.me/Dddadddyttt")]]
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
     except: pass
 

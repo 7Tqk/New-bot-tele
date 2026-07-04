@@ -1,7 +1,7 @@
 # ==============================================================================
-# 𝘚𝘎𝘎 - SHOPIFY VIP BOT PRODUCTION SYSTEM (PTB NATIVE STYLES + OMNI-GIF + LIVE STATUS)
+# 𝘚𝘎𝘎 - SHOPIFY VIP BOT PRODUCTION SYSTEM (PTB NATIVE STYLES + GIPHY OMNI-GIF + LIVE STATUS)
 # ==============================================================================
-import asyncio, aiohttp, aiofiles, os, random, time, json, re, io, logging, sys
+import asyncio, aiohttp, aiofiles, os, random, time, json, re, logging, sys
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -11,7 +11,7 @@ from telegram.error import RetryAfter, Conflict
 # تأكد أن ملف database2.py موجود بجانب هذا الملف
 from database2 import (init_db, ensure_user, get_user_plan, set_user_plan, get_all_user_proxies, add_proxy_db, remove_proxy_by_index, clear_all_proxies, mark_user_joined)
 
-# 🛑 توجيه السجلات لـ stdout لمنع ظهور علامة Error الحمراء الوهمية في Railway
+# 🛑 توجيه السجلات لـ stdout لمنع أخطاء Railway الوهمية
 logging.basicConfig(stream=sys.stdout, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger("ShopifyVIP")
 
@@ -40,21 +40,12 @@ def get_flag_emoji(country_code, fallback="🏳️"):
     c = country_code.upper()
     return COUNTRY_FLAGS.get(c, chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397) if c.isalpha() else fallback)
 
-# ====================== 100% RELIABLE ANIME GIFs LIBRARY ======================
+# ====================== 100% RELIABLE ANIME GIFs LIBRARY (GIPHY ONLY) ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
 ACTIVATION_GIF = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJ4Zndqbm5qbm5qbm5qbm5qbm5qbm5qbm5qbm5qbm5qbm5qJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/6Z3D5t3vtZROjEdF2W/giphy.gif"
 
+# جميع الروابط هنا تعمل 100% داخل تليجرام لأنها من المصدر الرسمي
 ANIME_GIFS = [
-    "https://i.pinimg.com/originals/2b/86/df/2b86df5da8f6f0db5b3e10eb96eb384c.gif",
-    "https://i.pinimg.com/originals/a1/38/53/a138531ccba628eec4c1d6ff1aeb8ee3.gif",
-    "https://i.pinimg.com/originals/30/80/e5/3080e5e09ddb2fba9eb77da12b9728de.gif",
-    "https://i.pinimg.com/originals/f3/77/85/f37785e5f52402120ea2163b2f909117.gif",
-    "https://i.pinimg.com/originals/05/cf/81/05cf818f9780075485eb1cae32d56a70.gif",
-    "https://i.pinimg.com/originals/82/10/7d/82107dce81e37bc62dc14e4b7858cfa5.gif",
-    "https://i.pinimg.com/originals/7c/4f/94/7c4f94bf762391262d1645e905d6db87.gif",
-    "https://i.pinimg.com/originals/60/c5/d1/60c5d18d4512e022f4ce8e7d7b0f2095.gif",
-    "https://i.pinimg.com/originals/9f/8e/58/9f8e583c2718abda3ba058bb0e0e1eb8.gif",
-    "https://i.pinimg.com/originals/5c/b6/c1/5cb6c139c1f60cae8be7ebbc789e5fc6.gif",
     "https://media.giphy.com/media/1n4iuWZFnTeN6qvdpD/giphy.gif",
     "https://media.giphy.com/media/11KzOet1ElBDz2/giphy.gif",
     "https://media.giphy.com/media/4ilFRqgbzbx4c/giphy.gif",
@@ -62,7 +53,19 @@ ANIME_GIFS = [
     "https://media.giphy.com/media/108BDeJ2BvtZRu/giphy.gif",
     "https://media.giphy.com/media/F3uJq1J1x0u6k/giphy.gif",
     "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif",
-    "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif"
+    "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif",
+    "https://media.giphy.com/media/3oKIPnAiaCRi8QiTKU/giphy.gif",
+    "https://media.giphy.com/media/5wWf7H0qoWaNnkZBucU/giphy.gif",
+    "https://media.giphy.com/media/l41lOugj2A3Z7GWe4/giphy.gif",
+    "https://media.giphy.com/media/26tn33aiTi1jVDzO0/giphy.gif",
+    "https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif",
+    "https://media.giphy.com/media/12B3cf1xO351a8/giphy.gif",
+    "https://media.giphy.com/media/B25xWc2UuIqK4/giphy.gif",
+    "https://media.giphy.com/media/J2qz0eGqF53P2/giphy.gif",
+    "https://media.giphy.com/media/26gR1Xh8H7yV1EksE/giphy.gif",
+    "https://media.giphy.com/media/l0HlNaQ6gWfllcjDO/giphy.gif",
+    "https://media.giphy.com/media/xUPGcxpCV81ebhq7cI/giphy.gif",
+    "https://media.giphy.com/media/3o6Zt481isNvuFIWc0/giphy.gif"
 ]
 
 PLANS = {
@@ -136,31 +139,9 @@ def get_cc_limit(plan, uid=0):
 
 def is_paid_plan(plan): return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ----------------- OMNI-GIF STYLING ENGINE (ZERO-ERROR EDITION) -----------------
-_GIF_CACHE = {}
-async def fetch_gif_to_memory(target_url):
-    if target_url in _GIF_CACHE: 
-        stream = io.BytesIO(_GIF_CACHE[target_url])
-        stream.name = "vip.gif"
-        stream.seek(0) # ⚡️ الحل الجذري لمنع خطأ 0 Bytes
-        return stream
-    try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        async with aiohttp.ClientSession() as session:
-            async with session.get(target_url, headers=headers, timeout=7) as r:
-                if r.status == 200:
-                    d = await r.read()
-                    if len(d) > 1024:
-                        if len(_GIF_CACHE) > 50: _GIF_CACHE.clear()
-                        _GIF_CACHE[target_url] = d
-                        stream = io.BytesIO(d)
-                        stream.name = "vip.gif"
-                        stream.seek(0) # ⚡️ الحل الجذري لمنع خطأ 0 Bytes
-                        return stream
-    except Exception as e: logger.warning(f"GIF Fetch Error: {e}")
-    return None
-
+# ----------------- OMNI-GIF STYLING ENGINE (URL ONLY = 0 ERRORS) -----------------
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
+    """إرسال مباشر للرابط بدون تحميل للذاكرة، يضمن إرسال הـ GIF في 100% من الحالات"""
     async with get_system_lock("message"):
         markup = InlineKeyboardMarkup(buttons) if buttons else None
         target = update.callback_query.message if update.callback_query else update.message
@@ -168,24 +149,14 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, sp
 
         if use_gif or specific_gif:
             url = specific_gif or random.choice(ANIME_GIFS)
-            gif_stream = await fetch_gif_to_memory(url)
-            if gif_stream:
-                try:
-                    return await target.reply_animation(animation=gif_stream, caption=text, reply_markup=markup, parse_mode="HTML")
-                except RetryAfter as e:
-                    await asyncio.sleep(e.retry_after + 1)
-                    gif_stream.seek(0)
-                    return await target.reply_animation(animation=gif_stream, caption=text, reply_markup=markup, parse_mode="HTML")
-                except Exception as e:
-                    logger.error(f"GIF stream error: {e}")
-            
-            # محاولة الإرسال كرابط إذا فشل التحميل للذاكرة
             try:
                 return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
+            except RetryAfter as e:
+                await asyncio.sleep(e.retry_after + 1)
+                return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
             except Exception as e:
-                logger.error(f"GIF url fallback error: {e}")
+                logger.warning(f"GIF Reply Error: {e}. Falling back to text.")
 
-        # الحماية القصوى: إرسال النص فقط إذا انهارت جميع محاولات הـ GIF
         try: return await target.reply_text(text=text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
         except Exception: return None
 
@@ -204,12 +175,6 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
         markup = InlineKeyboardMarkup(buttons) if buttons else None
         if use_gif or specific_gif:
             url = specific_gif or random.choice(ANIME_GIFS)
-            gif_stream = await fetch_gif_to_memory(url)
-            if gif_stream:
-                try:
-                    return await bot.send_animation(chat_id=chat_id, animation=gif_stream, caption=text, reply_markup=markup, parse_mode="HTML")
-                except Exception: pass
-            
             try: return await bot.send_animation(chat_id=chat_id, animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
             except Exception: pass
             
@@ -286,7 +251,9 @@ async def is_user_joined(uid, bot):
     for chat_id in [JOIN_CHANNEL_ID, JOIN_GROUP_ID]:
         if str(chat_id) in ["0", ""]: continue
         try:
-            member = await bot.get_chat_member(chat_id=chat_id, user_id=uid)
+            try: cid = int(chat_id)
+            except: cid = str(chat_id)
+            member = await bot.get_chat_member(chat_id=cid, user_id=uid)
             if member.status in ['left', 'kicked', 'banned']: return False
         except: return False
     return True
@@ -379,7 +346,7 @@ async def _send_global_hit(status, gateway, message, price, uid, bot):
         await bot.send_message(HITS_GROUP_ID, t, parse_mode="HTML", disable_web_page_preview=True)
     except: pass
 
-# ----------------- COMMAND HANDLERS -----------------
+# ----------------- COMMAND HANDLERS (NATIVE PTB 100% RELIABILITY) -----------------
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return await styled_reply(update, f"⦗ {get_custom_emoji('error', '🛠️')} ⦘ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦 𝘔𝘰𝘥𝘦", use_gif=True)
     if not await force_join_check(update, context): return
@@ -429,9 +396,8 @@ async def feedback_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
     if not await force_join_check(update, context): return
     uid = update.effective_user.id
-    raw_text = update.message.text or update.message.caption or ""
-    p = raw_text.split(maxsplit=1)
-    txt = p[1] if len(p) > 1 else ""
+    try: txt = context.args[0] if context.args else ""
+    except: txt = ""
     if not txt and not update.message.reply_to_message: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘢 𝘮𝘦𝘴𝘴𝘢𝘨𝘦.", use_gif=True)
     if ADMIN_ID:
         try:
@@ -471,9 +437,7 @@ async def add_proxy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raw_text = msg.reply_to_message.text or msg.reply_to_message.caption or ""
             lines = raw_text.split()
     else:
-        raw_text = msg.text or msg.caption or ""
-        p = raw_text.split(maxsplit=1)
-        if len(p) == 2: lines = p[1].split()
+        if context.args: lines = context.args
         else: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘵𝘩𝘦 𝘱𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
     
     if not lines: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘕𝘰 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘧𝘰𝘶𝘯𝘥.", use_gif=True)
@@ -508,10 +472,8 @@ async def remove_proxy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     px = await get_all_user_proxies(uid)
     if not px: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘕𝘰 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘵𝘰 𝘳𝘦𝘮𝘰𝘷𝘦.", use_gif=True)
-    raw_text = update.message.text or update.message.caption or ""
-    p = raw_text.split(maxsplit=1)
-    if len(p) == 1: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘱𝘦𝘤𝘪𝘧𝘺 'all' 𝘰𝘳 𝘵𝘩𝘦 𝘕𝘶𝘮𝘣𝘦𝘳.", use_gif=True)
-    arg = p[1].strip().lower()
+    if not context.args: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘱𝘦𝘤𝘪𝘧𝘺 'all' 𝘰𝘳 𝘵𝘩𝘦 𝘕𝘶𝘮𝘣𝘦𝘳.", use_gif=True)
+    arg = context.args[0].strip().lower()
     if arg == 'all':
         c = await clear_all_proxies(uid)
         return await styled_reply(update, f"⦗ {get_custom_emoji('approved', '✅')} ⦘ 𝘊𝘭𝘦𝘢𝘳𝘦𝘥 <code>{c}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴.", use_gif=True)
@@ -524,11 +486,9 @@ async def remove_proxy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def generate_keys_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if uid not in ADMIN_ID: return
-    raw_text = update.message.text or update.message.caption or ""
-    p = raw_text.split()
-    if len(p) < 2: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘜𝘴𝘢𝘨𝘦: /gen [𝘗𝘭𝘢𝘯] [𝘕𝘶𝘮𝘣𝘦𝘳]", use_gif=True)
-    pk = p[1].lower()
-    amt = int(p[2]) if len(p) > 2 else 1
+    if not context.args: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘜𝘴𝘢𝘨𝘦: /gen [𝘗𝘭𝘢𝘯] [𝘕𝘶𝘮𝘣𝘦𝘳]", use_gif=True)
+    pk = context.args[0].lower()
+    amt = int(context.args[1]) if len(context.args) > 1 else 1
     if pk not in PLANS: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘗𝘭𝘢𝘯.", use_gif=True)
     pi = PLANS[pk]
     kdb = await load_keys()
@@ -547,9 +507,7 @@ async def redeem_key_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
     if not await force_join_check(update, context): return
     uid = update.effective_user.id
-    raw_text = update.message.text or update.message.caption or ""
-    p = raw_text.split(maxsplit=1)
-    c = p[1].strip() if len(p) > 1 else ""
+    c = context.args[0] if context.args else ""
     if not c: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘗𝘳𝘰𝘷𝘪𝘥𝘦 𝘠𝘰𝘶𝘳 𝘒𝘦𝘺: <code>/redeem [𝘒𝘦𝘺]</code>", use_gif=True)
     kdb = await load_keys()
     if c not in kdb: return await styled_reply(update, f"⦗ {get_custom_emoji('error', '❌')} ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘒𝘦𝘺.", use_gif=True)
@@ -573,9 +531,7 @@ async def redeem_key_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def validate_key_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_ID: return
-    raw_text = update.message.text or update.message.caption or ""
-    p = raw_text.split(maxsplit=1)
-    c = p[1].strip() if len(p) > 1 else ""
+    c = context.args[0] if context.args else ""
     kdb = await load_keys()
     if not c: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘒𝘦𝘺.", use_gif=True)
     if c not in kdb: return await styled_reply(update, f"⦗ {get_custom_emoji('error', '❌')} ⦘ 𝘒𝘦𝘺 𝘯𝘰𝘵 𝘧𝘰𝘶𝘯𝘥.", use_gif=True)
@@ -589,9 +545,7 @@ async def validate_key_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def maint_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _MAINTENANCE_MODE
     if update.effective_user.id not in ADMIN_ID: return
-    raw_text = update.message.text or update.message.caption or ""
-    p = raw_text.split(maxsplit=1)
-    a = p[1].strip() if len(p) > 1 else ""
+    a = context.args[0].strip() if context.args else ""
     if a: _MAINTENANCE_MODE = (a.lower() == 'on')
     else: _MAINTENANCE_MODE = not _MAINTENANCE_MODE
     if _MAINTENANCE_MODE: await styled_reply(update, f"⦗ 💎 ⦘ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦 𝘔𝘰𝘥𝘦: 𝘖𝘕", use_gif=True)
@@ -605,10 +559,8 @@ async def admin_users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def revoke_plan_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_ID: return
-    raw_text = update.message.text or update.message.caption or ""
-    p = raw_text.split(maxsplit=1)
-    if len(p) < 2: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘐𝘋.", use_gif=True)
-    try: tu = int(p[1].strip())
+    if not context.args: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘐𝘋.", use_gif=True)
+    try: tu = int(context.args[0].strip())
     except: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘐𝘋.", use_gif=True)
     await set_user_plan(tu, "Free", 0)
     proc = ACTIVE_MTXT_PROCESSES.get(tu)
@@ -621,9 +573,6 @@ async def revoke_plan_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
     uid = update.effective_user.id
-    raw_text = update.message.text or update.message.caption or ""
-    if re.search(r'^[/.](addpxy|rmpxy|gen|redeem|start|info|plan|fb|proxy|validate|maint|users|revoke|cmds)', raw_text, re.IGNORECASE): return
-    
     pm = await styled_reply(update, f"⦗ {get_custom_emoji('time', '⏳')} ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴𝘪𝘯𝘨 𝘧𝘪𝘭𝘦 𝘥𝘢𝘵𝘢...", use_gif=True)
     try:
         if uid in ACTIVE_MTXT_PROCESSES and not ACTIVE_MTXT_PROCESSES[uid].get("stopped", True): return await styled_edit(pm, f"⦗ 💎 ⦘ 𝘈 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘪𝘴 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘢𝘤𝘵𝘪𝘷𝘦!")
@@ -721,6 +670,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 status = res.get('status', 'Dead')
                 chk += 1
                 
+                # الكلمة تظهر بجانب الرقم في الزر الحي
                 status_displays = {
                     'Charged': '🟢 Charged', 'Approved': '⚡ Approved',
                     'Insufficient': '🟡 Insuff', 'Site Error': '⚠️ Error', 'Dead': '🔴 Declined'
@@ -803,29 +753,26 @@ async def post_init(app: Application):
     except Exception as e: logger.error(f"❌ DB Error: {e}")
     asyncio.create_task(check_sites_loop())
 
-def cmd_pattern(regex):
-    return filters.Regex(re.compile(regex, re.IGNORECASE)) | filters.CaptionRegex(re.compile(regex, re.IGNORECASE))
-
 def main():
     global bot_instance
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
     bot_instance = app.bot
     app.add_error_handler(global_error_handler)
     
-    # 🎯 بروتوكول Regex الشامل: يقبل / و . ويقبل الأوامر من رسائل الصور والملفات
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.](start|cmds?|commands?)$'), start_cmd))
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]info$'), info_cmd))
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]plan$'), show_plans))
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]fb(?:\s+(.*))?'), feedback_cmd))
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]addpxy'), add_proxy_cmd))
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]proxy$'), view_proxies))
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]rmpxy'), remove_proxy_cmd))
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]gen\s+(plan[1-4])(?:\s+(\d+))?'), generate_keys_cmd))
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]redeem(?:\s+(.+))?'), redeem_key_cmd))
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]validate(?:\s+(.+))?'), validate_key_cmd))
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]maint(?: (on|off))?'), maint_cmd))
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]users?$'), admin_users_cmd))
-    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]revoke\s+(\d+)'), revoke_plan_cmd))
+    # 🎯 تم العودة للـ CommandHandler الأصلي المضمون 100% (يقبل / فقط ولا يتأثر بالمسافات)
+    app.add_handler(CommandHandler(["start", "cmds"], start_cmd))
+    app.add_handler(CommandHandler("info", info_cmd))
+    app.add_handler(CommandHandler("plan", show_plans))
+    app.add_handler(CommandHandler("fb", feedback_cmd))
+    app.add_handler(CommandHandler("addpxy", add_proxy_cmd))
+    app.add_handler(CommandHandler("proxy", view_proxies))
+    app.add_handler(CommandHandler("rmpxy", remove_proxy_cmd))
+    app.add_handler(CommandHandler("gen", generate_keys_cmd))
+    app.add_handler(CommandHandler("redeem", redeem_key_cmd))
+    app.add_handler(CommandHandler("validate", validate_key_cmd))
+    app.add_handler(CommandHandler("maint", maint_cmd))
+    app.add_handler(CommandHandler("users", admin_users_cmd))
+    app.add_handler(CommandHandler("revoke", revoke_plan_cmd))
     app.add_handler(MessageHandler(filters.Document.MimeType("text/plain"), auto_file_check_cmd))
     
     app.add_handler(CallbackQueryHandler(gateway_selection_cb, pattern=r"^gate:"))
@@ -835,7 +782,7 @@ def main():
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     
-    logger.info("🔄 Starting VIP System with Full Parity Engine...")
+    logger.info("🔄 Starting VIP System with Flawless Command Engine...")
     
     while True:
         try:

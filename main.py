@@ -61,7 +61,7 @@ ANIME_GIFS = [
 
 PLANS = {
     "plan1": {"name": "𝘊𝘰𝘳𝘦 𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "Core", "duration_days": 7, "price": "$5.00"},
-    "plan2": {"name": "𝘌𝘭𝘪𝘵េ 𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "Elite", "duration_days": 15, "price": "$10.00"},
+    "plan2": {"name": "𝘌𝘭𝘪𝘵𝘦 𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "Elite", "duration_days": 15, "price": "$10.00"},
     "plan3": {"name": "𝘙𝘰𝘰𝘵 𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "Root", "duration_days": 30, "price": "$15.00"},
     "plan4": {"name": "𝘟-𝘈𝘤𝘤𝘦𝘴𝘴", "tier": "X", "duration_days": 60, "price": "$25.00"},
 }
@@ -106,40 +106,56 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     logger.error("Exception while handling an update:", exc_info=context.error)
 
 # ----------------- OMNI-GIF STYLING ENGINE -----------------
+# 🚀 تم إزالة القيود (Locks) من هنا لجعل البوت يستجيب لأوامر /start بسرعة البرق
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
-    async with get_system_lock("message"):
-        markup = InlineKeyboardMarkup(buttons) if buttons else None
-        target = update.callback_query.message if update.callback_query else update.message
-        if not target: return None
-        if use_gif or specific_gif:
-            url = specific_gif or random.choice(ANIME_GIFS)
-            try: return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
-            except RetryAfter as e:
-                await asyncio.sleep(e.retry_after + 1)
-                return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
-            except Exception: pass
-        try: return await target.reply_text(text=text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
-        except Exception: return None
+    markup = InlineKeyboardMarkup(buttons) if buttons else None
+    target = update.callback_query.message if update.callback_query else update.message
+    if not target: return None
+    
+    if use_gif or specific_gif:
+        url = specific_gif or random.choice(ANIME_GIFS)
+        try: 
+            return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
+        except RetryAfter as e:
+            await asyncio.sleep(e.retry_after + 1)
+            return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
+        except Exception as e: 
+            logger.error(f"Animation fallback triggered: {e}")
+            pass
+            
+    try: 
+        return await target.reply_text(text=text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
+    except Exception as e: 
+        logger.error(f"Text fallback failed: {e}")
+        return None
 
 async def styled_edit(msg, text, buttons=None):
-    async with get_system_lock("edit"):
-        markup = InlineKeyboardMarkup(buttons) if buttons else None
-        try:
-            if msg.animation or msg.photo or msg.video or msg.document: 
-                return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode="HTML")
-            return await msg.edit_text(text=text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
-        except RetryAfter as e: await asyncio.sleep(e.retry_after + 1)
-        except Exception: return None
+    markup = InlineKeyboardMarkup(buttons) if buttons else None
+    try:
+        if msg.animation or msg.photo or msg.video or msg.document: 
+            return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode="HTML")
+        return await msg.edit_text(text=text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
+    except RetryAfter as e: 
+        await asyncio.sleep(e.retry_after + 1)
+    except Exception as e: 
+        logger.error(f"Edit failed: {e}")
+        return None
 
 async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_gif=None):
-    async with get_system_lock("message"):
-        markup = InlineKeyboardMarkup(buttons) if buttons else None
-        if use_gif or specific_gif:
-            url = specific_gif or random.choice(ANIME_GIFS)
-            try: return await bot.send_animation(chat_id=chat_id, animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
-            except Exception: pass
-        try: return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
-        except Exception: return None
+    markup = InlineKeyboardMarkup(buttons) if buttons else None
+    if use_gif or specific_gif:
+        url = specific_gif or random.choice(ANIME_GIFS)
+        try: 
+            return await bot.send_animation(chat_id=chat_id, animation=url, caption=text, reply_markup=markup, parse_mode="HTML")
+        except Exception as e: 
+            logger.error(f"Animation fallback triggered: {e}")
+            pass
+            
+    try: 
+        return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode="HTML", disable_web_page_preview=True)
+    except Exception as e: 
+        logger.error(f"Text send failed: {e}")
+        return None
 
 _USER_HTTP_SESSIONS = {}
 async def get_user_http_session(uid):
@@ -215,7 +231,9 @@ async def is_user_joined(uid, bot):
             except: cid = str(chat_id)
             member = await bot.get_chat_member(chat_id=cid, user_id=uid)
             if member.status in ['left', 'kicked', 'banned']: return False
-        except: return False
+        except Exception as e:
+            logger.warning(f"Join Check Failed (Make sure Bot is Admin in Channel): {e}")
+            return False 
     return True
 
 async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -234,7 +252,8 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not kb: return True
     kb.append([create_native_button("✅ Verify", callback_data="check_joined")])
     
-    await styled_reply(update, "⦗ 🛑 ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩են 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, use_gif=True)
+    # تم تصحيح الخطأ الإملائي في كلمة (then)
+    await styled_reply(update, "⦗ 🛑 ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, use_gif=True)
     return False
 
 # ----------------- CALLBACK HANDLERS -----------------
@@ -341,13 +360,13 @@ async def _send_global_hit(status, gateway, message, price, uid, bot):
         ps = f"${str(price).replace('$', '')}" if price and str(price) != "-" else ""
         h = "🟢 𝘊𝘏𝘈𝘙𝘎𝘌𝘋 𝘚𝘜𝘊𝘊𝘌𝘚𝘚𝘍𝘜𝘓𝘓𝘠" if status == "Charged" else "🟡 𝘐𝘕𝘚𝘜𝘍𝘍𝘐𝘊𝘐𝘌𝘕𝘛 𝘍𝘜𝘕𝘋𝘚" if status == "Insufficient" else None
         if not h: return
-        t = f"⦗ {h} ⦘\n\n├ 🌐 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 ⇾ <code>{gateway}</code> {ps}\n├ 💬 𝘙𝘦𝘴𝘱𝘰𝘯𝘴ece ⇾ <code>{message}</code>\n╰ 👤 𝘜𝘴𝘦𝘳 ⇾ <a href='tg://user?id={uid}'>{un}</a> (<code>{pn}</code>)"
+        t = f"⦗ {h} ⦘\n\n├ 🌐 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 ⇾ <code>{gateway}</code> {ps}\n├ 💬 𝘙𝘦𝘴𝘱𝘰𝘯𝘴𝘦 ⇾ <code>{message}</code>\n╰ 👤 𝘜𝘴𝘦𝘳 ⇾ <a href='tg://user?id={uid}'>{un}</a> (<code>{pn}</code>)"
         await bot.send_message(HITS_GROUP_ID, t, parse_mode="HTML", disable_web_page_preview=True)
     except: pass
 
 # ====================== CENTRALIZED CORE ROUTER ======================
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global _MAINTENANCE_MODE # ✅ تم النقل إلى هنا (أول سطر في الدالة) لحل المشكلة نهائياً
+    global _MAINTENANCE_MODE
     
     if not update.message: return
     uid = update.effective_user.id
@@ -362,8 +381,9 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cmd = tokens[0][1:].lower().split('@')[0]
     args = tokens[1:]
 
+    # تم تصحيح جميع الأخطاء الإملائية وتنظيف الحروف هنا
     if cmd in ["start", "cmds", "commands"]:
-        if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await styled_reply(update, "⦗ 🛠️ ⦘ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤ェ 𝘔𝘰𝘥𝘦", use_gif=True)
+        if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await styled_reply(update, "⦗ 🛠️ ⦘ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦 𝘔𝘰𝘥𝘦", use_gif=True)
         if not await force_join_check(update, context): return
         await ensure_user(uid)
         plan = await get_user_plan(uid)
@@ -379,7 +399,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ensure_user(uid)
         plan = await get_user_plan(uid)
         limit = get_cc_limit(plan, uid)
-        t = f"⦗ 👤 ⦘ 𝘗𝘳𝘰𝘧𝘪𝘭𝘦 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯\n\n├ ⦗ 🆔 ⦘ 𝘐𝘋: <code>{uid}</code>\n├ ⦗ ⚡ ⦘ 𝘚𝘵𝘢𝘵𝘶ษ: <code>{'Active' if is_paid_plan(plan) else 'Free'}</code>\n├ ⦗ 💎 ⦘ 𝘗𝘭𝘢𝘯: <code>{plan.title() if plan else 'Bronze'}</code>\n╰ ⦗ 💳 ⦘ 𝘓𝘪𝘮𝘪𝘵: <code>{limit} 𝘊𝘊𝘴</code>"
+        t = f"⦗ 👤 ⦘ 𝘗𝘳𝘰𝘧𝘪𝘭𝘦 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯\n\n├ ⦗ 🆔 ⦘ 𝘐𝘋: <code>{uid}</code>\n├ ⦗ ⚡ ⦘ 𝘚𝘵𝘢𝘵𝘶𝘴: <code>{'Active' if is_paid_plan(plan) else 'Free'}</code>\n├ ⦗ 💎 ⦘ 𝘗𝘭𝘢𝘯: <code>{plan.title() if plan else 'Bronze'}</code>\n╰ ⦗ 💳 ⦘ 𝘓𝘪𝘮𝘪𝘵: <code>{limit} 𝘊𝘊𝘴</code>"
         await styled_reply(update, t, use_gif=True)
 
     elif cmd == "plan":
@@ -437,7 +457,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tm = await styled_reply(update, f"⦗ ⚙️ ⦘ 𝘈𝘥𝘥𝘪𝘯𝘨...", use_gif=True)
         c = 0
         for p2 in parsed: await add_proxy_db(uid, p2); c += 1
-        await styled_edit(tm, f"⦗ ✅ ⦘ 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭ყ 𝘈𝘥𝘥𝘦𝘥: <code>{c}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴")
+        await styled_edit(tm, f"⦗ ✅ ⦘ 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘈𝘥𝘥𝘦𝘥: <code>{c}</code> 𝘗𝘳𝘰𝘹𝘪𝘦𝘴")
 
     elif cmd == "proxy":
         if not await force_join_check(update, context): return
@@ -461,7 +481,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             idx = int(arg) - 1
             if 0 <= idx < len(proxies): await remove_proxy_by_index(uid, idx); await styled_reply(update, f"⦗ ✅ ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘳𝘦𝘮𝘰𝘷𝘦𝘥.", use_gif=True)
             else: await styled_reply(update, f"⦗ 💎 ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘕𝘶𝘮𝘣𝘦𝘳.", use_gif=True)
-        except: await styled_reply(update, f"⦗ 💎 ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘕𝘶𝘮挙𝘦𝘳.", use_gif=True)
+        except: await styled_reply(update, f"⦗ 💎 ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘕𝘶𝘮𝘣𝘦𝘳.", use_gif=True)
 
     elif cmd == "gen":
         if uid not in ADMIN_ID: return
@@ -477,14 +497,14 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             kdb[c] = {"tier": pi["tier"], "days": pi["duration_days"], "used": False, "used_by": None, "generated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             gc.append(c)
         await save_keys(kdb)
-        t = f"⦗ ✅ ⦘ 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘎𝘦𝘯𝘦𝘳𝘢𝘵𝘦𝘥 <code>{amt}</code> 𝘒𝘦𝘺(𝘴)!\n\n├ 𝘗𝘭𝘢𝘯: <code>{pi['name']}</code>\n├ Delta: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n╰ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n\n"
+        t = f"⦗ ✅ ⦘ 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺 𝘎𝘦𝘯𝘦𝘳𝘢𝘵𝘦𝘥 <code>{amt}</code> 𝘒𝘦𝘺(𝘴)!\n\n├ 𝘗𝘭𝘢𝘯: <code>{pi['name']}</code>\n├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n╰ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n\n"
         for c in gc: t += f"<code>{c}</code>\n"
         await styled_reply(update, t, use_gif=True)
 
     elif cmd == "redeem":
         if not await force_join_check(update, context): return
         c = args[0].strip() if args else ""
-        if not c: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘗𝘳ο𝘷𝘪𝘥𝘦 𝘠𝘰𝘶𝘳 𝘒𝘦ย: <code>/redeem [𝘒𝘦𝘺]</code>", use_gif=True)
+        if not c: return await styled_reply(update, f"⦗ 💎 ⦘ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘗𝘳𝘰𝘷𝘪𝘥𝘦 𝘠𝘰𝘶𝘳 𝘒𝘦𝘺: <code>/redeem [𝘒𝘦𝘺]</code>", use_gif=True)
         kdb = await load_keys()
         if c not in kdb: return await styled_reply(update, f"⦗ ❌ ⦘ 𝘐𝘯𝘷𝘢𝘭𝘪𝘥 𝘒𝘦𝘺.", use_gif=True)
         ki = kdb[c]
@@ -508,12 +528,11 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ki = kdb[c]
         u, ub = ki.get("used", False), ki.get("used_by", "None")
         se, st = ('🔴', "𝘜𝘴𝘦𝘥") if u else ('🟢', "𝘈𝘤𝘵𝘪𝘷𝘦")
-        m = f"⦗ 🔑 ⦘ 𝘒𝘦𝘺 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯\n\n├ 𝘒𝘦𝘺: <code>{c}</code>\n├ {se} 𝘚𝘵𝘢𝘵𝘶𝘴: <code>{st}</code>\n├ 𝘗𝘭𝘢𝘯: <code>{ki.get('tier', 'Unknown')}</code>\n├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{ki.get('days', 0)} 𝘋𝘢้ย𝘴</code>\n├ 𝘎𝘦𝘯𝘦𝘳𝘢𝘵𝘦𝘥: <code>{ki.get('generated_at', 'Unknown')}</code>"
+        m = f"⦗ 🔑 ⦘ 𝘒𝘦𝘺 𝘐𝘯𝘧𝘰𝘳𝘮𝘢𝘵𝘪𝘰𝘯\n\n├ 𝘒𝘦𝘺: <code>{c}</code>\n├ {se} 𝘚𝘵𝘢𝘵𝘶𝘴: <code>{st}</code>\n├ 𝘗𝘭𝘢𝘯: <code>{ki.get('tier', 'Unknown')}</code>\n├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{ki.get('days', 0)} 𝘋𝘢𝘺𝘴</code>\n├ 𝘎𝘦𝘯𝘦𝘳𝘢𝘵𝘦𝘥: <code>{ki.get('generated_at', 'Unknown')}</code>"
         if u: m += f"\n\n├ 𝘙𝘦𝘥𝘦𝘦𝘮𝘦𝘥 𝘉𝘺: <code>{ub}</code>\n╰ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘛𝘪𝘮𝘦: <code>{ki.get('redeemed_at', 'Not yet')}</code>"
         await styled_reply(update, m, use_gif=True)
 
     elif cmd == "maint":
-        # ❌ تم إزالة تعريف global من هنا، لأنه يجب أن يكون في الأعلى فقط
         if uid not in ADMIN_ID: return
         a = args[0].strip().lower() if args else ""
         if a: _MAINTENANCE_MODE = (a == 'on')
@@ -544,14 +563,14 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
     uid = update.effective_user.id
-    pm = await styled_reply(update, f"⦗ ⏳ ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝓼𝘪𝘯𝘨 𝘧𝘪𝘭𝘦 𝘥𝘢𝘵𝘢...", use_gif=True)
+    pm = await styled_reply(update, f"⦗ ⏳ ⦘ 𝘗𝘳𝘰𝘤𝘦𝘴𝘴𝘪𝘯𝘨 𝘧𝘪𝘭𝘦 𝘥𝘢𝘵𝘢...", use_gif=True)
     try:
         if uid in ACTIVE_MTXT_PROCESSES and not ACTIVE_MTXT_PROCESSES[uid].get("stopped", True): return await styled_edit(pm, f"⦗ 💎 ⦘ 𝘈 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘪𝘴 𝘢𝘭𝘳𝘦𝘢𝘥𝘺 𝘢𝘤𝘵𝘪𝘷𝘦!")
         doc = update.message.document
         if doc.file_size > 2 * 1024 * 1024: return await styled_edit(pm, f"⦗ 💎 ⦘ 𝘍𝘪𝘭𝘦 𝘵𝘰𝘰 𝘭𝘢𝘳𝘨𝘦! (𝘔𝘢𝘹 2𝘔𝘉)")
         if not await force_join_check(update, context): return
         db_proxies = await get_all_user_proxies(uid)
-        if len(db_proxies) == 0: return await styled_edit(pm, f"⦗ 💎 ⦘ <b>𝘠𝘰𝘶 𝘮𝘶สต์ 𝘢𝘥𝘥 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘧𝘪𝘳𝘴𝘵! 𝘜𝘴𝘦 <code>/addpxy</code></b>")
+        if len(db_proxies) == 0: return await styled_edit(pm, f"⦗ 💎 ⦘ <b>𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘢𝘥𝘥 𝘱𝘳𝘰𝘹𝘪𝘦𝘴 𝘧𝘪𝘳𝘴𝘵! 𝘜𝘴𝘦 <code>/addpxy</code></b>")
         f = await context.bot.get_file(doc.file_id)
         fp = f"temp_{uid}_{int(time.time())}.txt"
         await f.download_to_drive(fp)
@@ -567,8 +586,10 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
             [create_native_button("Stripe (Soon)", callback_data="gate:soon_Stripe"), create_native_button("PayPal (Soon)", callback_data="gate:soon_PayPal")],
             [create_native_button("Cancel", callback_data="gate:cancel")]
         ]
-        await styled_edit(pm, f"⦗ ⚙️ ⦘ 𝘍𝘪𝘭𝘦 𝘓𝘰𝘢𝘥𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺\n\n├ 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴: <code>{len(cards)}</code>\n╰ 𝘗安全𝘴𝘦𝘭𝘦𝘤𝘵 𝘢 𝘎𝘢𝘵𝘦𝘸𝘢𝘺:", buttons=kb)
-    except Exception as e: await styled_edit(pm, f"⚠️ Error: {e}")
+        await styled_edit(pm, f"⦗ ⚙️ ⦘ 𝘍𝘪𝘭𝘦 𝘓𝘰𝘢𝘥𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺\n\n├ 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴: <code>{len(cards)}</code>\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘦𝘭𝘦𝘤𝘵 𝘢 𝘎𝘢𝘵𝘦𝘸𝘢𝘺:", buttons=kb)
+    except Exception as e: 
+        logger.error(f"File process error: {e}")
+        await styled_edit(pm, f"⚠️ Error: {e}")
 
 async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return

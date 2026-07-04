@@ -12,3 +12,4 @@ aiofiles
 aiogram
 apscheduler
 psutil
+python-telegram-bot>=21.0

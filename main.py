@@ -1,5 +1,5 @@
 # ==============================================================================
-# SHOPIFY VIP BOT PRODUCTION SYSTEM (NATIVE GIFS & NATIVE STYLED BUTTONS)
+# 𝘚𝘎𝘎 - SHOPIFY VIP BOT PRODUCTION SYSTEM (NATIVE GIFS & NATIVE STYLED BUTTONS)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -124,8 +124,6 @@ PAID_TIERS = ["Core", "Elite", "Root", "X"]
 
 USER_LAST_REQ, ACTIVE_MTXT_PROCESSES, PENDING_FILES = {}, {}, {}
 
-# FIX: Removed the BytesIO memory caching entirely. Relying purely on string URLs and native Telegram file_ids to prevent stream cutting.
-_GIF_FILE_IDS = {}
 _system_locks = {}
 
 def get_system_lock(name: str):
@@ -168,28 +166,20 @@ def get_cc_limit(plan, uid=0):
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== FLAWLESS GIF SENDER ======================
+# ====================== FLAWLESS NATIVE GIF SENDER ======================
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     target = update.callback_query.message if update.callback_query else update.message
     if not target: return None
 
+    # FIX: Directly using URL and native PTB rendering for 100% stability. No manual byte caching that cuts off GIFs.
     if use_gif or specific_gif:
         url = specific_gif or random.choice(ANIME_GIFS)
-        # FIX: Directly fetching file_id or passing raw URL to preserve stability over network calls
-        media_to_send = _GIF_FILE_IDS.get(url, url)
-        
         try: 
-            msg = await target.reply_animation(animation=media_to_send, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-            if url not in _GIF_FILE_IDS and msg.animation:
-                _GIF_FILE_IDS[url] = msg.animation.file_id
-            return msg
+            return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after + 1)
-            msg = await target.reply_animation(animation=media_to_send, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-            if url not in _GIF_FILE_IDS and msg.animation:
-                _GIF_FILE_IDS[url] = msg.animation.file_id
-            return msg
+            return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.error(f"GIF rendering failed, falling back to text: {e}")
             pass
@@ -220,13 +210,8 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     if use_gif or specific_gif:
         url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = _GIF_FILE_IDS.get(url, url)
-        
         try: 
-            msg = await bot.send_animation(chat_id=chat_id, animation=media_to_send, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-            if url not in _GIF_FILE_IDS and msg.animation:
-                _GIF_FILE_IDS[url] = msg.animation.file_id
-            return msg
+            return await bot.send_animation(chat_id=chat_id, animation=url, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
         except Exception: pass
         
     try: 
@@ -335,15 +320,15 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
 
 ⦗ {CE_9} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
     
-    # FIX: Adopted the official color_style parameter instead of using unsupported wrappers or emojis. 
-    kb = [[InlineKeyboardButton("View Plans", callback_data="show_plans", color_style="primary")]]
+    # FIX: Using proper PTB parameter `style` and authentic Telegram values (primary, success, danger).
+    kb = [[InlineKeyboardButton("View Plans", callback_data="show_plans", style="primary")]]
     
     if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton("Channel", url=JOIN_CHANNEL_LINK, color_style="primary"), InlineKeyboardButton("Group", url=JOIN_GROUP_LINK, color_style="primary")])
+        kb.append([InlineKeyboardButton("Channel", url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton("Group", url=JOIN_GROUP_LINK, style="primary")])
     elif is_valid_url(JOIN_CHANNEL_LINK):
-        kb.append([InlineKeyboardButton("Channel", url=JOIN_CHANNEL_LINK, color_style="primary")])
+        kb.append([InlineKeyboardButton("Channel", url=JOIN_CHANNEL_LINK, style="primary")])
     elif is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton("Group", url=JOIN_GROUP_LINK, color_style="primary")])
+        kb.append([InlineKeyboardButton("Group", url=JOIN_GROUP_LINK, style="primary")])
         
     if isinstance(update_or_bot, Update):
         await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
@@ -362,13 +347,12 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return True
         
     kb = []
-    # FIX: Native mapping of the color_style attributes inside InlineKeyboardButton
-    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton("Channel", url=JOIN_CHANNEL_LINK, color_style="primary")])
-    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton("Group", url=JOIN_GROUP_LINK, color_style="primary")])
+    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton("Channel", url=JOIN_CHANNEL_LINK, style="primary")])
+    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton("Group", url=JOIN_GROUP_LINK, style="primary")])
     if not kb: return True
-    kb.append([InlineKeyboardButton("Verify", callback_data="check_joined", color_style="positive")])
+    kb.append([InlineKeyboardButton("Verify", callback_data="check_joined", style="success")])
     
-    await styled_reply(update, f"⦗ {CE_7} ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, use_gif=True)
+    await styled_reply(update, f"⦗ {CE_7} ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰ఫ్𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, use_gif=True)
     return False
 
 # ====================== CHECKER CORE API ======================
@@ -520,11 +504,11 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
         
-        # FIX: Replaced custom fallback wrappers with direct InlineKeyboardButton color_style arguments 
+        # FIX: Added native style keyword exclusively without wrappers
         kb = [
-            [InlineKeyboardButton("Shopify (Charge)", callback_data="gate:Shopify", color_style="positive"), InlineKeyboardButton("Braintree (Soon)", callback_data="gate:soon_Braintree", color_style="primary")],
-            [InlineKeyboardButton("Stripe (Soon)", callback_data="gate:soon_Stripe", color_style="primary"), InlineKeyboardButton("PayPal (Soon)", callback_data="gate:soon_PayPal", color_style="primary")],
-            [InlineKeyboardButton("Cancel", callback_data="gate:cancel", color_style="negative")]
+            [InlineKeyboardButton("Shopify (Charge)", callback_data="gate:Shopify", style="success"), InlineKeyboardButton("Braintree (Soon)", callback_data="gate:soon_Braintree", style="primary")],
+            [InlineKeyboardButton("Stripe (Soon)", callback_data="gate:soon_Stripe", style="primary"), InlineKeyboardButton("PayPal (Soon)", callback_data="gate:soon_PayPal", style="primary")],
+            [InlineKeyboardButton("Cancel", callback_data="gate:cancel", style="danger")]
         ]
         await styled_edit(pm, f"⦗ {CE_4} ⦘ 𝘍𝘪𝘭𝘦 𝘓𝘰𝘢𝘥𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺\n\n├ 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴: <code>{len(cards)}</code>\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘦𝘭𝘦𝘤𝘵 𝘢 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵:", buttons=kb)
     except Exception as e: await styled_edit(pm, f"⚠️ Error: {e}")
@@ -575,8 +559,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for _, pi in PLANS.items():
             t += f"├ ⦗ {CE_1} ⦘ <code>{pi['name']}</code>\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ├ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
         t += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
-        # FIX: Updated standard buttons to use the native color_style API implementation
-        kb = [[InlineKeyboardButton("Contact Owner", url="https://t.me/Dddadddyttt", color_style="primary")], [InlineKeyboardButton("Back", callback_data="back_start", color_style="negative")]]
+        kb = [[InlineKeyboardButton("Contact Owner", url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton("Back", callback_data="back_start", style="danger")]]
         await styled_reply(update, t, buttons=kb, use_gif=True)
 
     elif cmd == "fb":
@@ -779,7 +762,7 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for _, pi in PLANS.items():
         t += f"├ ⦗ {CE_1} ⦘ <code>{pi['name']}</code>\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ├ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
     t += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
-    kb = [[InlineKeyboardButton("Contact Owner", url="https://t.me/Dddadddyttt", color_style="primary")], [InlineKeyboardButton("Back", callback_data="back_start", color_style="negative")]]
+    kb = [[InlineKeyboardButton("Contact Owner", url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton("Back", callback_data="back_start", style="danger")]]
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
 
@@ -858,14 +841,14 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             
             dt = f"⦗ {CE_2} ⦘ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘈𝘤𝘵𝘪𝘷𝘦...\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n├ ⦗ {CE_13} ⦘ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴: <code>{WORKERS}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘪𝘮𝘦: <code>{h_now}𝘩 {m_now}𝘮 {s_now}𝘴</code>"
             
-            # FIX: Native mapping of the color_style attributes mapped properly
+            # FIX: Native mapping of real API colors to Dashboard
             kb = [
-                [InlineKeyboardButton(f"{lcd}", callback_data="none", color_style="primary")],
-                [InlineKeyboardButton(f"Charged: {chg}", callback_data="none", color_style="positive"), InlineKeyboardButton(f"Approved: {app}", callback_data="none", color_style="positive")],
-                [InlineKeyboardButton(f"Insufficient: {ins}", callback_data="none", color_style="primary"), InlineKeyboardButton(f"Declined: {dec}", callback_data="none", color_style="negative")],
-                [InlineKeyboardButton(f"Total: {chk} / {tot}", callback_data="none", color_style="primary"), InlineKeyboardButton(f"Error: {err}", callback_data="none", color_style="negative")],
-                [InlineKeyboardButton(f"Speed: {cpm} CPM", callback_data="none", color_style="primary")],
-                [InlineKeyboardButton("Stop Process", callback_data=f"{stop_prefix}:{uid}", color_style="negative")]
+                [InlineKeyboardButton(f"{lcd}", callback_data="none", style="primary")],
+                [InlineKeyboardButton(f"Charged: {chg}", callback_data="none", style="success"), InlineKeyboardButton(f"Approved: {app}", callback_data="none", style="success")],
+                [InlineKeyboardButton(f"Insufficient: {ins}", callback_data="none", style="primary"), InlineKeyboardButton(f"Declined: {dec}", callback_data="none", style="danger")],
+                [InlineKeyboardButton(f"Total: {chk} / {tot}", callback_data="none", style="primary"), InlineKeyboardButton(f"Error: {err}", callback_data="none", style="danger")],
+                [InlineKeyboardButton(f"Speed: {cpm} CPM", callback_data="none", style="primary")],
+                [InlineKeyboardButton("Stop Process", callback_data=f"{stop_prefix}:{uid}", style="danger")]
             ]
             try: await styled_edit(msg_obj, dt, buttons=kb)
             except asyncio.CancelledError: break
@@ -923,11 +906,12 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     h, m, s = el // 3600, (el % 3600) // 60, el % 60
     avg_cpm = int((chk / el) * 60) if el > 0 else 0
     ft = f"⦗ {CE_7} 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘍𝘰𝘳𝘤𝘦 𝘚𝘵𝘰𝘱𝘱𝘦𝘥 ⦘\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘛𝘪𝘮𝘦: <code>{h}𝘩 {m}𝘮 {s}𝘴</code>" if is_stopped() else f"⦗ {CE_4} 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘊𝘰𝘮𝘱𝘭𝘦𝘵𝘦𝘥 ⦘\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘛𝘪𝘮𝘦: <code>{h}𝘩 {m}𝘮 {s}𝘴</code>"
+    
     fkb = [
-        [InlineKeyboardButton(f"Charged: {chg}", callback_data="none", color_style="positive"), InlineKeyboardButton(f"Approved: {app}", callback_data="none", color_style="positive")],
-        [InlineKeyboardButton(f"Insufficient: {ins}", callback_data="none", color_style="primary"), InlineKeyboardButton(f"Declined: {dec}", callback_data="none", color_style="negative")],
-        [InlineKeyboardButton(f"Total: {chk} / {tot}", callback_data="none", color_style="primary"), InlineKeyboardButton(f"Error: {err}", callback_data="none", color_style="negative")],
-        [InlineKeyboardButton(f"Average Speed: {avg_cpm} CPM", callback_data="none", color_style="primary")]
+        [InlineKeyboardButton(f"Charged: {chg}", callback_data="none", style="success"), InlineKeyboardButton(f"Approved: {app}", callback_data="none", style="success")],
+        [InlineKeyboardButton(f"Insufficient: {ins}", callback_data="none", style="primary"), InlineKeyboardButton(f"Declined: {dec}", callback_data="none", style="danger")],
+        [InlineKeyboardButton(f"Total: {chk} / {tot}", callback_data="none", style="primary"), InlineKeyboardButton(f"Error: {err}", callback_data="none", style="danger")],
+        [InlineKeyboardButton(f"Average Speed: {avg_cpm} CPM", callback_data="none", style="primary")]
     ]
     try: await styled_edit(msg_obj, ft, buttons=fkb)
     except Exception: pass
@@ -939,7 +923,7 @@ async def _send_mass_hit(card, status, message, price, gateway, uid, elapsed, bo
     try:
         bi = await get_bin_info(card.split("|")[0])
         msg = format_card_result(status, card, gateway, message, price, bi, elapsed)
-        kb = [[InlineKeyboardButton("Owner", url="https://t.me/Dddadddyttt", color_style="primary")]]
+        kb = [[InlineKeyboardButton("Owner", url="https://t.me/Dddadddyttt", style="primary")]]
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
     except Exception: pass
 
@@ -997,3 +981,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

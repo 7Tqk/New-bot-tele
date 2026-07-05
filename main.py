@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝘚𝘎𝘎 - SHOPIFY VIP BOT PRODUCTION SYSTEM (PTB NATIVE STYLES + 100% GIF RATE)
+# SHOPIFY VIP BOT PRODUCTION SYSTEM (NATIVE GIFS & NATIVE STYLED BUTTONS)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -24,7 +24,7 @@ from database2 import (
     clear_all_proxies, mark_user_joined
 )
 
-# توجيه السجلات لمنع أي أخطاء في الكونسول
+# Logging configuration
 logging.basicConfig(stream=sys.stdout, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger("ShopifyVIP")
 
@@ -52,8 +52,9 @@ def get_valid_target(link, chat_id):
         return f"@{uname}"
     if l.startswith("@"): return l
     if c and c not in ["0", "", "none", "None"]:
+        if c.isdigit(): c = f"-100{c}" # Auto-fix channel IDs
         try: return int(c)
-        except: return c
+        except ValueError: return c
     return None
 
 JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
@@ -99,7 +100,7 @@ def get_flag_emoji(country_code, fallback="🏳️"):
     c = country_code.upper()
     return COUNTRY_FLAGS.get(c, chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397) if c.isalpha() else fallback)
 
-# ====================== OMNI-GIF LIBRARY ======================
+# ====================== GIF ASSETS ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
 REDEEM_GIF = "https://media.giphy.com/media/l41YkxvU8c7J7Bba0/giphy.gif"
 ANIME_GIFS = [
@@ -122,30 +123,20 @@ PLANS = {
 PAID_TIERS = ["Core", "Elite", "Root", "X"]
 
 USER_LAST_REQ, ACTIVE_MTXT_PROCESSES, PENDING_FILES = {}, {}, {}
+
+# FIX: Removed the BytesIO memory caching entirely. Relying purely on string URLs and native Telegram file_ids to prevent stream cutting.
+_GIF_FILE_IDS = {}
 _system_locks = {}
 
 def get_system_lock(name: str):
     if name not in _system_locks: _system_locks[name] = asyncio.Lock()
     return _system_locks[name]
 
-async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    logger.error("Exception in update: " + str(context.error))
-
-# 🎨 محرك الأزرار الملونة لـ PTB 
-def create_native_button(text: str, callback_data: str=None, url: str=None, style: str=None):
-    if style:
-        if style == "success" and not text.startswith("🟢"): text = f"🟢 {text}"
-        elif style == "danger" and not text.startswith("🔴") and not text.startswith("❌"): text = f"🔴 {text}"
-        elif style == "primary" and not any(text.startswith(e) for e in ["🔵", "💎", "📢", "💬", "🛍️", "🌐", "💳", "🅿️", "🚀"]): 
-            text = f"🔵 {text}"
-            
-    kwargs = {"text": text}
-    if callback_data: kwargs["callback_data"] = callback_data
-    if url: kwargs["url"] = url
-    return InlineKeyboardButton(**kwargs)
-
 def is_valid_url(link):
     return link and str(link).strip().startswith("http")
+
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.error(f"Exception in update: {context.error}")
 
 # ====================== DATABASE & LIMITS ======================
 async def load_keys():
@@ -177,54 +168,71 @@ def get_cc_limit(plan, uid=0):
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== DIRECT URL GIF ENGINE ======================
+# ====================== FLAWLESS GIF SENDER ======================
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
-    async with get_system_lock("message"):
-        markup = InlineKeyboardMarkup(buttons) if buttons else None
-        target = update.callback_query.message if update.callback_query else update.message
-        if not target: return None
+    markup = InlineKeyboardMarkup(buttons) if buttons else None
+    target = update.callback_query.message if update.callback_query else update.message
+    if not target: return None
 
-        if use_gif or specific_gif:
-            url = specific_gif or random.choice(ANIME_GIFS)
-            try: 
-                return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-            except RetryAfter as e:
-                await asyncio.sleep(e.retry_after + 1)
-                return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-            except Exception as e:
-                logger.error("GIF Reply Fallback triggered: " + str(e))
-                pass
-
-        try: return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    if use_gif or specific_gif:
+        url = specific_gif or random.choice(ANIME_GIFS)
+        # FIX: Directly fetching file_id or passing raw URL to preserve stability over network calls
+        media_to_send = _GIF_FILE_IDS.get(url, url)
+        
+        try: 
+            msg = await target.reply_animation(animation=media_to_send, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
+            if url not in _GIF_FILE_IDS and msg.animation:
+                _GIF_FILE_IDS[url] = msg.animation.file_id
+            return msg
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after + 1)
-            return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-        except Exception: return None
+            msg = await target.reply_animation(animation=media_to_send, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
+            if url not in _GIF_FILE_IDS and msg.animation:
+                _GIF_FILE_IDS[url] = msg.animation.file_id
+            return msg
+        except Exception as e:
+            logger.error(f"GIF rendering failed, falling back to text: {e}")
+            pass
+
+    try: 
+        return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except RetryAfter as e:
+        await asyncio.sleep(e.retry_after + 1)
+        return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except Exception: 
+        return None
 
 async def styled_edit(msg, text, buttons=None):
-    async with get_system_lock("edit"):
-        markup = InlineKeyboardMarkup(buttons) if buttons else None
-        try:
-            if msg.animation or msg.photo or msg.video or msg.document: 
-                return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-            return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-        except RetryAfter as e: 
-            await asyncio.sleep(e.retry_after + 1)
-            if msg.animation or msg.photo or msg.video or msg.document: 
-                return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-            return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-        except Exception: return None
+    markup = InlineKeyboardMarkup(buttons) if buttons else None
+    try:
+        if msg.animation or msg.photo or msg.video or msg.document: 
+            return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
+        return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except RetryAfter as e: 
+        await asyncio.sleep(e.retry_after + 1)
+        if msg.animation or msg.photo or msg.video or msg.document: 
+            return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
+        return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except Exception: 
+        return None
 
 async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_gif=None):
-    async with get_system_lock("message"):
-        markup = InlineKeyboardMarkup(buttons) if buttons else None
-        if use_gif or specific_gif:
-            url = specific_gif or random.choice(ANIME_GIFS)
-            try: return await bot.send_animation(chat_id=chat_id, animation=url, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-            except Exception: pass
-            
-        try: return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-        except Exception: return None
+    markup = InlineKeyboardMarkup(buttons) if buttons else None
+    if use_gif or specific_gif:
+        url = specific_gif or random.choice(ANIME_GIFS)
+        media_to_send = _GIF_FILE_IDS.get(url, url)
+        
+        try: 
+            msg = await bot.send_animation(chat_id=chat_id, animation=media_to_send, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
+            if url not in _GIF_FILE_IDS and msg.animation:
+                _GIF_FILE_IDS[url] = msg.animation.file_id
+            return msg
+        except Exception: pass
+        
+    try: 
+        return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except Exception: 
+        return None
 
 # ====================== SESSIONS & EXTRACTION ======================
 _USER_HTTP_SESSIONS = {}
@@ -301,8 +309,46 @@ async def is_user_joined(uid, bot):
             except ValueError: cid = target
             member = await bot.get_chat_member(chat_id=cid, user_id=uid)
             if member.status in ['left', 'kicked', 'banned']: return False
-        except Exception: return False 
+        except Exception: 
+            return False 
     return True
+
+async def send_welcome_menu(update_or_bot, uid, plan, limit):
+    account_prefix = "├" if uid in ADMIN_ID else "╰"
+    admin_panel = f"\n\n╰ ⦗ {CE_3} ⦘ 𝘈𝘥𝘮𝘪𝘯 𝘗𝘢𝘯𝘦𝘭\n  ├ /gen [𝘱𝘭𝘢𝘯] [𝘲𝘵𝘺] ⇾ 𝘎𝘦𝘯𝘦𝘳𝘢𝘵𝘦 𝘒𝘦𝘺𝘴\n  ├ /validate [𝘬𝘦𝘺] ⇾ 𝘊𝘩𝘦𝘤𝘬 𝘒𝘦𝘺\n  ├ /users ⇾ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘚𝘵𝘢𝘵𝘶𝘴\n  ╰ /maint ⇾ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦 𝘔𝘰𝘥𝘦" if uid in ADMIN_ID else ""
+    
+    t = f"""⦗ {CE_2} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
+
+├ ⦗ {CE_8} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
+│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
+
+├ ⦗ {CE_11} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
+│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+
+{account_prefix} ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
+  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
+  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺
+  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬
+  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴{admin_panel}
+
+⦗ {CE_9} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
+    
+    # FIX: Adopted the official color_style parameter instead of using unsupported wrappers or emojis. 
+    kb = [[InlineKeyboardButton("View Plans", callback_data="show_plans", color_style="primary")]]
+    
+    if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
+        kb.append([InlineKeyboardButton("Channel", url=JOIN_CHANNEL_LINK, color_style="primary"), InlineKeyboardButton("Group", url=JOIN_GROUP_LINK, color_style="primary")])
+    elif is_valid_url(JOIN_CHANNEL_LINK):
+        kb.append([InlineKeyboardButton("Channel", url=JOIN_CHANNEL_LINK, color_style="primary")])
+    elif is_valid_url(JOIN_GROUP_LINK):
+        kb.append([InlineKeyboardButton("Group", url=JOIN_GROUP_LINK, color_style="primary")])
+        
+    if isinstance(update_or_bot, Update):
+        await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
+    else:
+        await styled_send(update_or_bot, uid, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
 
 async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -316,10 +362,11 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return True
         
     kb = []
-    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([create_native_button("📢 𝘑𝘰𝘪𝘯 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", url=JOIN_CHANNEL_LINK, style="primary")])
-    if is_valid_url(JOIN_GROUP_LINK): kb.append([create_native_button("💬 𝘑𝘰𝘪𝘯 𝘎𝘳𝘰𝘶𝘱", url=JOIN_GROUP_LINK, style="primary")])
+    # FIX: Native mapping of the color_style attributes inside InlineKeyboardButton
+    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton("Channel", url=JOIN_CHANNEL_LINK, color_style="primary")])
+    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton("Group", url=JOIN_GROUP_LINK, color_style="primary")])
     if not kb: return True
-    kb.append([create_native_button("✅ 𝘝𝘦𝘳𝘪𝘧𝘺", callback_data="check_joined", style="success")])
+    kb.append([InlineKeyboardButton("Verify", callback_data="check_joined", color_style="positive")])
     
     await styled_reply(update, f"⦗ {CE_7} ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, use_gif=True)
     return False
@@ -473,13 +520,14 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
         
+        # FIX: Replaced custom fallback wrappers with direct InlineKeyboardButton color_style arguments 
         kb = [
-            [create_native_button("𝘚𝘩𝘰𝘱𝘪𝘧𝘺 (𝘊𝘩𝘢𝘳𝘨𝘦)", callback_data="gate:Shopify", style="success"), create_native_button("𝘉𝘳𝘢𝘪𝘯𝘵𝘳𝘦𝘦 (𝘚𝘰𝘰𝘯)", callback_data="gate:soon_Braintree", style="primary")],
-            [create_native_button("𝘚𝘵𝘳𝘪𝘱𝘦 (𝘚𝘰𝘰𝘯)", callback_data="gate:soon_Stripe", style="primary"), create_native_button("𝘗𝘢𝘺𝘗𝘢𝘭 (𝘚𝘰𝘰𝘯)", callback_data="gate:soon_PayPal", style="primary")],
-            [create_native_button("𝘊𝘢𝘯𝘤𝘦𝘭", callback_data="gate:cancel", style="danger")]
+            [InlineKeyboardButton("Shopify (Charge)", callback_data="gate:Shopify", color_style="positive"), InlineKeyboardButton("Braintree (Soon)", callback_data="gate:soon_Braintree", color_style="primary")],
+            [InlineKeyboardButton("Stripe (Soon)", callback_data="gate:soon_Stripe", color_style="primary"), InlineKeyboardButton("PayPal (Soon)", callback_data="gate:soon_PayPal", color_style="primary")],
+            [InlineKeyboardButton("Cancel", callback_data="gate:cancel", color_style="negative")]
         ]
         await styled_edit(pm, f"⦗ {CE_4} ⦘ 𝘍𝘪𝘭𝘦 𝘓𝘰𝘢𝘥𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺\n\n├ 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴: <code>{len(cards)}</code>\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘦𝘭𝘦𝘤𝘵 𝘢 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵:", buttons=kb)
-    except Exception as e: await styled_edit(pm, "⚠️ Error: " + str(e))
+    except Exception as e: await styled_edit(pm, f"⚠️ Error: {e}")
 
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _MAINTENANCE_MODE
@@ -505,36 +553,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ensure_user(uid)
         plan = await get_user_plan(uid)
         limit = get_cc_limit(plan, uid)
-        
-        account_prefix = "├" if uid in ADMIN_ID else "╰"
-        admin_panel = f"\n\n╰ ⦗ {CE_3} ⦘ 𝘈𝘥𝘮𝘪𝘯 𝘗𝘢𝘯𝘦𝘭\n  ├ /gen [𝘱𝘭𝘢𝘯] [𝘲𝘵𝘺] ⇾ 𝘎𝘦𝘯𝘦𝘳𝘢𝘵𝘦 𝘒𝘦𝘺𝘴\n  ├ /validate [𝘬𝘦𝘺] ⇾ 𝘊𝘩𝘦𝘤𝘬 𝘒𝘦𝘺\n  ├ /users ⇾ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘚𝘵𝘢𝘵𝘶𝘴\n  ╰ /maint ⇾ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦 𝘔𝘰𝘥𝘦" if uid in ADMIN_ID else ""
-        
-        t = f"""⦗ {CE_2} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
-
-├ ⦗ {CE_8} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
-│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
-
-├ ⦗ {CE_11} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
-│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-
-{account_prefix} ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
-  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
-  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺
-  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬
-  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴{admin_panel}
-
-⦗ {CE_9} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
-        kb = [[create_native_button("𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", callback_data="show_plans", style="primary")]]
-        if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-            kb.append([create_native_button("𝘊𝘩𝘢𝘯𝘯𝘦𝘭", url=JOIN_CHANNEL_LINK, style="primary"), create_native_button("𝘎𝘳𝘰𝘶𝘱", url=JOIN_GROUP_LINK, style="primary")])
-        elif is_valid_url(JOIN_CHANNEL_LINK):
-            kb.append([create_native_button("𝘊𝘩𝘢𝘯𝘯𝘦𝘭", url=JOIN_CHANNEL_LINK, style="primary")])
-        elif is_valid_url(JOIN_GROUP_LINK):
-            kb.append([create_native_button("𝘎𝘳𝘰𝘶𝘱", url=JOIN_GROUP_LINK, style="primary")])
-            
-        await styled_reply(update, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
+        await send_welcome_menu(update, uid, plan, limit)
 
     elif cmd == "info":
         if not await force_join_check(update, context): return
@@ -556,7 +575,8 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for _, pi in PLANS.items():
             t += f"├ ⦗ {CE_1} ⦘ <code>{pi['name']}</code>\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ├ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
         t += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
-        kb = [[create_native_button("𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳", url="https://t.me/Dddadddyttt", style="primary")], [create_native_button("𝘉𝘢𝘤𝘬", callback_data="back_start", style="danger")]]
+        # FIX: Updated standard buttons to use the native color_style API implementation
+        kb = [[InlineKeyboardButton("Contact Owner", url="https://t.me/Dddadddyttt", color_style="primary")], [InlineKeyboardButton("Back", callback_data="back_start", color_style="negative")]]
         await styled_reply(update, t, buttons=kb, use_gif=True)
 
     elif cmd == "fb":
@@ -759,7 +779,7 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for _, pi in PLANS.items():
         t += f"├ ⦗ {CE_1} ⦘ <code>{pi['name']}</code>\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ├ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
     t += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
-    kb = [[create_native_button("𝘊𝘰𝘯𝘵𝘢𝘤𝘵 𝘖𝘸𝘯𝘦𝘳", url="https://t.me/Dddadddyttt", style="primary")], [create_native_button("𝘉𝘢𝘤𝘬", callback_data="back_start", style="danger")]]
+    kb = [[InlineKeyboardButton("Contact Owner", url="https://t.me/Dddadddyttt", color_style="primary")], [InlineKeyboardButton("Back", callback_data="back_start", color_style="negative")]]
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
 
@@ -770,36 +790,7 @@ async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
     plan = await get_user_plan(uid)
     limit = get_cc_limit(plan, uid)
-    
-    account_prefix = "├" if uid in ADMIN_ID else "╰"
-    admin_panel = f"\n\n╰ ⦗ {CE_3} ⦘ 𝘈𝘥𝘮𝘪𝘯 𝘗𝘢𝘯𝘦𝘭\n  ├ /gen [𝘱𝘭𝘢𝘯] [𝘲𝘵𝘺] ⇾ 𝘎𝘦𝘯𝘦𝘳𝘢𝘵𝘦 𝘒𝘦𝘺𝘴\n  ├ /validate [𝘬𝘦𝘺] ⇾ 𝘊𝘩𝘦𝘤𝘬 𝘒𝘦𝘺\n  ├ /users ⇾ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘚𝘵𝘢𝘵𝘶𝘴\n  ╰ /maint ⇾ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦 𝘔𝘰𝘥𝘦" if uid in ADMIN_ID else ""
-    
-    t = f"""⦗ {CE_2} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
-
-├ ⦗ {CE_8} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
-│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
-
-├ ⦗ {CE_11} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
-│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-
-{account_prefix} ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
-  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
-  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺
-  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬
-  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴{admin_panel}
-
-⦗ {CE_9} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
-    kb = [[create_native_button("𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", callback_data="show_plans", style="primary")]]
-    if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-        kb.append([create_native_button("𝘊𝘩𝘢𝘯𝘯𝘦𝘭", url=JOIN_CHANNEL_LINK, style="primary"), create_native_button("𝘎𝘳𝘰𝘶𝘱", url=JOIN_GROUP_LINK, style="primary")])
-    elif is_valid_url(JOIN_CHANNEL_LINK):
-        kb.append([create_native_button("𝘊𝘩𝘢𝘯𝘯𝘦𝘭", url=JOIN_CHANNEL_LINK, style="primary")])
-    elif is_valid_url(JOIN_GROUP_LINK):
-        kb.append([create_native_button("𝘎𝘳𝘰𝘶𝘱", url=JOIN_GROUP_LINK, style="primary")])
-        
-    await styled_edit(q.message, t, buttons=kb)
+    await send_welcome_menu(q.message, uid, plan, limit)
     await q.answer()
 
 async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -811,7 +802,7 @@ async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except: pass
         plan = await get_user_plan(uid)
         limit = get_cc_limit(plan, uid)
-        # Using master_router directly logic to show menu
+        await send_welcome_menu(context.bot, uid, plan, limit)
         return
         
     is_joined = await is_user_joined(uid, context.bot)
@@ -821,39 +812,11 @@ async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer("✅ Verified Successfully!", show_alert=True)
         try: await q.message.delete()
         except Exception: pass
-        
         plan = await get_user_plan(uid)
         limit = get_cc_limit(plan, uid)
-        account_prefix = "├" if uid in ADMIN_ID else "╰"
-        admin_panel = f"\n\n╰ ⦗ {CE_3} ⦘ 𝘈𝘥𝘮𝘪𝘯 𝘗𝘢𝘯𝘦𝘭\n  ├ /gen [𝘱𝘭𝘢𝘯] [𝘲𝘵𝘺] ⇾ 𝘎𝘦𝘯𝘦𝘳𝘢𝘵𝘦 𝘒𝘦𝘺𝘴\n  ├ /validate [𝘬𝘦𝘺] ⇾ 𝘊𝘩𝘦𝘤𝘬 𝘒𝘦𝘺\n  ├ /users ⇾ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘚𝘵𝘢𝘵𝘶𝘴\n  ╰ /maint ⇾ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦 𝘔𝘰𝘥𝘦" if uid in ADMIN_ID else ""
-        
-        t = f"""⦗ {CE_2} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
-
-├ ⦗ {CE_8} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
-│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
-
-├ ⦗ {CE_11} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
-│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-
-{account_prefix} ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
-  ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
-  ├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺
-  ├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬
-  ╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴{admin_panel}
-
-⦗ {CE_9} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
-        kb = [[create_native_button("𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", callback_data="show_plans", style="primary")]]
-        if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-            kb.append([create_native_button("𝘊𝘩𝘢𝘯𝘯𝘦𝘭", url=JOIN_CHANNEL_LINK, style="primary"), create_native_button("𝘎𝘳𝘰𝘶𝘱", url=JOIN_GROUP_LINK, style="primary")])
-        elif is_valid_url(JOIN_CHANNEL_LINK):
-            kb.append([create_native_button("𝘊𝘩𝘢𝘯𝘯𝘦𝘭", url=JOIN_CHANNEL_LINK, style="primary")])
-        elif is_valid_url(JOIN_GROUP_LINK):
-            kb.append([create_native_button("𝘎𝘳𝘰𝘶𝘱", url=JOIN_GROUP_LINK, style="primary")])
-        await styled_send(context.bot, uid, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
+        await send_welcome_menu(context.bot, uid, plan, limit)
     else:
-        await q.answer("❌ Not joined yet!", show_alert=True)
+        await q.answer("❌ Not joined yet! Or Bot is not an Admin.", show_alert=True)
 
 async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
@@ -879,7 +842,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     sites = await get_github_sites()
     proxies = [p['proxy_url'] for p in await get_all_user_proxies(uid)] if await get_all_user_proxies(uid) else []
     http_session = await get_user_http_session(uid)
-    lcd = "..."
+    lcd = "Waiting for response..."
     def is_stopped(): return process_store.get(uid, {}).get("stopped", False)
 
     async def dashboard_updater():
@@ -894,13 +857,15 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
             dt = f"⦗ {CE_2} ⦘ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘈𝘤𝘵𝘪𝘷𝘦...\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n├ ⦗ {CE_13} ⦘ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴: <code>{WORKERS}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘪𝘮𝘦: <code>{h_now}𝘩 {m_now}𝘮 {s_now}𝘴</code>"
+            
+            # FIX: Native mapping of the color_style attributes mapped properly
             kb = [
-                [create_native_button(f"{lcd}", callback_data="none", style="primary")],
-                [create_native_button(f"𝘊𝘩𝘢𝘳𝘨𝘦𝘥: {chg}", callback_data="none", style="success"), create_native_button(f"𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥: {app}", callback_data="none", style="success")],
-                [create_native_button(f"𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵: {ins}", callback_data="none", style="danger"), create_native_button(f"𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥: {dec}", callback_data="none", style="danger")],
-                [create_native_button(f"𝘛𝘰𝘵𝘢𝘭: {chk} / {tot}", callback_data="none", style="primary"), create_native_button(f"𝘌𝘳𝘳𝘰𝘳: {err}", callback_data="none", style="danger")],
-                [create_native_button(f"𝘚𝘱𝘦𝘦𝘥: {cpm} 𝘊𝘗𝘔", callback_data="none", style="primary")],
-                [create_native_button("𝘚𝘵𝘰𝘱 𝘗𝘳𝘰𝘤𝘦𝘴𝘴", callback_data=f"{stop_prefix}:{uid}", style="danger")]
+                [InlineKeyboardButton(f"{lcd}", callback_data="none", color_style="primary")],
+                [InlineKeyboardButton(f"Charged: {chg}", callback_data="none", color_style="positive"), InlineKeyboardButton(f"Approved: {app}", callback_data="none", color_style="positive")],
+                [InlineKeyboardButton(f"Insufficient: {ins}", callback_data="none", color_style="primary"), InlineKeyboardButton(f"Declined: {dec}", callback_data="none", color_style="negative")],
+                [InlineKeyboardButton(f"Total: {chk} / {tot}", callback_data="none", color_style="primary"), InlineKeyboardButton(f"Error: {err}", callback_data="none", color_style="negative")],
+                [InlineKeyboardButton(f"Speed: {cpm} CPM", callback_data="none", color_style="primary")],
+                [InlineKeyboardButton("Stop Process", callback_data=f"{stop_prefix}:{uid}", color_style="negative")]
             ]
             try: await styled_edit(msg_obj, dt, buttons=kb)
             except asyncio.CancelledError: break
@@ -959,10 +924,10 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     avg_cpm = int((chk / el) * 60) if el > 0 else 0
     ft = f"⦗ {CE_7} 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘍𝘰𝘳𝘤𝘦 𝘚𝘵𝘰𝘱𝘱𝘦𝘥 ⦘\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘛𝘪𝘮𝘦: <code>{h}𝘩 {m}𝘮 {s}𝘴</code>" if is_stopped() else f"⦗ {CE_4} 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘊𝘰𝘮𝘱𝘭𝘦𝘵𝘦𝘥 ⦘\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘛𝘪𝘮𝘦: <code>{h}𝘩 {m}𝘮 {s}𝘴</code>"
     fkb = [
-        [create_native_button(f"𝘊𝘩𝘢𝘳𝘨𝘦𝘥: {chg}", callback_data="none", style="success"), create_native_button(f"𝘈𝘱𝘱𝘳𝘰𝘷𝘦𝘥: {app}", callback_data="none", style="success")],
-        [create_native_button(f"𝘐𝘯𝘴𝘶𝘧𝘧𝘪𝘤𝘪𝘦𝘯𝘵: {ins}", callback_data="none", style="danger"), create_native_button(f"𝘋𝘦𝘤𝘭𝘪𝘯𝘦𝘥: {dec}", callback_data="none", style="danger")],
-        [create_native_button(f"𝘛𝘰𝘵𝘢𝘭: {chk} / {tot}", callback_data="none", style="primary"), create_native_button(f"𝘌𝘳𝘳𝘰𝘳: {err}", callback_data="none", style="danger")],
-        [create_native_button(f"𝘈𝘷𝘦𝘳𝘢𝘨𝘦 𝘚𝘱𝘦𝘦𝘥: {avg_cpm} 𝘊𝘗𝘔", callback_data="none", style="primary")]
+        [InlineKeyboardButton(f"Charged: {chg}", callback_data="none", color_style="positive"), InlineKeyboardButton(f"Approved: {app}", callback_data="none", color_style="positive")],
+        [InlineKeyboardButton(f"Insufficient: {ins}", callback_data="none", color_style="primary"), InlineKeyboardButton(f"Declined: {dec}", callback_data="none", color_style="negative")],
+        [InlineKeyboardButton(f"Total: {chk} / {tot}", callback_data="none", color_style="primary"), InlineKeyboardButton(f"Error: {err}", callback_data="none", color_style="negative")],
+        [InlineKeyboardButton(f"Average Speed: {avg_cpm} CPM", callback_data="none", color_style="primary")]
     ]
     try: await styled_edit(msg_obj, ft, buttons=fkb)
     except Exception: pass
@@ -974,14 +939,14 @@ async def _send_mass_hit(card, status, message, price, gateway, uid, elapsed, bo
     try:
         bi = await get_bin_info(card.split("|")[0])
         msg = format_card_result(status, card, gateway, message, price, bi, elapsed)
-        kb = [[create_native_button("𝘖𝘸𝘯𝘦𝘳", url="https://t.me/Dddadddyttt", style="primary")]]
+        kb = [[InlineKeyboardButton("Owner", url="https://t.me/Dddadddyttt", color_style="primary")]]
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
     except Exception: pass
 
 async def stop_chk_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     puid = int(q.data.split(":")[1])
-    if q.from_user.id != puid and q.from_user.id not in ADMIN_ID: return await q.answer("⚠️ 𝘕𝘰𝘵 𝘺𝘰𝘶𝘳𝘴!", show_alert=True)
+    if q.from_user.id != puid and q.from_user.id not in ADMIN_ID: return await q.answer("⚠️ Not yours!", show_alert=True)
     proc = ACTIVE_MTXT_PROCESSES.get(puid)
     if proc:
         proc["stopped"] = True
@@ -1001,13 +966,11 @@ async def post_init(app: Application):
     try: await app.bot.delete_webhook(drop_pending_updates=True)
     except Exception: pass
     try: await init_db()
-    except Exception as e: logger.error("DB Error: " + str(e))
+    except Exception as e: logger.error(f"DB Error: {e}")
     asyncio.create_task(check_sites_loop())
 
 def main():
-    global bot_instance
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
-    bot_instance = app.bot
     app.add_error_handler(global_error_handler)
     
     app.add_handler(MessageHandler(filters.ALL, master_router))
@@ -1019,7 +982,7 @@ def main():
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     
-    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH ZERO ERRORS!")
+    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH NATIVE COLORED BUTTONS!")
     
     while True:
         try:
@@ -1029,7 +992,7 @@ def main():
             logger.warning("Conflict detected. Retrying...")
             time.sleep(5)
         except Exception as e:
-            logger.error("Fatal error: " + str(e))
+            logger.error(f"Fatal error: {e}")
             time.sleep(5)
 
 if __name__ == "__main__":

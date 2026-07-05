@@ -1,5 +1,6 @@
 # ==============================================================================
-# SHOPIFY VIP BOT PRODUCTION SYSTEM (NATIVE GIFS, NATIVE STYLED BUTTONS & EXACT UI)
+# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
+# (NATIVE GIFS, SERIF FONTS, FIXED REDEEM & EXACT UI)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -9,7 +10,6 @@ import random
 import time
 import json
 import re
-import io
 import logging
 import sys
 from datetime import datetime, timedelta
@@ -100,16 +100,15 @@ ANIME_GIFS = [
 ]
 
 PLANS = {
-    "plan1": {"name": "Core Access", "tier": "Core", "duration_days": 7, "price": "$5.00"},
-    "plan2": {"name": "Elite Access", "tier": "Elite", "duration_days": 15, "price": "$10.00"},
-    "plan3": {"name": "Root Access", "tier": "Root", "duration_days": 30, "price": "$15.00"},
-    "plan4": {"name": "X-Access", "tier": "X", "duration_days": 60, "price": "$25.00"},
+    "plan1": {"name": "𝐂𝐨𝐫𝐞 𝐀𝐜𝐜𝐞𝐬𝐬", "tier": "Core", "duration_days": 7, "price": "$5.00"},
+    "plan2": {"name": "𝐄𝐥𝐢𝐭𝐞 𝐀𝐜𝐜𝐞𝐬𝐬", "tier": "Elite", "duration_days": 15, "price": "$10.00"},
+    "plan3": {"name": "𝐑𝐨𝐨𝐭 𝐀𝐜𝐜𝐞𝐬𝐬", "tier": "Root", "duration_days": 30, "price": "$15.00"},
+    "plan4": {"name": "𝐗-𝐀𝐜𝐜𝐞𝐬𝐬", "tier": "X", "duration_days": 60, "price": "$25.00"},
 }
 PAID_TIERS = ["Core", "Elite", "Root", "X"]
 
 USER_LAST_REQ, ACTIVE_MTXT_PROCESSES, PENDING_FILES = {}, {}, {}
 
-_GIF_BYTES_CACHE = {}
 _GIF_FILE_IDS = {}
 _system_locks = {}
 
@@ -120,7 +119,6 @@ def get_system_lock(name: str):
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Exception in update: {context.error}")
 
-# FIX: InlineKeyboardButton style parameter support mapping.
 def create_native_button(text: str, callback_data: str=None, url: str=None, style: str=None):
     kwargs = {"text": text}
     if callback_data: kwargs["callback_data"] = callback_data
@@ -161,68 +159,45 @@ def get_cc_limit(plan, uid=0):
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== FLAWLESS STRICT GIF ENGINE ======================
-async def get_gif_media(url):
-    if url in _GIF_FILE_IDS:
-        return _GIF_FILE_IDS[url]
-    
-    if url not in _GIF_BYTES_CACHE:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=15) as r:
-                    if r.status == 200:
-                        _GIF_BYTES_CACHE[url] = await r.read()
-        except Exception:
-            pass
-            
-    if url in _GIF_BYTES_CACHE:
-        bio = io.BytesIO(_GIF_BYTES_CACHE[url])
-        bio.name = "animation.gif"
-        return bio
-        
-    return url 
-
+# ====================== HIGH PERFORMANCE GIF ENGINE ======================
+# FIX: Completely removed BytesIO downloading. Sending pure URLs is 100x faster and prevents RAM crashes.
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     target = update.callback_query.message if update.callback_query else update.message
     if not target: return None
 
     if use_gif or specific_gif:
-        url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = await get_gif_media(url)
-        
-        for _ in range(5):
+        for _ in range(3): # المحاولة 3 مرات إجبارياً
+            url = specific_gif or random.choice(ANIME_GIFS)
+            media_to_send = _GIF_FILE_IDS.get(url, url)
             try: 
                 msg = await target.reply_animation(
                     animation=media_to_send, 
                     caption=text, 
                     reply_markup=markup, 
                     parse_mode=ParseMode.HTML,
-                    read_timeout=60,
-                    write_timeout=60,
-                    connect_timeout=60
+                    read_timeout=40,
+                    connect_timeout=40
                 )
                 if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
                     _GIF_FILE_IDS[url] = msg.animation.file_id
                 return msg
             except RetryAfter as e:
                 await asyncio.sleep(e.retry_after + 1)
-                media_to_send = await get_gif_media(url) 
             except (Forbidden, BadRequest):
                 return None 
             except Exception as e:
-                logger.error(f"Retrying GIF due to error: {e}")
-                await asyncio.sleep(1.5)
-                media_to_send = await get_gif_media(url)
-        return None 
-    else:
-        try: 
-            return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-        except RetryAfter as e:
-            await asyncio.sleep(e.retry_after + 1)
-            return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-        except Exception: 
-            return None
+                logger.warning(f"GIF retry error: {e}")
+                await asyncio.sleep(1)
+
+    # في حال فشل الاستجابة تماماً، نرسل نص فقط حتى لا يتجمد البوت
+    try: 
+        return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except RetryAfter as e:
+        await asyncio.sleep(e.retry_after + 1)
+        return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except Exception: 
+        return None
 
 async def styled_edit(msg, text, buttons=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
@@ -242,10 +217,9 @@ async def styled_edit(msg, text, buttons=None):
 async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     if use_gif or specific_gif:
-        url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = await get_gif_media(url)
-        
-        for _ in range(5):
+        for _ in range(3):
+            url = specific_gif or random.choice(ANIME_GIFS)
+            media_to_send = _GIF_FILE_IDS.get(url, url)
             try: 
                 msg = await bot.send_animation(
                     chat_id=chat_id, 
@@ -253,31 +227,27 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
                     caption=text, 
                     reply_markup=markup, 
                     parse_mode=ParseMode.HTML,
-                    read_timeout=60,
-                    write_timeout=60,
-                    connect_timeout=60
+                    read_timeout=40,
+                    connect_timeout=40
                 )
                 if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
                     _GIF_FILE_IDS[url] = msg.animation.file_id
                 return msg
             except RetryAfter as e:
                 await asyncio.sleep(e.retry_after + 1)
-                media_to_send = await get_gif_media(url)
             except (Forbidden, BadRequest):
                 return None
             except Exception as e:
-                logger.error(f"Retrying GIF send due to error: {e}")
-                await asyncio.sleep(1.5)
-                media_to_send = await get_gif_media(url)
+                logger.warning(f"GIF send retry error: {e}")
+                await asyncio.sleep(1)
+
+    try: 
+        return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except RetryAfter as e:
+        await asyncio.sleep(e.retry_after + 1)
+        return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except Exception: 
         return None
-    else:
-        try: 
-            return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-        except RetryAfter as e:
-            await asyncio.sleep(e.retry_after + 1)
-            return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-        except Exception: 
-            return None
 
 # ====================== SESSIONS & EXTRACTION ======================
 _USER_HTTP_SESSIONS = {}
@@ -360,26 +330,26 @@ async def is_user_joined(uid, bot):
     return True
 
 async def send_welcome_menu(update_or_bot, uid, plan, limit):
-    admin_panel = f"\n\n<b>[+] Admin Panel:</b>\n ├ /gen [plan] [qty] - Generate Keys\n ├ /validate [key] - Check Key\n ├ /users - System Status\n ╰ /maint - Maintenance Mode" if uid in ADMIN_ID else ""
+    # FIX: Serif Bold Text Applied For Luxury UI Experience
+    admin_panel = f"\n\n<b>[+] 𝐀𝐝𝐦𝐢𝐧 𝐏𝐚𝐧𝐞𝐥:</b>\n ├ /gen [plan] [qty] - Generate Keys\n ├ /validate [key] - Check Key\n ├ /users - System Status\n ╰ /maint - Maintenance Mode" if uid in ADMIN_ID else ""
     
-    # FIX: Updated font styling to bold, clean, formal layout for all replies
-    t = f"""<b>━━━ SHOPIFY VIP CHECKER ━━━</b>
+    t = f"""<b>━━━ 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 𝐕𝐈𝐏 𝐂𝐇𝐄𝐂𝐊𝐄𝐑 ━━━</b>
 
-<b>[+] Checker Engine:</b>
+<b>[+] 𝐂𝐡𝐞𝐜𝐤𝐞𝐫 𝐄𝐧𝐠𝐢𝐧𝐞:</b>
  ╰ <i>Send a combo file to auto-start mass check</i>
 
-<b>[+] Proxy Manager:</b>
+<b>[+] 𝐏𝐫𝐨𝐱𝐲 𝐌𝐚𝐧𝐚𝐠𝐞𝐫:</b>
  ├ /addpxy - Add Proxies
  ├ /proxy - View Proxies
  ╰ /rmpxy - Remove Proxies
 
-<b>[+] Account Settings:</b>
+<b>[+] 𝐀𝐜𝐜𝐨𝐮𝐧𝐭 𝐒𝐞𝐭𝐭𝐢𝐧𝐠𝐬:</b>
  ├ /info - Profile Info
  ├ /redeem - Redeem Key
  ├ /fb - Send Feedback
  ╰ /plan - View Subscriptions{admin_panel}
 
-<b>👤 Your Plan:</b> <code>{plan.title() if plan else 'Free'} ({limit} CC Limit)</code>"""
+<b>👤 𝐘𝐨𝐮𝐫 𝐏𝐥𝐚𝐧:</b> <code>{plan.title() if plan else 'Free'} ({limit} CC Limit)</code>"""
     
     kb = [[InlineKeyboardButton("View Plans", callback_data="show_plans", style="primary")]]
     
@@ -412,7 +382,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not kb: return True
     kb.append([InlineKeyboardButton("Verify", callback_data="check_joined", style="success")])
     
-    await styled_reply(update, f"<b>🔴 Access Denied</b>\n\n├ You must join our official channels first.\n╰ Please join, then click 'Verify'.", buttons=kb, use_gif=True)
+    await styled_reply(update, f"<b>🔴 𝐀𝐜𝐜𝐞𝐬𝐬 𝐃𝐞𝐧𝐢𝐞𝐝</b>\n\n├ You must join our official channels first.\n╰ Please join, then click 'Verify'.", buttons=kb, use_gif=True)
     return False
 
 # ====================== CHECKER CORE API ======================
@@ -485,10 +455,10 @@ def format_card_result(status, card, gateway, response, price="-", bin_info=None
     bi = bin_info or {}
     ps = f"${str(price).replace('$', '')}" if price and price != "-" else "-"
     
-    if status == "Charged": h = f"<b>🟢 CHARGED SUCCESSFULLY</b>"
-    elif status == "Approved": h = f"<b>⚡ APPROVED CVV</b>"
-    elif status == "Insufficient": h = f"<b>🟡 INSUFFICIENT FUNDS</b>"
-    else: h = f"<b>🔴 DECLINED</b>"
+    if status == "Charged": h = f"<b>🟢 𝐂𝐇𝐀𝐑𝐆𝐄𝐃 𝐒𝐔𝐂𝐂𝐄𝐒𝐒𝐅𝐔𝐋𝐋𝐘</b>"
+    elif status == "Approved": h = f"<b>⚡ 𝐀𝐏𝐏𝐑𝐎𝐕𝐄𝐃 𝐂𝐕𝐕</b>"
+    elif status == "Insufficient": h = f"<b>🟡 𝐈𝐍𝐒𝐔𝐅𝐅𝐈𝐂𝐈𝐄𝐍𝐓 𝐅𝐔𝐍𝐃𝐒</b>"
+    else: h = f"<b>🔴 𝐃𝐄𝐂𝐋𝐈𝐍𝐄𝐃</b>"
     
     country_code = str(bi.get('country_code', '')).strip()
     flag = get_flag_emoji(country_code) if country_code else "🏳️"
@@ -523,8 +493,8 @@ async def _send_global_hit(status, gateway, message, price, uid, bot, elapsed):
         plan_name = plan.title() if plan else "Free"
         ps = f"${str(price).replace('$', '')}" if price and str(price) != "-" else ""
         
-        if status == "Charged": h = f"<b>🟢 CHARGED SUCCESSFULLY</b>"
-        elif status == "Insufficient": h = f"<b>🟡 INSUFFICIENT FUNDS</b>"
+        if status == "Charged": h = f"<b>🟢 𝐂𝐇𝐀𝐑𝐆𝐄𝐃 𝐒𝐔𝐂𝐂𝐄𝐒𝐒𝐅𝐔𝐋𝐋𝐘</b>"
+        elif status == "Insufficient": h = f"<b>🟡 𝐈𝐍𝐒𝐔𝐅𝐅𝐈𝐂𝐈𝐄𝐍𝐓 𝐅𝐔𝐍𝐃𝐒</b>"
         else: return 
         
         text = f"""{h}
@@ -544,7 +514,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
     global _MAINTENANCE_MODE
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
     uid = update.effective_user.id
-    pm = await styled_reply(update, f"<b>⏱ Processing file data...</b>", use_gif=True)
+    pm = await styled_reply(update, f"<b>⏱ 𝐏𝐫𝐨𝐜𝐞𝐬𝐬𝐢𝐧𝐠 𝐟𝐢𝐥𝐞 𝐝𝐚𝐭𝐚...</b>", use_gif=True)
     try:
         if uid in ACTIVE_MTXT_PROCESSES and not ACTIVE_MTXT_PROCESSES[uid].get("stopped", True): return await styled_edit(pm, f"<b>⚠️ A process is already active! Please wait for it to finish.</b>")
         doc = update.message.document
@@ -579,7 +549,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton("Stripe (Soon)", callback_data="gate:soon_Stripe", style="primary"), InlineKeyboardButton("PayPal (Soon)", callback_data="gate:soon_PayPal", style="primary")],
             [InlineKeyboardButton("Cancel", callback_data="gate:cancel", style="danger")]
         ]
-        await styled_edit(pm, f"<b>✅ File Loaded Successfully</b>\n\n├ <b>Total CCs:</b> <code>{len(cards)}</code>\n╰ <b>Please select a Gateway to start:</b>", buttons=kb)
+        await styled_edit(pm, f"<b>✅ 𝐅𝐢𝐥𝐞 𝐋𝐨𝐚𝐝𝐞𝐝 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲</b>\n\n├ <b>Total CCs:</b> <code>{len(cards)}</code>\n╰ <b>Please select a Gateway to start:</b>", buttons=kb)
     except Exception as e: await styled_edit(pm, f"<b>⚠️ Error:</b> {e}")
 
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -613,7 +583,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ensure_user(uid)
         plan = await get_user_plan(uid)
         limit = get_cc_limit(plan, uid)
-        t = f"""<b>👤 Profile Information</b>
+        t = f"""<b>👤 𝐏𝐫𝐨𝐟𝐢𝐥𝐞 𝐈𝐧𝐟𝐨𝐫𝐦𝐚𝐭𝐢𝐨𝐧</b>
 
 ├ <b>ID:</b> <code>{uid}</code>
 ├ <b>Status:</b> <code>{'Active' if is_paid_plan(plan) else 'Free'}</code>
@@ -624,7 +594,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif cmd == "plan":
         if not await force_join_check(update, context): return
         cp = await get_user_plan(uid)
-        t = f"<b>⭐ VIP Subscription Plans</b>\n\n"
+        t = f"<b>⭐ 𝐕𝐈𝐏 𝐒𝐮𝐛𝐬𝐜𝐫𝐢𝐩𝐭𝐢𝐨𝐧 𝐏𝐥𝐚𝐧𝐬</b>\n\n"
         for _, pi in PLANS.items():
             t += f"├ <b>{pi['name']}</b>\n│ ├ <b>Duration:</b> <code>{pi['duration_days']} Days</code>\n│ ├ <b>Limit:</b> <code>{get_cc_limit(pi['tier'])} CCs</code>\n│ ╰ <b>Price:</b> <code>{pi['price']}</code>\n│\n"
         t += f"╰ <b>Your Current Plan:</b> <code>{cp.title() if cp else 'Bronze'}</code>"
@@ -684,7 +654,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await force_join_check(update, context): return
         proxies = await get_all_user_proxies(uid)
         if not proxies: return await styled_reply(update, f"<b>⚠️ You don't have any proxies saved.</b>", use_gif=True)
-        t = f"<b>🛡️ Your Proxies ({len(proxies)}/100)</b>\n\n"
+        t = f"<b>🛡️ 𝐘𝐨𝐮𝐫 𝐏𝐫𝐨𝐱𝐢𝐞𝐬 ({len(proxies)}/100)</b>\n\n"
         for i, p in enumerate(proxies[:30], 1): t += f"<code>{i}.</code> <code>{p['ip']}:{p['port']}</code>\n"
         if len(proxies) > 30: t += f"\n<i>+{len(proxies)-30} more...</i>"
         await styled_reply(update, t, use_gif=True)
@@ -720,7 +690,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             kdb[c] = {"tier": pi["tier"], "days": pi["duration_days"], "used": False, "used_by": None, "generated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             gc.append(c)
         await save_keys(kdb)
-        t = f"<b>✅ Successfully Generated <code>{amt}</code> Key(s)!</b>\n\n├ <b>Plan:</b> <code>{pi['name']}</code>\n├ <b>Duration:</b> <code>{pi['duration_days']} Days</code>\n╰ <b>Limit:</b> <code>{get_cc_limit(pi['tier'])} CCs</code>\n\n"
+        t = f"<b>✅ 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲 𝐆𝐞𝐧𝐞𝐫𝐚𝐭𝐞𝐝 <code>{amt}</code> 𝐊𝐞𝐲(𝐬)!</b>\n\n├ <b>Plan:</b> <code>{pi['name']}</code>\n├ <b>Duration:</b> <code>{pi['duration_days']} Days</code>\n╰ <b>Limit:</b> <code>{get_cc_limit(pi['tier'])} CCs</code>\n\n"
         for c in gc: t += f"<code>{c}</code>\n"
         await styled_reply(update, t, use_gif=True)
 
@@ -742,7 +712,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: user_name = update.effective_user.first_name or str(uid)
         except Exception: user_name = f"User {uid}"
         
-        msg = f"""<b>👑 Subscription Activated Successfully!</b>
+        msg = f"""<b>👑 𝐒𝐮𝐛𝐬𝐜𝐫𝐢𝐩𝐭𝐢𝐨𝐧 𝐀𝐜𝐭𝐢𝐯𝐚𝐭𝐞𝐝 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲!</b>
 
 ├ <b>User:</b> <a href="tg://user?id={uid}">{user_name}</a>
 ├ <b>Plan:</b> <code>{t}</code>
@@ -750,10 +720,15 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ├ <b>Mass Limit:</b> <code>{limit} CCs</code>
 ╰ <b>Expires On:</b> <code>{ed}</code>"""
         await styled_reply(update, msg, use_gif=True, specific_gif=REDEEM_GIF)
+        
+        # FIX: إصلاح إشعار الإدارة بحيث يرسل كرسالة نصية مباشرة لجميع المدراء لتجنب أي فشل بسبب تعليق الصور
         try:
-            an = f"<b>🔔 New Key Redeemed!</b>\n\n├ <b>Key:</b> <code>{c}</code>\n├ <b>User:</b> <a href='tg://user?id={uid}'>{user_name}</a> (<code>{uid}</code>)\n├ <b>Plan:</b> <code>{t}</code>\n├ <b>Duration:</b> <code>{d} Days</code>\n╰ <b>Time:</b> <code>{rt}</code>"
-            if ADMIN_ID: await styled_send(context.bot, ADMIN_ID[0], an, use_gif=True)
-        except Exception: pass
+            an = f"<b>🔔 𝐍𝐞𝐰 𝐊𝐞𝐲 𝐑𝐞𝐝𝐞𝐞𝐦𝐞𝐝!</b>\n\n├ <b>Key:</b> <code>{c}</code>\n├ <b>User:</b> <a href='tg://user?id={uid}'>{user_name}</a> (<code>{uid}</code>)\n├ <b>Plan:</b> <code>{t}</code>\n├ <b>Duration:</b> <code>{d} Days</code>\n╰ <b>Time:</b> <code>{rt}</code>"
+            if ADMIN_ID:
+                for admin in ADMIN_ID:
+                    await context.bot.send_message(chat_id=admin, text=an, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.error(f"Failed to notify admin: {e}")
 
     elif cmd == "validate":
         if uid not in ADMIN_ID: return
@@ -764,7 +739,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ki = kdb[c]
         u, ub = ki.get("used", False), ki.get("used_by", "None")
         se, st = ('🔴', "Used") if u else ('🟢', "Active")
-        m = f"<b>⭐ Key Information</b>\n\n├ <b>Key:</b> <code>{c}</code>\n├ <b>Status:</b> <code>{st}</code>\n├ <b>Plan Tier:</b> <code>{ki.get('tier', 'Unknown')}</code>\n├ <b>Duration:</b> <code>{ki.get('days', 0)} Days</code>\n╰ <b>Generated:</b> <code>{ki.get('generated_at', 'Unknown')}</code>"
+        m = f"<b>⭐ 𝐊𝐞𝐲 𝐈𝐧𝐟𝐨𝐫𝐦𝐚𝐭𝐢𝐨𝐧</b>\n\n├ <b>Key:</b> <code>{c}</code>\n├ <b>Status:</b> <code>{st}</code>\n├ <b>Plan Tier:</b> <code>{ki.get('tier', 'Unknown')}</code>\n├ <b>Duration:</b> <code>{ki.get('days', 0)} Days</code>\n╰ <b>Generated:</b> <code>{ki.get('generated_at', 'Unknown')}</code>"
         if u: m += f"\n\n├ <b>Redeemed By:</b> <code>{ub}</code> <a href='tg://user?id={ub}'>[Profile]</a>\n╰ <b>Redeem Time:</b> <code>{ki.get('redeemed_at', 'Not yet')}</code>"
         await styled_reply(update, m, use_gif=True)
 
@@ -774,7 +749,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if a: _MAINTENANCE_MODE = (a == 'on')
         else: _MAINTENANCE_MODE = not _MAINTENANCE_MODE
         t = "ON" if _MAINTENANCE_MODE else "OFF"
-        await styled_reply(update, f"<b>⚙️ Maintenance Mode:</b> {t}", use_gif=True)
+        await styled_reply(update, f"<b>⚙️ 𝐌𝐚𝐢𝐧𝐭𝐞𝐧𝐚𝐧𝐜𝐞 𝐌𝐨𝐝𝐞:</b> {t}", use_gif=True)
 
     elif cmd in ["users", "user"]:
         if uid not in ADMIN_ID: return
@@ -794,7 +769,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception: user_name = 'User'
             recent_users_info.append(f"  │  ├ <b>User:</b> <a href='tg://user?id={u}'>{user_name}</a>\n  │  ╰ ID: <code>{u}</code>")
             
-        text = f"<b>🌐 Global System Status</b>\n\n├ <b>Total Session Users:</b> <code>{len(USER_LAST_REQ)}</code>\n"
+        text = f"<b>🌐 𝐆𝐥𝐨𝐛𝐚𝐥 𝐒𝐲𝐬𝐭𝐞𝐦 𝐒𝐭𝐚𝐭𝐮𝐬</b>\n\n├ <b>Total Session Users:</b> <code>{len(USER_LAST_REQ)}</code>\n"
         if recent_users_info: text += "  ╰ Recent Users (Last 15):\n" + "\n".join(recent_users_info) + "\n\n"
         else: text += "  ╰ Recent Users: <code>None</code>\n\n"
             
@@ -815,7 +790,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             proc["stopped"] = True
             for t in proc.get("tasks", []):
                 if not t.done(): t.cancel()
-        admin_msg = f"<b>🔴 Access Revoked</b>\n├ <b>User:</b> <code>{tu}</code>\n╰ <b>Status:</b> <code>Demoted to Free</code>"
+        admin_msg = f"<b>🔴 𝐀𝐜𝐜𝐞𝐬𝐬 𝐑𝐞𝐯𝐨𝐤𝐞𝐝</b>\n├ <b>User:</b> <code>{tu}</code>\n╰ <b>Status:</b> <code>Demoted to Free</code>"
         await styled_reply(update, admin_msg, use_gif=True)
         try: await styled_send(context.bot, tu, f"<b>🔴 System Alert</b>\n\n╰ Your VIP access has been revoked by the administrator.", use_gif=True)
         except Exception: pass
@@ -827,7 +802,7 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = q.from_user.id
     if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
     cp = await get_user_plan(uid)
-    t = f"<b>⭐ VIP Subscription Plans</b>\n\n"
+    t = f"<b>⭐ 𝐕𝐈𝐏 𝐒𝐮𝐛𝐬𝐜𝐫𝐢𝐩𝐭𝐢𝐨𝐧 𝐏𝐥𝐚𝐧𝐬</b>\n\n"
     for _, pi in PLANS.items():
         t += f"├ <b>{pi['name']}</b>\n│ ├ <b>Duration:</b> <code>{pi['duration_days']} Days</code>\n│ ├ <b>Limit:</b> <code>{get_cc_limit(pi['tier'])} CCs</code>\n│ ╰ <b>Price:</b> <code>{pi['price']}</code>\n│\n"
     t += f"╰ <b>Your Current Plan:</b> <code>{cp.title() if cp else 'Bronze'}</code>"
@@ -843,26 +818,25 @@ async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plan = await get_user_plan(uid)
     limit = get_cc_limit(plan, uid)
     
-    # FIX: Edited message in-place without deleting to prevent UI flickering. Added clean bold formatting.
-    admin_panel = f"\n\n<b>[+] Admin Panel:</b>\n ├ /gen [plan] [qty] - Generate Keys\n ├ /validate [key] - Check Key\n ├ /users - System Status\n ╰ /maint - Maintenance Mode" if uid in ADMIN_ID else ""
+    admin_panel = f"\n\n<b>[+] 𝐀𝐝𝐦𝐢𝐧 𝐏𝐚𝐧𝐞𝐥:</b>\n ├ /gen [plan] [qty] - Generate Keys\n ├ /validate [key] - Check Key\n ├ /users - System Status\n ╰ /maint - Maintenance Mode" if uid in ADMIN_ID else ""
     
-    t = f"""<b>━━━ SHOPIFY VIP CHECKER ━━━</b>
+    t = f"""<b>━━━ 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 𝐕𝐈𝐏 𝐂𝐇𝐄𝐂𝐊𝐄𝐑 ━━━</b>
 
-<b>[+] Checker Engine:</b>
+<b>[+] 𝐂𝐡𝐞𝐜𝐤𝐞𝐫 𝐄𝐧𝐠𝐢𝐧𝐞:</b>
  ╰ <i>Send a combo file to auto-start mass check</i>
 
-<b>[+] Proxy Manager:</b>
+<b>[+] 𝐏𝐫𝐨𝐱𝐲 𝐌𝐚𝐧𝐚𝐠𝐞𝐫:</b>
  ├ /addpxy - Add Proxies
  ├ /proxy - View Proxies
  ╰ /rmpxy - Remove Proxies
 
-<b>[+] Account Settings:</b>
+<b>[+] 𝐀𝐜𝐜𝐨𝐮𝐧𝐭 𝐒𝐞𝐭𝐭𝐢𝐧𝐠𝐬:</b>
  ├ /info - Profile Info
  ├ /redeem - Redeem Key
  ├ /fb - Send Feedback
  ╰ /plan - View Subscriptions{admin_panel}
 
-<b>👤 Your Plan:</b> <code>{plan.title() if plan else 'Free'} ({limit} CC Limit)</code>"""
+<b>👤 𝐘𝐨𝐮𝐫 𝐏𝐥𝐚𝐧:</b> <code>{plan.title() if plan else 'Free'} ({limit} CC Limit)</code>"""
     
     kb = [[InlineKeyboardButton("View Plans", callback_data="show_plans", style="primary")]]
     
@@ -915,7 +889,7 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     cards = PENDING_FILES.pop(uid, None)
     if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": [], "total": len(cards), "gate": gn}
-    await styled_edit(msg_obj, f"<b>⚙️ Preparing Session...</b>\n\n├ <b>Loaded:</b> <code>{len(cards)} CCs</code>\n├ <b>Threads:</b> <code>{WORKERS}</code>\n╰ <b>Gateway:</b> <code>{gn}</code>", buttons=None)
+    await styled_edit(msg_obj, f"<b>⚙️ 𝐏𝐫𝐞𝐩𝐚𝐫𝐢𝐧𝐠 𝐒𝐞𝐬𝐬𝐢𝐨𝐧...</b>\n\n├ <b>Loaded:</b> <code>{len(cards)} CCs</code>\n├ <b>Threads:</b> <code>{WORKERS}</code>\n╰ <b>Gateway:</b> <code>{gn}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
 
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
@@ -925,6 +899,9 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     sites = await get_github_sites()
     proxies = [p['proxy_url'] for p in await get_all_user_proxies(uid)] if await get_all_user_proxies(uid) else []
     http_session = await get_user_http_session(uid)
+    
+    last_resp = "Waiting for response..."
+    
     def is_stopped(): return process_store.get(uid, {}).get("stopped", False)
 
     async def dashboard_updater():
@@ -938,11 +915,10 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
             h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
-            dt = f"<b>━━━ CHECKING IN PROGRESS ━━━</b>\n\n├ <b>[✦] Gateway:</b> <code>{gate_name}</code>\n├ <b>[✦] Threads:</b> <code>{WORKERS}</code>\n╰ <b>[⏱] Time:</b> <code>{h_now}h {m_now}m {s_now}s</code>"
+            dt = f"<b>━━━ 𝐂𝐇𝐄𝐂𝐊𝐈𝐍𝐆 𝐈𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒 ━━━</b>\n\n├ <b>[✦] Gateway:</b> <code>{gate_name}</code>\n├ <b>[✦] Workers:</b> <code>{WORKERS}</code>\n├ <b>[🔥] Response:</b> <code>{last_resp}</code>\n╰ <b>[⏱] Time:</b> <code>{h_now}h {m_now}m {s_now}s</code>"
             
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
-            # FIX: Exact requested button array layout. Top wide row, split middle rows, bottom wide rows to stretch correctly across mobile screens exactly like sc.jpeg.
             kb = [
                 [InlineKeyboardButton(f"📄 {chk}/{tot} ({percent}%)", callback_data="none", style="success" if percent == 100 else "primary")],
                 [InlineKeyboardButton(f"⇌ Charged: {chg}", callback_data="none", style="success"), InlineKeyboardButton(f"✅ Approved: {app}", callback_data="none", style="success")],
@@ -961,7 +937,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
 
     async def worker(wid):
         await asyncio.sleep(wid * 0.1)
-        nonlocal chk, chg, app, ins, dec, err
+        nonlocal chk, chg, app, ins, dec, err, last_resp
         while not queue.empty() and not is_stopped():
             try: card = queue.get_nowait()
             except Exception: break
@@ -973,6 +949,11 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 c_el = time.time() - c_st
                 status = res.get('status', 'Dead')
                 chk += 1
+                
+                raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
+                short_msg = (raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg
+                
+                last_resp = short_msg
                 
                 if status == 'Charged':
                     chg += 1
@@ -1001,9 +982,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     h, m, s = el // 3600, (el % 3600) // 60, el % 60
     avg_cpm = int((chk / el) * 60) if el > 0 else 0
     
-    ft = f"<b>✅ DONE</b>\n\n├ <b>[✦] Gateway:</b> <code>{gate_name}</code>\n├ <b>[✦] Workers:</b> <code>{WORKERS}</code>\n╰ <b>[⏱] Total Time:</b> <code>{h}h {m}m {s}s</code>"
+    ft = f"<b>✅ 𝐃𝐎𝐍𝐄</b>\n\n├ <b>[✦] Gateway:</b> <code>{gate_name}</code>\n├ <b>[✦] Workers:</b> <code>{WORKERS}</code>\n├ <b>[🔥] Response:</b> <code>{last_resp}</code>\n╰ <b>[⏱] Total Time:</b> <code>{h}h {m}m {s}s</code>"
     
-    # FIX: Final state layout applied matching exactly the grid rules required.
     fkb = [
         [InlineKeyboardButton(f"📄 {chk}/{tot} (100%)", callback_data="none", style="success")],
         [InlineKeyboardButton(f"⇌ Charged: {chg}", callback_data="none", style="success"), InlineKeyboardButton(f"✅ Approved: {app}", callback_data="none", style="success")],

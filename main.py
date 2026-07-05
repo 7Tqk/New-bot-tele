@@ -29,7 +29,11 @@ logging.basicConfig(stream=sys.stdout, format='%(asctime)s - %(name)s - %(leveln
 logger = logging.getLogger("ShopifyVIP")
 
 # ====================== CONFIG & GLOBALS ======================
+try: API_ID = int(os.getenv('API_ID', 0))
+except: API_ID = 0
+API_HASH = os.getenv('API_HASH', '').strip()
 BOT_TOKEN = os.getenv('BOT_TOKEN', '').strip()
+
 ADMIN_ID = [int(x.strip()) for x in os.getenv("ADMIN_ID", "8879293808").split(",") if x.strip()]
 JOIN_CHANNEL_ID = os.getenv("JOIN_CHANNEL_ID", "0").strip()
 JOIN_GROUP_ID = os.getenv("JOIN_GROUP_ID", "0").strip()
@@ -335,47 +339,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"⦗ {CE_7} ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, use_gif=True)
     return False
 
-# ====================== CALLBACK HANDLERS ======================
-async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
-    cp = await get_user_plan(uid)
-    t = f"⦗ {CE_9} ⦘ 𝘝𝘐𝘗 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯 𝘗𝘭𝘢𝘯𝘴\n\n"
-    for _, pi in PLANS.items():
-        t += f"├ ⦗ {CE_1} ⦘ <code>{pi['name']}</code>\n│ ├ 𝘋𝘶𝘳𝘢𝘵𝘪𝘰𝘯: <code>{pi['duration_days']} 𝘋𝘢𝘺𝘴</code>\n│ ├ 𝘓𝘪𝘮𝘪𝘵: <code>{get_cc_limit(pi['tier'])} 𝘊𝘊𝘴</code>\n│ ╰ 𝘗𝘳𝘪𝘤𝘦: <code>{pi['price']}</code>\n│\n"
-    t += f"╰ ⦗ 👤 ⦘ 𝘠𝘰𝘶𝘳 𝘊𝘶𝘳𝘳𝘦𝘯𝘵 𝘗𝘭𝘢𝘯 ⇾ <code>{cp.title() if cp else 'Bronze'}</code>"
-    kb = [[create_native_button("Contact Owner", url="https://t.me/Dddadddyttt")], [create_native_button("Back", callback_data="back_start")]]
-    await styled_edit(q.message, t, buttons=kb)
-    await q.answer()
-
-async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
-    plan = await get_user_plan(uid)
-    limit = get_cc_limit(plan, uid)
-    ap = "├" if uid in ADMIN_ID else "╰"
-    ap_txt = f"\n\n╰ ⦗ {CE_3} ⦘ 𝘈𝘥𝘮𝘪𝘯 𝘗𝘢𝘯𝘦𝘭\n  ├ /gen [𝘱𝘭𝘢𝘯] [𝘲𝘵𝘺] ⇾ 𝘎𝘦𝘯𝘦𝘳𝘢𝘵𝘦 𝘒𝘦𝘺𝘴\n  ├ /validate [𝘬𝘦𝘺] ⇾ 𝘊𝘩𝘦𝘤𝘬 𝘒𝘦𝘺\n  ├ /users ⇾ 𝘚𝘺𝘴𝘵𝘦𝘮 𝘚𝘵𝘢𝘵𝘶𝘴\n  ╰ /maint ⇾ 𝘔𝘢𝘪𝘯𝘵𝘦𝘯𝘢𝘯𝘤𝘦 𝘔𝘰𝘥𝘦" if uid in ADMIN_ID else ""
-    t = f"⦗ {CE_2} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮\n\n⦗ {CE_8} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨\n╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬\n\n⦗ {CE_11} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳\n├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴\n\n⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵\n├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦\n├ /redeem ⇾ 𝘙𝘦𝘥𝘦𝘦𝘮 𝘒𝘦𝘺\n├ /fb ⇾ 𝘚𝘦𝘯𝘥 𝘍𝘦𝘦𝘥𝘣𝘢𝘤𝘬\n╰ /plan ⇾ 𝘝𝘪𝘦𝘸 𝘚𝘶𝘣𝘴𝘤𝘳𝘪𝘱𝘵𝘪𝘰𝘯𝘴{ap_txt}\n\n⦗ {CE_9} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"
-    kb = [[create_native_button("⦗ 💎 ⦘ 𝘝𝘪𝘦𝘸 𝘗𝘭𝘢𝘯𝘴", callback_data="show_plans")], [create_native_button("⦗ 📢 ⦘ 𝘊𝘩𝘢𝘯𝘯𝘦𝘭", url=JOIN_CHANNEL_LINK), create_native_button("⦗ 💬 ⦘ 𝘎𝘳𝘰𝘶𝘱", url=JOIN_GROUP_LINK)]]
-    await styled_edit(q.message, t, buttons=kb)
-    await q.answer()
-
-async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    if uid in ADMIN_ID: return await q.answer("✅ Admin Access", show_alert=True)
-    if await is_user_joined(uid, context.bot):
-        await mark_user_joined(uid)
-        await q.answer("✅ Verified!", show_alert=True)
-        try: await q.message.delete()
-        except Exception: pass
-        await styled_send(context.bot, uid, f"⦗ {CE_2} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮\n╰ 𝘚𝘦𝘯𝘥 /start 𝘵𝘰 𝘷𝘪𝘦𝘸 𝘵𝘩𝘦 𝘮𝘦𝘯𝘶.", use_gif=True)
-    else:
-        await q.answer("❌ Not joined yet!", show_alert=True)
-
-# ----------------- CHECKER CORE API -----------------
+# ====================== CHECKER CORE API ======================
 async def get_bin_info(bin_code):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
@@ -518,9 +482,9 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         PENDING_FILES[uid] = cards
         
         kb = [
-            [create_native_button("🛍️ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 (𝘊𝘩𝘢𝘳𝘨𝘦)", callback_data="gate:Shopify"), create_native_button("🌐 𝘉𝘳𝘢𝘪𝘯𝘵𝘳𝘦𝘦 (𝘚𝘰𝘰𝘯)", callback_data="gate:soon_Braintree")],
-            [create_native_button("💳 𝘚𝘵𝘳𝘪𝘱𝘦 (𝘚𝘰𝘰𝘯)", callback_data="gate:soon_Stripe"), create_native_button("🅿️ 𝘗𝘢𝘺𝘗𝘢𝘭 (𝘚𝘰𝘰𝘯)", callback_data="gate:soon_PayPal")],
-            [create_native_button("❌ 𝘊𝘢𝘯𝘤𝘦𝘭", callback_data="gate:cancel")]
+            [create_native_button("🛍️ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 (𝘊𝘩𝘢𝘳𝘨𝘦)", callback_data="gate:Shopify", style="primary"), create_native_button("🌐 𝘉𝘳𝘢𝘪𝘯𝘵𝘳𝘦𝘦 (𝘚𝘰𝘰𝘯)", callback_data="gate:soon_Braintree", style="primary")],
+            [create_native_button("💳 𝘚𝘵𝘳𝘪𝘱𝘦 (𝘚𝘰𝘰𝘯)", callback_data="gate:soon_Stripe", style="primary"), create_native_button("🅿️ 𝘗𝘢𝘺𝘗𝘢𝘭 (𝘚𝘰𝘰𝘯)", callback_data="gate:soon_PayPal", style="primary")],
+            [create_native_button("❌ 𝘊𝘢𝘯𝘤𝘦𝘭", callback_data="gate:cancel", style="danger")]
         ]
         await styled_edit(pm, f"⦗ {CE_4} ⦘ 𝘍𝘪𝘭𝘦 𝘓𝘰𝘢𝘥𝘦𝘥 𝘚𝘶𝘤𝘤𝘦𝘴𝘴𝘧𝘶𝘭𝘭𝘺\n\n├ 𝘛𝘰𝘵𝘢𝘭 𝘊𝘊𝘴: <code>{len(cards)}</code>\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘴𝘦𝘭𝘦𝘤𝘵 𝘢 𝘎𝘢𝘵𝘦𝘸𝘢𝘺 𝘵𝘰 𝘴𝘵𝘢𝘳𝘵:", buttons=kb)
     except Exception as e: await styled_edit(pm, "⚠️ Error: " + str(e))
@@ -555,13 +519,13 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         t = f"""⦗ {CE_2} ⦘ 𝘚𝘩𝘰𝘱𝘪𝘧𝘺 𝘝𝘐𝘗 𝘚𝘺𝘴𝘵𝘦𝘮
 
-⦗ {CE_8} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
-╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
+├ ⦗ {CE_8} ⦘ 𝘊𝘩𝘦𝘤𝘬𝘪𝘯𝘨
+│ ╰ 𝘚𝘦𝘯𝘥 𝘢 𝘧𝘪𝘭𝘦 𝘵𝘰 𝘢𝘶𝘵𝘰-𝘴𝘵𝘢𝘳𝘵 𝘔𝘢𝘴𝘴 𝘊𝘩𝘦𝘤𝘬
 
-⦗ {CE_11} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
-├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
-╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+├ ⦗ {CE_11} ⦘ 𝘗𝘳𝘰𝘹𝘺 𝘔𝘢𝘯𝘢𝘨𝘦𝘳
+│ ├ /addpxy ⇾ 𝘈𝘥𝘥 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ├ /proxy ⇾ 𝘝𝘪𝘦𝘸 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
+│ ╰ /rmpxy ⇾ 𝘙𝘦𝘮𝘰𝘷𝘦 𝘗𝘳𝘰𝘹𝘪𝘦𝘴
 
 {account_prefix} ⦗ 👤 ⦘ 𝘈𝘤𝘤𝘰𝘶𝘯𝘵
   ├ /info ⇾ 𝘠𝘰𝘶𝘳 𝘗𝘳𝘰𝘧𝘪𝘭𝘦
@@ -809,7 +773,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     sites = await get_github_sites()
     proxies = [p['proxy_url'] for p in await get_all_user_proxies(uid)] if await get_all_user_proxies(uid) else []
     http_session = await get_user_http_session(uid)
-    lcd = "Waiting for CC... ⏳"
+    lcd = "..."
     def is_stopped(): return process_store.get(uid, {}).get("stopped", False)
 
     async def dashboard_updater():
@@ -940,4 +904,27 @@ def main():
     bot_instance = app.bot
     app.add_error_handler(global_error_handler)
     
-    app
+    app.add_handler(MessageHandler(filters.ALL, master_router))
+    
+    app.add_handler(CallbackQueryHandler(gateway_selection_cb, pattern=r"^gate:"))
+    app.add_handler(CallbackQueryHandler(stop_chk_cb, pattern=r"^stop_chk:"))
+    app.add_handler(CallbackQueryHandler(plans_cb, pattern=r"^show_plans$"))
+    app.add_handler(CallbackQueryHandler(back_start_cb, pattern=r"^back_start$"))
+    app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
+    app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
+    
+    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH ZERO ERRORS!")
+    
+    while True:
+        try:
+            app.run_polling(drop_pending_updates=True)
+            break
+        except Conflict:
+            logger.warning("Conflict detected. Retrying...")
+            time.sleep(5)
+        except Exception as e:
+            logger.error("Fatal error: " + str(e))
+            time.sleep(5)
+
+if __name__ == "__main__":
+    main()

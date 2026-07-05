@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝘚𝘎𝘎 - SHOPIFY VIP BOT PRODUCTION SYSTEM (NATIVE GIFS & NATIVE STYLED BUTTONS)
+# SHOPIFY VIP BOT PRODUCTION SYSTEM (NATIVE GIFS & NATIVE STYLED BUTTONS)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-from telegram.error import RetryAfter, Conflict
+from telegram.error import RetryAfter, Conflict, TimedOut
 from telegram.constants import ParseMode
 
 from database2 import (
@@ -52,7 +52,7 @@ def get_valid_target(link, chat_id):
         return f"@{uname}"
     if l.startswith("@"): return l
     if c and c not in ["0", "", "none", "None"]:
-        if c.isdigit(): c = f"-100{c}" # Auto-fix channel IDs
+        if c.isdigit(): c = f"-100{c}" 
         try: return int(c)
         except ValueError: return c
     return None
@@ -124,6 +124,7 @@ PAID_TIERS = ["Core", "Elite", "Root", "X"]
 
 USER_LAST_REQ, ACTIVE_MTXT_PROCESSES, PENDING_FILES = {}, {}, {}
 
+_GIF_FILE_IDS = {}
 _system_locks = {}
 
 def get_system_lock(name: str):
@@ -166,20 +167,44 @@ def get_cc_limit(plan, uid=0):
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== FLAWLESS NATIVE GIF SENDER ======================
+# ====================== FLAWLESS GIF SENDER WITH TIMEOUT FIX ======================
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     target = update.callback_query.message if update.callback_query else update.message
     if not target: return None
 
-    # FIX: Directly using URL and native PTB rendering for 100% stability. No manual byte caching that cuts off GIFs.
     if use_gif or specific_gif:
         url = specific_gif or random.choice(ANIME_GIFS)
+        media_to_send = _GIF_FILE_IDS.get(url, url)
+        
         try: 
-            return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
+            # FIX: Added read_timeout=60, write_timeout=60 to stop telegram from dropping the GIF on slower networks
+            msg = await target.reply_animation(
+                animation=media_to_send, 
+                caption=text, 
+                reply_markup=markup, 
+                parse_mode=ParseMode.HTML,
+                read_timeout=60,
+                write_timeout=60,
+                connect_timeout=60
+            )
+            if url not in _GIF_FILE_IDS and msg.animation:
+                _GIF_FILE_IDS[url] = msg.animation.file_id
+            return msg
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after + 1)
-            return await target.reply_animation(animation=url, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
+            msg = await target.reply_animation(
+                animation=media_to_send, 
+                caption=text, 
+                reply_markup=markup, 
+                parse_mode=ParseMode.HTML,
+                read_timeout=60,
+                write_timeout=60,
+                connect_timeout=60
+            )
+            if url not in _GIF_FILE_IDS and msg.animation:
+                _GIF_FILE_IDS[url] = msg.animation.file_id
+            return msg
         except Exception as e:
             logger.error(f"GIF rendering failed, falling back to text: {e}")
             pass
@@ -210,9 +235,26 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     if use_gif or specific_gif:
         url = specific_gif or random.choice(ANIME_GIFS)
+        media_to_send = _GIF_FILE_IDS.get(url, url)
+        
         try: 
-            return await bot.send_animation(chat_id=chat_id, animation=url, caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-        except Exception: pass
+            # FIX: Added timeouts here as well for safety
+            msg = await bot.send_animation(
+                chat_id=chat_id, 
+                animation=media_to_send, 
+                caption=text, 
+                reply_markup=markup, 
+                parse_mode=ParseMode.HTML,
+                read_timeout=60,
+                write_timeout=60,
+                connect_timeout=60
+            )
+            if url not in _GIF_FILE_IDS and msg.animation:
+                _GIF_FILE_IDS[url] = msg.animation.file_id
+            return msg
+        except Exception as e:
+            logger.error(f"GIF send failed: {e}")
+            pass
         
     try: 
         return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -320,7 +362,6 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
 
 ⦗ {CE_9} ⦘ 𝘠𝘰𝘶𝘳 𝘗𝘭𝘢𝘯 ⇾ <code>{plan.title() if plan else 'Bronze'} ({limit} 𝘓𝘪𝘮𝘪𝘵)</code>"""
     
-    # FIX: Using proper PTB parameter `style` and authentic Telegram values (primary, success, danger).
     kb = [[InlineKeyboardButton("View Plans", callback_data="show_plans", style="primary")]]
     
     if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
@@ -352,7 +393,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not kb: return True
     kb.append([InlineKeyboardButton("Verify", callback_data="check_joined", style="success")])
     
-    await styled_reply(update, f"⦗ {CE_7} ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰ఫ్𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, use_gif=True)
+    await styled_reply(update, f"⦗ {CE_7} ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, use_gif=True)
     return False
 
 # ====================== CHECKER CORE API ======================
@@ -504,7 +545,6 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
         
-        # FIX: Added native style keyword exclusively without wrappers
         kb = [
             [InlineKeyboardButton("Shopify (Charge)", callback_data="gate:Shopify", style="success"), InlineKeyboardButton("Braintree (Soon)", callback_data="gate:soon_Braintree", style="primary")],
             [InlineKeyboardButton("Stripe (Soon)", callback_data="gate:soon_Stripe", style="primary"), InlineKeyboardButton("PayPal (Soon)", callback_data="gate:soon_PayPal", style="primary")],
@@ -566,7 +606,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await force_join_check(update, context): return
         txt = raw_text.split(maxsplit=1)[1] if len(tokens) > 1 else ""
         if not txt and not update.message.reply_to_message and not getattr(update.message, 'media', None): 
-            return await styled_reply(update, f"⚠️ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘢 𝘮𝘦𝘴𝘴𝘢𝘨𝘦.", use_gif=True)
+            return await styled_reply(update, f"⚠️ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘢 𝘮𝘦𝘴 fixed_message.", use_gif=True)
         if ADMIN_ID:
             try:
                 if update.message.reply_to_message:
@@ -725,7 +765,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception: user_name = 'User'
             recent_users_info.append(f"  │  ├ ⦗ 👤 ⦘ <a href='tg://user?id={u}'>{user_name}</a>\n  │  ╰ 𝘐𝘋: <code>{u}</code>")
             
-        text = f"⦗ 🌐 ⦘ 𝘎𝘭𝘰𝘣𝘢𝘭 𝘚𝘺𝘴𝘵𝘦𝘮 𝘚𝘵𝘢𝘵𝘶𝘴\n\n├ ⦗ 👥 ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘜𝘴𝘦𝘳𝘴: <code>{len(USER_LAST_REQ)}</code>\n"
+        text = f"⦗ 🌐 ⦘ 𝘎𝘭𝘰𝘣𝘢𝘭 𝘚𝘺𝘴𝘵𝘦𝘮 𝘚𝘵𝘢𝘵𝘶𝘴\n\n├ ⦗ 👥 ⦘ 𝘛𝘰𝘵ষ্ঠ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘜𝘴𝘦𝘳𝘴: <code>{len(USER_LAST_REQ)}</code>\n"
         if recent_users_info: text += "  ╰ 𝘙𝘦𝘤𝘦𝘯𝘵 𝘜𝘴𝘦𝘳𝘴 (𝘓𝘢𝘴𝘵 15):\n" + "\n".join(recent_users_info) + "\n\n"
         else: text += "  ╰ 𝘙𝘦𝘤𝘦𝘯𝘵 𝘜𝘴𝘦𝘳𝘴: <code>None</code>\n\n"
             
@@ -841,7 +881,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             
             dt = f"⦗ {CE_2} ⦘ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘈𝘤𝘵𝘪𝘷𝘦...\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n├ ⦗ {CE_13} ⦘ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴: <code>{WORKERS}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘪𝘮𝘦: <code>{h_now}𝘩 {m_now}𝘮 {s_now}𝘴</code>"
             
-            # FIX: Native mapping of real API colors to Dashboard
             kb = [
                 [InlineKeyboardButton(f"{lcd}", callback_data="none", style="primary")],
                 [InlineKeyboardButton(f"Charged: {chg}", callback_data="none", style="success"), InlineKeyboardButton(f"Approved: {app}", callback_data="none", style="success")],
@@ -954,7 +993,8 @@ async def post_init(app: Application):
     asyncio.create_task(check_sites_loop())
 
 def main():
-    app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+    # FIX: Increased connect, read, and write timeouts at the global bot application level.
+    app = Application.builder().token(BOT_TOKEN).read_timeout(60).write_timeout(60).connect_timeout(60).post_init(post_init).build()
     app.add_error_handler(global_error_handler)
     
     app.add_handler(MessageHandler(filters.ALL, master_router))
@@ -981,4 +1021,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

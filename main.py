@@ -1,5 +1,5 @@
 # ==============================================================================
-# SHOPIFY VIP BOT PRODUCTION SYSTEM (NATIVE GIFS & NATIVE STYLED BUTTONS)
+# SHOPIFY VIP BOT PRODUCTION SYSTEM (NATIVE GIFS FIXED & NATIVE STYLED BUTTONS)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -9,6 +9,7 @@ import random
 import time
 import json
 import re
+import io
 import logging
 import sys
 from datetime import datetime, timedelta
@@ -91,15 +92,6 @@ CE_12 = '<tg-emoji emoji-id="5447453226498552490">📊</tg-emoji>'
 CE_13 = '<tg-emoji emoji-id="5445163772706582819">🚀</tg-emoji>'
 CE_14 = '<tg-emoji emoji-id="5447311106030726740">⏱</tg-emoji>'
 
-# ====================== 250+ COUNTRIES FLAGS ALGORITHM ======================
-ALL_COUNTRY_CODES = ["AD","AE","AF","AG","AI","AL","AM","AO","AQ","AR","AS","AT","AU","AW","AX","AZ","BA","BB","BD","BE","BF","BG","BH","BI","BJ","BL","BM","BN","BO","BQ","BR","BS","BT","BV","BW","BY","BZ","CA","CC","CD","CF","CG","CH","CI","CK","CL","CM","CN","CO","CR","CU","CV","CW","CX","CY","CZ","DE","DJ","DK","DM","DO","DZ","EC","EE","EG","EH","ER","ES","ET","FI","FJ","FK","FM","FO","FR","GA","GB","GD","GE","GF","GG","GH","GI","GL","GM","GN","GP","GQ","GR","GS","GT","GU","GW","GY","HK","HM","HN","HR","HT","HU","ID","IE","IL","IM","IN","IO","IQ","IR","IS","IT","JE","JM","JO","JP","KE","KG","KH","KI","KM","KN","KP","KR","KW","KY","KZ","LA","LB","LC","LI","LK","LR","LS","LT","LU","LV","LY","MA","MC","MD","ME","MF","MG","MH","MK","ML","MM","MN","MO","MP","MQ","MR","MS","MT","MU","MV","MW","MX","MY","MZ","NA","NC","NE","NF","NG","NI","NL","NO","NP","NR","NU","NZ","OM","PA","PE","PF","PG","PH","PK","PL","PM","PN","PR","PS","PT","PW","PY","QA","RE","RO","RS","RU","RW","SA","SB","SC","SD","SE","SG","SH","SI","SJ","SK","SL","SM","SN","SO","SR","SS","ST","SV","SX","SY","SZ","TC","TD","TF","TG","TH","TJ","TK","TL","TM","TN","TO","TR","TT","TV","TW","TZ","UA","UG","UM","US","UY","UZ","VA","VC","VE","VG","VI","VN","VU","WF","WS","YE","YT","ZA","ZM","ZW"]
-COUNTRY_FLAGS = {code: chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397) for code in ALL_COUNTRY_CODES}
-
-def get_flag_emoji(country_code, fallback="🏳️"):
-    if not country_code or len(country_code) != 2: return fallback
-    c = country_code.upper()
-    return COUNTRY_FLAGS.get(c, chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397) if c.isalpha() else fallback)
-
 # ====================== GIF ASSETS ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
 REDEEM_GIF = "https://media.giphy.com/media/l41YkxvU8c7J7Bba0/giphy.gif"
@@ -124,6 +116,7 @@ PAID_TIERS = ["Core", "Elite", "Root", "X"]
 
 USER_LAST_REQ, ACTIVE_MTXT_PROCESSES, PENDING_FILES = {}, {}, {}
 
+_GIF_BYTES_CACHE = {}
 _GIF_FILE_IDS = {}
 _system_locks = {}
 
@@ -167,7 +160,31 @@ def get_cc_limit(plan, uid=0):
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== FLAWLESS GIF SENDER WITH TIMEOUT FIX ======================
+# ====================== FLAWLESS GIF SENDER WITH BYTES FIX ======================
+async def get_gif_media(url):
+    # 1. إذا كان لدينا الـ ID الجاهز من تليجرام، نستخدمه فوراً
+    if url in _GIF_FILE_IDS:
+        return _GIF_FILE_IDS[url]
+    
+    # 2. إذا لم يكن محولاً إلى بيانات (Bytes) نقوم بتحميله لمرة واحدة
+    if url not in _GIF_BYTES_CACHE:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=15) as r:
+                    if r.status == 200:
+                        _GIF_BYTES_CACHE[url] = await r.read()
+        except Exception as e:
+            logger.error(f"Failed to download GIF: {e}")
+            pass
+            
+    # 3. إرجاع نسخة آمنة وجديدة (Fresh Stream) لضمان الإرسال 100%
+    if url in _GIF_BYTES_CACHE:
+        bio = io.BytesIO(_GIF_BYTES_CACHE[url])
+        bio.name = "animation.gif"
+        return bio
+        
+    return url # حل أخير في حال فشل كل شيء
+
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     target = update.callback_query.message if update.callback_query else update.message
@@ -175,10 +192,9 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, sp
 
     if use_gif or specific_gif:
         url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = _GIF_FILE_IDS.get(url, url)
+        media_to_send = await get_gif_media(url)
         
         try: 
-            # FIX: Added read_timeout=60, write_timeout=60 to stop telegram from dropping the GIF on slower networks
             msg = await target.reply_animation(
                 animation=media_to_send, 
                 caption=text, 
@@ -193,6 +209,7 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, sp
             return msg
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after + 1)
+            media_to_send = await get_gif_media(url) # إنشاء ملف جديد بعد الانتظار
             msg = await target.reply_animation(
                 animation=media_to_send, 
                 caption=text, 
@@ -235,10 +252,9 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     if use_gif or specific_gif:
         url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = _GIF_FILE_IDS.get(url, url)
+        media_to_send = await get_gif_media(url)
         
         try: 
-            # FIX: Added timeouts here as well for safety
             msg = await bot.send_animation(
                 chat_id=chat_id, 
                 animation=media_to_send, 
@@ -267,7 +283,7 @@ async def get_user_http_session(uid):
     key = f"{uid}_msp"
     if key not in _USER_HTTP_SESSIONS or _USER_HTTP_SESSIONS[key].closed:
         connector = aiohttp.TCPConnector(limit=WORKERS + 10, ssl=False, enable_cleanup_closed=True, force_close=True)
-        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30, connect=10, sock_read=15), connector=connector)
+        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=90, connect=30, sock_read=80), connector=connector)
     return _USER_HTTP_SESSIONS[key]
 
 async def cleanup_user_http_session(uid):
@@ -396,7 +412,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"⦗ {CE_7} ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, use_gif=True)
     return False
 
-# ====================== CHECKER CORE API ======================
+# ====================== CHECKER CORE API EXACT REPLICATION ======================
 async def get_bin_info(bin_code):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
@@ -410,32 +426,42 @@ async def get_bin_info(bin_code):
 async def check_card_api(card, site, proxy, session, gateway_name):
     try:
         if len(card.split('|')) != 4: return {'status': 'Dead', 'message': 'Invalid card format', 'card': card}
-        params = {'cc': card, 'site': site}
-        if proxy: params['proxy'] = proxy if isinstance(proxy, str) else f"{proxy['username']}:{proxy['password']}@{proxy['ip']}:{proxy['port']}" if proxy.get('username') else f"{proxy['ip']}:{proxy['port']}"
-        async with session.get(CHECKER_API_URL, params=params) as resp:
+        
+        proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
+        proxy_param = f"&proxy={proxy_str}" if proxy else ""
+        req_url = f"{CHECKER_API_URL}?cc={card}&site={site}{proxy_param}"
+        
+        async with session.get(req_url, timeout=90) as resp:
             text_data = await resp.text()
             if resp.status != 200: return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
             try: rj = json.loads(text_data)
             except Exception: return {'status': 'Site Error', 'message': 'Format Error', 'card': card, 'retry': True}
             
-        rm, pr, gt, st = rj.get('Response', ''), rj.get('Price', '-'), gateway_name or rj.get('Gate', 'Shopify'), rj.get('Status', '')
+        rm = str(rj.get('Response', '')).strip()
+        pr = rj.get('Price', '-')
+        gt = rj.get('Gateway', gateway_name)
+        st = str(rj.get('Status', '')).strip().lower()
         
         if is_dead_site_error(rm): return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
         
-        rl = str(rm).lower()
-        if st == 'Charged' or 'order completed' in rl or '💎' in rm or 'thank you' in rl or 'payment successful' in rl: 
+        rl = rm.lower()
+        
+        if st == 'true' or 'success' in rl or 'charged' in rl or 'order completed' in rl or '💎' in rm or 'thank you' in rl or 'payment successful' in rl: 
             return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
         if 'cloudflare bypass failed' in rl: 
             return {'status': 'Site Error', 'message': 'Cloudflare active', 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
         if 'insufficient_funds' in rl or 'insufficient funds' in rl: 
             return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-        if st == 'Approved' or any(k in rl for k in ['approved', 'success', 'invalid_cvv', 'incorrect_cvv', 'invalid_cvc', 'incorrect_cvc', 'incorrect_zip']): 
+        if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'incorrect_cvv', 'invalid_cvc', 'incorrect_cvc', 'incorrect_zip']): 
             return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
         if any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'failed']): 
             return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
+            
         return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-    except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
-    except Exception: return {'status': 'Site Error', 'message': 'Connection dropped', 'card': card, 'retry': True}
+    except asyncio.TimeoutError: 
+        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
+    except Exception as e: 
+        return {'status': 'Site Error', 'message': f'Connection dropped: {str(e)[:20]}', 'card': card, 'retry': True}
 
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, max_retries=2):
     lr = None; ap = list(proxies) if proxies else []
@@ -606,7 +632,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await force_join_check(update, context): return
         txt = raw_text.split(maxsplit=1)[1] if len(tokens) > 1 else ""
         if not txt and not update.message.reply_to_message and not getattr(update.message, 'media', None): 
-            return await styled_reply(update, f"⚠️ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘢 𝘮𝘦𝘴 fixed_message.", use_gif=True)
+            return await styled_reply(update, f"⚠️ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘱𝘳𝘰𝘷𝘪𝘥𝘦 𝘢 𝘮𝘦𝘴𝘴𝘢𝘨𝘦.", use_gif=True)
         if ADMIN_ID:
             try:
                 if update.message.reply_to_message:
@@ -765,7 +791,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception: user_name = 'User'
             recent_users_info.append(f"  │  ├ ⦗ 👤 ⦘ <a href='tg://user?id={u}'>{user_name}</a>\n  │  ╰ 𝘐𝘋: <code>{u}</code>")
             
-        text = f"⦗ 🌐 ⦘ 𝘎𝘭𝘰𝘣𝘢𝘭 𝘚𝘺𝘴𝘵𝘦𝘮 𝘚𝘵𝘢𝘵𝘶𝘴\n\n├ ⦗ 👥 ⦘ 𝘛𝘰𝘵ষ্ঠ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘜𝘴𝘦𝘳𝘴: <code>{len(USER_LAST_REQ)}</code>\n"
+        text = f"⦗ 🌐 ⦘ 𝘎𝘭𝘰𝘣𝘢𝘭 𝘚𝘺𝘴𝘵𝘦𝘮 𝘚𝘵𝘢𝘵𝘶𝘴\n\n├ ⦗ 👥 ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘜𝘴𝘦𝘳𝘴: <code>{len(USER_LAST_REQ)}</code>\n"
         if recent_users_info: text += "  ╰ 𝘙𝘦𝘤𝘦𝘯𝘵 𝘜𝘴𝘦𝘳𝘴 (𝘓𝘢𝘴𝘵 15):\n" + "\n".join(recent_users_info) + "\n\n"
         else: text += "  ╰ 𝘙𝘦𝘤𝘦𝘯𝘵 𝘜𝘴𝘦𝘳𝘴: <code>None</code>\n\n"
             
@@ -813,7 +839,9 @@ async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
     plan = await get_user_plan(uid)
     limit = get_cc_limit(plan, uid)
-    await send_welcome_menu(q.message, uid, plan, limit)
+    try: await q.message.delete()
+    except Exception: pass
+    await send_welcome_menu(context.bot, uid, plan, limit)
     await q.answer()
 
 async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -993,7 +1021,6 @@ async def post_init(app: Application):
     asyncio.create_task(check_sites_loop())
 
 def main():
-    # FIX: Increased connect, read, and write timeouts at the global bot application level.
     app = Application.builder().token(BOT_TOKEN).read_timeout(60).write_timeout(60).connect_timeout(60).post_init(post_init).build()
     app.add_error_handler(global_error_handler)
     

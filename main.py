@@ -1,5 +1,5 @@
 # ==============================================================================
-# SHOPIFY VIP BOT PRODUCTION SYSTEM (NATIVE GIFS FIXED & NATIVE STYLED BUTTONS)
+# SHOPIFY VIP BOT PRODUCTION SYSTEM (NATIVE GIFS FIXED, NATIVE STYLED BUTTONS & EXACT UI)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-from telegram.error import RetryAfter, Conflict, TimedOut
+from telegram.error import RetryAfter, Conflict, TimedOut, NetworkError, Forbidden, BadRequest
 from telegram.constants import ParseMode
 
 from database2 import (
@@ -53,7 +53,7 @@ def get_valid_target(link, chat_id):
         return f"@{uname}"
     if l.startswith("@"): return l
     if c and c not in ["0", "", "none", "None"]:
-        if c.isdigit(): c = f"-100{c}" 
+        if c.isdigit(): c = f"-100{c}" # Auto-fix channel IDs
         try: return int(c)
         except ValueError: return c
     return None
@@ -92,6 +92,15 @@ CE_12 = '<tg-emoji emoji-id="5447453226498552490">📊</tg-emoji>'
 CE_13 = '<tg-emoji emoji-id="5445163772706582819">🚀</tg-emoji>'
 CE_14 = '<tg-emoji emoji-id="5447311106030726740">⏱</tg-emoji>'
 
+# ====================== 250+ COUNTRIES FLAGS ALGORITHM ======================
+ALL_COUNTRY_CODES = ["AD","AE","AF","AG","AI","AL","AM","AO","AQ","AR","AS","AT","AU","AW","AX","AZ","BA","BB","BD","BE","BF","BG","BH","BI","BJ","BL","BM","BN","BO","BQ","BR","BS","BT","BV","BW","BY","BZ","CA","CC","CD","CF","CG","CH","CI","CK","CL","CM","CN","CO","CR","CU","CV","CW","CX","CY","CZ","DE","DJ","DK","DM","DO","DZ","EC","EE","EG","EH","ER","ES","ET","FI","FJ","FK","FM","FO","FR","GA","GB","GD","GE","GF","GG","GH","GI","GL","GM","GN","GP","GQ","GR","GS","GT","GU","GW","GY","HK","HM","HN","HR","HT","HU","ID","IE","IL","IM","IN","IO","IQ","IR","IS","IT","JE","JM","JO","JP","KE","KG","KH","KI","KM","KN","KP","KR","KW","KY","KZ","LA","LB","LC","LI","LK","LR","LS","LT","LU","LV","LY","MA","MC","MD","ME","MF","MG","MH","MK","ML","MM","MN","MO","MP","MQ","MR","MS","MT","MU","MV","MW","MX","MY","MZ","NA","NC","NE","NF","NG","NI","NL","NO","NP","NR","NU","NZ","OM","PA","PE","PF","PG","PH","PK","PL","PM","PN","PR","PS","PT","PW","PY","QA","RE","RO","RS","RU","RW","SA","SB","SC","SD","SE","SG","SH","SI","SJ","SK","SL","SM","SN","SO","SR","SS","ST","SV","SX","SY","SZ","TC","TD","TF","TG","TH","TJ","TK","TL","TM","TN","TO","TR","TT","TV","TW","TZ","UA","UG","UM","US","UY","UZ","VA","VC","VE","VG","VI","VN","VU","WF","WS","YE","YT","ZA","ZM","ZW"]
+COUNTRY_FLAGS = {code: chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397) for code in ALL_COUNTRY_CODES}
+
+def get_flag_emoji(country_code, fallback="🏳️"):
+    if not country_code or len(country_code) != 2: return fallback
+    c = country_code.upper()
+    return COUNTRY_FLAGS.get(c, chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397) if c.isalpha() else fallback)
+
 # ====================== GIF ASSETS ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
 REDEEM_GIF = "https://media.giphy.com/media/l41YkxvU8c7J7Bba0/giphy.gif"
@@ -124,11 +133,19 @@ def get_system_lock(name: str):
     if name not in _system_locks: _system_locks[name] = asyncio.Lock()
     return _system_locks[name]
 
-def is_valid_url(link):
-    return link and str(link).strip().startswith("http")
-
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Exception in update: {context.error}")
+
+# الاستخدام الرسمي والشرعي لتلوين الأزرار في مكتبة PTB الحديثة
+def create_native_button(text: str, callback_data: str=None, url: str=None, style: str=None):
+    kwargs = {"text": text}
+    if callback_data: kwargs["callback_data"] = callback_data
+    if url: kwargs["url"] = url
+    if style: kwargs["style"] = style 
+    return InlineKeyboardButton(**kwargs)
+
+def is_valid_url(link):
+    return link and str(link).strip().startswith("http")
 
 # ====================== DATABASE & LIMITS ======================
 async def load_keys():
@@ -160,30 +177,26 @@ def get_cc_limit(plan, uid=0):
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== FLAWLESS GIF SENDER WITH BYTES FIX ======================
+# ====================== FLAWLESS STRICT GIF ENGINE ======================
 async def get_gif_media(url):
-    # 1. إذا كان لدينا الـ ID الجاهز من تليجرام، نستخدمه فوراً
     if url in _GIF_FILE_IDS:
         return _GIF_FILE_IDS[url]
     
-    # 2. إذا لم يكن محولاً إلى بيانات (Bytes) نقوم بتحميله لمرة واحدة
     if url not in _GIF_BYTES_CACHE:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=15) as r:
                     if r.status == 200:
                         _GIF_BYTES_CACHE[url] = await r.read()
-        except Exception as e:
-            logger.error(f"Failed to download GIF: {e}")
+        except Exception:
             pass
             
-    # 3. إرجاع نسخة آمنة وجديدة (Fresh Stream) لضمان الإرسال 100%
     if url in _GIF_BYTES_CACHE:
         bio = io.BytesIO(_GIF_BYTES_CACHE[url])
         bio.name = "animation.gif"
         return bio
         
-    return url # حل أخير في حال فشل كل شيء
+    return url 
 
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
@@ -194,59 +207,53 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, sp
         url = specific_gif or random.choice(ANIME_GIFS)
         media_to_send = await get_gif_media(url)
         
+        for _ in range(5):
+            try: 
+                msg = await target.reply_animation(
+                    animation=media_to_send, 
+                    caption=text, 
+                    reply_markup=markup, 
+                    parse_mode=ParseMode.HTML,
+                    read_timeout=60,
+                    write_timeout=60,
+                    connect_timeout=60
+                )
+                if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+                    _GIF_FILE_IDS[url] = msg.animation.file_id
+                return msg
+            except RetryAfter as e:
+                await asyncio.sleep(e.retry_after + 1)
+                media_to_send = await get_gif_media(url) 
+            except (Forbidden, BadRequest):
+                return None 
+            except Exception as e:
+                logger.error(f"Retrying GIF due to error: {e}")
+                await asyncio.sleep(1.5)
+                media_to_send = await get_gif_media(url)
+        return None 
+    else:
         try: 
-            msg = await target.reply_animation(
-                animation=media_to_send, 
-                caption=text, 
-                reply_markup=markup, 
-                parse_mode=ParseMode.HTML,
-                read_timeout=60,
-                write_timeout=60,
-                connect_timeout=60
-            )
-            if url not in _GIF_FILE_IDS and msg.animation:
-                _GIF_FILE_IDS[url] = msg.animation.file_id
-            return msg
+            return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after + 1)
-            media_to_send = await get_gif_media(url) # إنشاء ملف جديد بعد الانتظار
-            msg = await target.reply_animation(
-                animation=media_to_send, 
-                caption=text, 
-                reply_markup=markup, 
-                parse_mode=ParseMode.HTML,
-                read_timeout=60,
-                write_timeout=60,
-                connect_timeout=60
-            )
-            if url not in _GIF_FILE_IDS and msg.animation:
-                _GIF_FILE_IDS[url] = msg.animation.file_id
-            return msg
-        except Exception as e:
-            logger.error(f"GIF rendering failed, falling back to text: {e}")
-            pass
-
-    try: 
-        return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-    except RetryAfter as e:
-        await asyncio.sleep(e.retry_after + 1)
-        return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-    except Exception: 
-        return None
+            return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        except Exception: 
+            return None
 
 async def styled_edit(msg, text, buttons=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
-    try:
-        if msg.animation or msg.photo or msg.video or msg.document: 
-            return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-        return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-    except RetryAfter as e: 
-        await asyncio.sleep(e.retry_after + 1)
-        if msg.animation or msg.photo or msg.video or msg.document: 
-            return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-        return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-    except Exception: 
-        return None
+    for _ in range(3):
+        try:
+            if msg.animation or msg.photo or msg.video or msg.document: 
+                return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
+            return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        except RetryAfter as e: 
+            await asyncio.sleep(e.retry_after + 1)
+        except (Forbidden, BadRequest):
+            return None
+        except Exception: 
+            await asyncio.sleep(1)
+    return None
 
 async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
@@ -254,28 +261,39 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
         url = specific_gif or random.choice(ANIME_GIFS)
         media_to_send = await get_gif_media(url)
         
-        try: 
-            msg = await bot.send_animation(
-                chat_id=chat_id, 
-                animation=media_to_send, 
-                caption=text, 
-                reply_markup=markup, 
-                parse_mode=ParseMode.HTML,
-                read_timeout=60,
-                write_timeout=60,
-                connect_timeout=60
-            )
-            if url not in _GIF_FILE_IDS and msg.animation:
-                _GIF_FILE_IDS[url] = msg.animation.file_id
-            return msg
-        except Exception as e:
-            logger.error(f"GIF send failed: {e}")
-            pass
-        
-    try: 
-        return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-    except Exception: 
+        for _ in range(5):
+            try: 
+                msg = await bot.send_animation(
+                    chat_id=chat_id, 
+                    animation=media_to_send, 
+                    caption=text, 
+                    reply_markup=markup, 
+                    parse_mode=ParseMode.HTML,
+                    read_timeout=60,
+                    write_timeout=60,
+                    connect_timeout=60
+                )
+                if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+                    _GIF_FILE_IDS[url] = msg.animation.file_id
+                return msg
+            except RetryAfter as e:
+                await asyncio.sleep(e.retry_after + 1)
+                media_to_send = await get_gif_media(url)
+            except (Forbidden, BadRequest):
+                return None
+            except Exception as e:
+                logger.error(f"Retrying GIF send due to error: {e}")
+                await asyncio.sleep(1.5)
+                media_to_send = await get_gif_media(url)
         return None
+    else:
+        try: 
+            return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        except RetryAfter as e:
+            await asyncio.sleep(e.retry_after + 1)
+            return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        except Exception: 
+            return None
 
 # ====================== SESSIONS & EXTRACTION ======================
 _USER_HTTP_SESSIONS = {}
@@ -352,8 +370,9 @@ async def is_user_joined(uid, bot):
             except ValueError: cid = target
             member = await bot.get_chat_member(chat_id=cid, user_id=uid)
             if member.status in ['left', 'kicked', 'banned']: return False
-        except Exception: 
-            return False 
+        except Exception as e:
+            logger.error(f"Join check exception (Bot not admin?): {e}")
+            pass 
     return True
 
 async def send_welcome_menu(update_or_bot, uid, plan, limit):
@@ -412,7 +431,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"⦗ {CE_7} ⦘ 𝘈𝘤𝘤𝘦𝘴𝘴 𝘋𝘦𝘯𝘪𝘦𝘥\n\n├ 𝘠𝘰𝘶 𝘮𝘶𝘴𝘵 𝘫𝘰𝘪𝘯 𝘰𝘶𝘳 𝘰𝘧𝘧𝘪𝘤𝘪𝘢𝘭 𝘤𝘩𝘢𝘯𝘯𝘦𝘭𝘴 𝘧𝘪𝘳𝘴𝘵.\n╰ 𝘗𝘭𝘦𝘢𝘴𝘦 𝘫𝘰𝘪𝘯, 𝘵𝘩𝘦𝘯 𝘤𝘭𝘪𝘤𝘬 '𝘝𝘦𝘳𝘪𝘧𝘺'.", buttons=kb, use_gif=True)
     return False
 
-# ====================== CHECKER CORE API EXACT REPLICATION ======================
+# ====================== CHECKER CORE API ======================
 async def get_bin_info(bin_code):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
@@ -867,7 +886,7 @@ async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         limit = get_cc_limit(plan, uid)
         await send_welcome_menu(context.bot, uid, plan, limit)
     else:
-        await q.answer("❌ Not joined yet! Or Bot is not an Admin.", show_alert=True)
+        await q.answer("❌ Not joined yet!", show_alert=True)
 
 async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
@@ -893,7 +912,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     sites = await get_github_sites()
     proxies = [p['proxy_url'] for p in await get_all_user_proxies(uid)] if await get_all_user_proxies(uid) else []
     http_session = await get_user_http_session(uid)
-    lcd = "Waiting for response..."
     def is_stopped(): return process_store.get(uid, {}).get("stopped", False)
 
     async def dashboard_updater():
@@ -905,17 +923,18 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             
             elapsed_now = int(time.time() - st)
             cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
-            h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
-            dt = f"⦗ {CE_2} ⦘ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘈𝘤𝘵𝘪𝘷𝘦...\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n├ ⦗ {CE_13} ⦘ 𝘛𝘩𝘳𝘦𝘢𝘥𝘴: <code>{WORKERS}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘪𝘮𝘦: <code>{h_now}𝘩 {m_now}𝘮 {s_now}𝘴</code>"
+            dt = f"⦗ ⚙️ ⦘ 𝘚𝘦𝘴𝘴𝘪𝘰𝘯 𝘈𝘤𝘵𝘪𝘷𝘦...\n\n├ 🗡️ 𝘎𝘢𝘵𝘦: <code>{gate_name}</code>\n├ ⚙️ 𝘞𝘰𝘳𝘬𝘦𝘳𝘴: <code>{WORKERS}</code>\n╰ 🚀 𝘚𝘱𝘦𝘦𝘥: <code>{cpm} CPM</code>"
             
+            percent = int((chk / tot) * 100) if tot > 0 else 0
+            
+            # FIX: Changed button layout to match requested image (1000035987.jpg)
             kb = [
-                [InlineKeyboardButton(f"{lcd}", callback_data="none", style="primary")],
-                [InlineKeyboardButton(f"Charged: {chg}", callback_data="none", style="success"), InlineKeyboardButton(f"Approved: {app}", callback_data="none", style="success")],
-                [InlineKeyboardButton(f"Insufficient: {ins}", callback_data="none", style="primary"), InlineKeyboardButton(f"Declined: {dec}", callback_data="none", style="danger")],
-                [InlineKeyboardButton(f"Total: {chk} / {tot}", callback_data="none", style="primary"), InlineKeyboardButton(f"Error: {err}", callback_data="none", style="danger")],
-                [InlineKeyboardButton(f"Speed: {cpm} CPM", callback_data="none", style="primary")],
-                [InlineKeyboardButton("Stop Process", callback_data=f"{stop_prefix}:{uid}", style="danger")]
+                [InlineKeyboardButton(f"📄 {chk}/{tot} ({percent}%)", callback_data="none", style="success" if percent == 100 else "primary")],
+                [InlineKeyboardButton(f"⇌ Charged: {chg}", callback_data="none", style="success"), InlineKeyboardButton(f"✅ Approved: {app}", callback_data="none", style="success")],
+                [InlineKeyboardButton(f"Insuff: {ins}", callback_data="none", style="success"), InlineKeyboardButton(f"✖️ Declined: {dec}", callback_data="none", style="danger")],
+                [InlineKeyboardButton(f"❕ Errors: {err}", callback_data="none", style="danger")],
+                [InlineKeyboardButton("🛑 Stop Process", callback_data=f"{stop_prefix}:{uid}", style="danger")]
             ]
             try: await styled_edit(msg_obj, dt, buttons=kb)
             except asyncio.CancelledError: break
@@ -927,7 +946,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
 
     async def worker(wid):
         await asyncio.sleep(wid * 0.1)
-        nonlocal chk, chg, app, ins, dec, err, lcd
+        nonlocal chk, chg, app, ins, dec, err
         while not queue.empty() and not is_stopped():
             try: card = queue.get_nowait()
             except Exception: break
@@ -939,12 +958,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 c_el = time.time() - c_st
                 status = res.get('status', 'Dead')
                 chk += 1
-                
-                raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
-                short_msg = (raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg
-                royal_status_map = {'Charged': '🟢', 'Approved': '⚡', 'Insufficient': '🟡', 'Site Error': '⚠️', 'Dead': '🔴'}
-                
-                lcd = f"⦗ 💳 ⦘ {card[:12]}.. ⇾ {royal_status_map.get(status, '🔴')} {short_msg}"
                 
                 if status == 'Charged':
                     chg += 1
@@ -972,13 +985,15 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     el = int(time.time() - st)
     h, m, s = el // 3600, (el % 3600) // 60, el % 60
     avg_cpm = int((chk / el) * 60) if el > 0 else 0
-    ft = f"⦗ {CE_7} 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘍𝘰𝘳𝘤𝘦 𝘚𝘵𝘰𝘱𝘱𝘦𝘥 ⦘\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘛𝘪𝘮𝘦: <code>{h}𝘩 {m}𝘮 {s}𝘴</code>" if is_stopped() else f"⦗ {CE_4} 𝘗𝘳𝘰𝘤𝘦𝘴𝘴 𝘊𝘰𝘮𝘱𝘭𝘦𝘵𝘦𝘥 ⦘\n\n├ ⦗ {CE_1} ⦘ 𝘎𝘢𝘵𝘦𝘸𝘢𝘺: <code>{gate_name}</code>\n╰ ⦗ {CE_14} ⦘ 𝘛𝘰𝘵𝘢𝘭 𝘛𝘪𝘮𝘦: <code>{h}𝘩 {m}𝘮 {s}𝘴</code>"
     
+    ft = f"✅ DONE\n\n├ 🗡️ 𝘎𝘢𝘵𝘦: <code>{gate_name}</code>\n├ ⚙️ 𝘞𝘰𝘳𝘬𝘦𝘳𝘴: <code>{WORKERS}</code>\n╰ ⏱ 𝘛𝘰𝘵𝘢𝘭 𝘛𝘪𝘮𝘦: <code>{h}𝘩 {m}𝘮 {s}𝘴</code>"
+    
+    # FIX: Changed button layout to match requested image (1000035987.jpg) for final state
     fkb = [
-        [InlineKeyboardButton(f"Charged: {chg}", callback_data="none", style="success"), InlineKeyboardButton(f"Approved: {app}", callback_data="none", style="success")],
-        [InlineKeyboardButton(f"Insufficient: {ins}", callback_data="none", style="primary"), InlineKeyboardButton(f"Declined: {dec}", callback_data="none", style="danger")],
-        [InlineKeyboardButton(f"Total: {chk} / {tot}", callback_data="none", style="primary"), InlineKeyboardButton(f"Error: {err}", callback_data="none", style="danger")],
-        [InlineKeyboardButton(f"Average Speed: {avg_cpm} CPM", callback_data="none", style="primary")]
+        [InlineKeyboardButton(f"📄 {chk}/{tot} (100%)", callback_data="none", style="success")],
+        [InlineKeyboardButton(f"⇌ Charged: {chg}", callback_data="none", style="success"), InlineKeyboardButton(f"✅ Approved: {app}", callback_data="none", style="success")],
+        [InlineKeyboardButton(f"Insuff: {ins}", callback_data="none", style="success"), InlineKeyboardButton(f"✖️ Declined: {dec}", callback_data="none", style="danger")],
+        [InlineKeyboardButton(f"❕ Errors: {err}", callback_data="none", style="danger")]
     ]
     try: await styled_edit(msg_obj, ft, buttons=fkb)
     except Exception: pass

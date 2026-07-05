@@ -1,6 +1,6 @@
 # ==============================================================================
 # 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
-# (SERIF FONTS, FIXED REDEEM, OPTIMIZED USERS & EXACT UI)
+# (SERIF FONTS, FIXED REDEEM GIF, OPTIMIZED USERS & EXACT UI)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -54,7 +54,7 @@ def get_valid_target(link, chat_id):
         return f"@{uname}"
     if l.startswith("@"): return l
     if c and c not in ["0", "", "none", "None"]:
-        if c.isdigit(): c = f"-100{c}" 
+        if c.isdigit(): c = f"-100{c}" # Auto-fix channel IDs
         try: return int(c)
         except ValueError: return c
     return None
@@ -599,7 +599,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message: return
     uid = update.effective_user.id
     
-    # Store user data for accurate /users command rendering
     USER_LAST_REQ[uid] = time.time()
     _USER_NAMES[uid] = update.effective_user.first_name or str(uid)
     
@@ -769,11 +768,12 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ╰ <b>{sf('Expires On')}:</b> <code>{ed}</code>"""
         await styled_reply(update, msg, use_gif=True, specific_gif=REDEEM_GIF)
         
+        # FIX: Changed notification back to 'styled_send' so it always uses the robust GIF engine
         try:
             an = f"<b>🔔 {sf('New Key Redeemed!')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{c}</code>\n├ <b>{sf('User')}:</b> <a href='tg://user?id={uid}'>{safe_name}</a> (<code>{uid}</code>)\n├ <b>{sf('Plan')}:</b> <code>{t}</code>\n├ <b>{sf('Duration')}:</b> <code>{d} {sf('Days')}</code>\n╰ <b>{sf('Time')}:</b> <code>{rt}</code>"
             if ADMIN_ID:
                 for admin in ADMIN_ID:
-                    await context.bot.send_message(chat_id=admin, text=an, parse_mode=ParseMode.HTML)
+                    await styled_send(context.bot, admin, an, use_gif=True, specific_gif=REDEEM_GIF)
         except Exception as e:
             logger.error(f"Failed to notify admin: {e}")
 

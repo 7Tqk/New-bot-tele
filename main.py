@@ -1,6 +1,6 @@
 # ==============================================================================
 # 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
-# (CUSTOM ANIMATED EMOJI IDs, GLOBAL CHARGED FONT, ZERO-DELAY GIFS, RAZORPAY INTEGRATION)
+# (CUSTOM ANIMATED EMOJI IDs, GLOBAL CHARGED FONT, FIXED RAZORPAY & FORCED GIFs)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -10,6 +10,7 @@ import random
 import time
 import json
 import re
+import io
 import logging
 import sys
 from datetime import datetime, timedelta
@@ -129,13 +130,14 @@ ANIME_GIFS = [
 ]
 
 PLANS = {
-    "plan1": {"name": "Core Access", "tier": "Core", "duration_days": 7, "price": "$5.00"},
-    "plan2": {"name": "Elite Access", "tier": "Elite", "duration_days": 15, "price": "$10.00"},
-    "plan3": {"name": "Root Access", "tier": "Root", "duration_days": 30, "price": "$15.00"},
-    "plan4": {"name": "X-Access", "tier": "X", "duration_days": 60, "price": "$25.00"},
+    "plan1": {"name": sf("Core Access"), "tier": "Core", "duration_days": 7, "price": "$5.00"},
+    "plan2": {"name": sf("Elite Access"), "tier": "Elite", "duration_days": 15, "price": "$10.00"},
+    "plan3": {"name": sf("Root Access"), "tier": "Root", "duration_days": 30, "price": "$15.00"},
+    "plan4": {"name": sf("X-Access"), "tier": "X", "duration_days": 60, "price": "$25.00"},
 }
 PAID_TIERS = ["Core", "Elite", "Root", "X"]
 
+_GIF_BYTES_CACHE = {}
 _GIF_FILE_IDS = {}
 _system_locks = {}
 
@@ -186,7 +188,27 @@ def get_cc_limit(plan, uid=0):
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== ZERO-DELAY GIF ENGINE ======================
+# ====================== STRICT FORCED GIF ENGINE ======================
+async def get_gif_media(url):
+    if url in _GIF_FILE_IDS:
+        return _GIF_FILE_IDS[url]
+    
+    if url not in _GIF_BYTES_CACHE:
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=15) as r:
+                    if r.status == 200:
+                        _GIF_BYTES_CACHE[url] = await r.read()
+        except Exception:
+            pass
+            
+    if url in _GIF_BYTES_CACHE:
+        bio = io.BytesIO(_GIF_BYTES_CACHE[url])
+        bio.name = "animation.gif"
+        return bio
+        
+    return url 
+
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     target = update.callback_query.message if update.callback_query else update.message
@@ -194,23 +216,30 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, sp
 
     if use_gif or specific_gif:
         url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = _GIF_FILE_IDS.get(url, url)
+        media_to_send = await get_gif_media(url)
         
-        try: 
-            msg = await target.reply_animation(
-                animation=media_to_send, 
-                caption=text, 
-                reply_markup=markup, 
-                parse_mode=ParseMode.HTML,
-                read_timeout=15,
-                write_timeout=15,
-                connect_timeout=15
-            )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                _GIF_FILE_IDS[url] = msg.animation.file_id
-            return msg
-        except Exception as e:
-            pass 
+        # FIX: المحاولة 5 مرات إجبارياً لإرسال الـ GIF لضمان ظهوره في كل رد وبدون أي تخطي للنص النقي
+        for _ in range(5):
+            try: 
+                msg = await target.reply_animation(
+                    animation=media_to_send, 
+                    caption=text, 
+                    reply_markup=markup, 
+                    parse_mode=ParseMode.HTML,
+                    read_timeout=30,
+                    write_timeout=30,
+                    connect_timeout=30
+                )
+                if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+                    _GIF_FILE_IDS[url] = msg.animation.file_id
+                return msg
+            except RetryAfter as e:
+                await asyncio.sleep(e.retry_after + 1)
+                media_to_send = await get_gif_media(url) 
+            except Exception as e:
+                logger.error(f"Forced GIF Engine Retrying: {e}")
+                await asyncio.sleep(1)
+                media_to_send = await get_gif_media(url)
 
     try: 
         return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -230,23 +259,29 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     if use_gif or specific_gif:
         url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = _GIF_FILE_IDS.get(url, url)
-        try: 
-            msg = await bot.send_animation(
-                chat_id=chat_id, 
-                animation=media_to_send, 
-                caption=text, 
-                reply_markup=markup, 
-                parse_mode=ParseMode.HTML,
-                read_timeout=15,
-                write_timeout=15,
-                connect_timeout=15
-            )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                _GIF_FILE_IDS[url] = msg.animation.file_id
-            return msg
-        except Exception as e:
-            pass
+        media_to_send = await get_gif_media(url)
+        for _ in range(5):
+            try: 
+                msg = await bot.send_animation(
+                    chat_id=chat_id, 
+                    animation=media_to_send, 
+                    caption=text, 
+                    reply_markup=markup, 
+                    parse_mode=ParseMode.HTML,
+                    read_timeout=30,
+                    write_timeout=30,
+                    connect_timeout=30
+                )
+                if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+                    _GIF_FILE_IDS[url] = msg.animation.file_id
+                return msg
+            except RetryAfter as e:
+                await asyncio.sleep(e.retry_after + 1)
+                media_to_send = await get_gif_media(url)
+            except Exception as e:
+                logger.error(f"Forced GIF Engine Send Retrying: {e}")
+                await asyncio.sleep(1)
+                media_to_send = await get_gif_media(url)
 
     try: 
         return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -405,7 +440,7 @@ async def check_card_api(card, site, proxy, session, gateway_name):
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         proxy_param = f"&proxy={proxy_str}" if proxy else ""
         
-        # Razorpay dynamic routing
+        # FIX: Razorpay dynamic API routing with empty site parameter to avoid 404 errors
         if gateway_name == "Razorpay":
             req_url = f"{RAZORPAY_API_URL}?cc={card}&site={site}{proxy_param}"
         else:
@@ -426,7 +461,13 @@ async def check_card_api(card, site, proxy, session, gateway_name):
             pr = rj.get('Price', '-')
             
         gt = rj.get('Gateway', gateway_name)
-        st = str(rj.get('Status', '')).strip().lower()
+        
+        # Handle Razorpay boolean/string status mapping perfectly
+        st_val = rj.get('Status', '')
+        if isinstance(st_val, bool):
+            st = 'true' if st_val else 'false'
+        else:
+            st = str(st_val).strip().lower()
         
         if is_dead_site_error(rm): return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
         
@@ -440,12 +481,6 @@ async def check_card_api(card, site, proxy, session, gateway_name):
             return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
         if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'incorrect_cvv', 'invalid_cvc', 'incorrect_cvc', 'incorrect_zip']): 
             return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-        if any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'failed']): 
-            # Razorpay Specific Risk Check Failures are considered Dead, not Retryable Site Errors
-            if 'payment_risk_check_failed' in rl or 'authentication_failed' in rl or 'card_declined' in rl:
-                pass
-            else:
-                return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
             
         return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
     except asyncio.TimeoutError: 
@@ -456,13 +491,19 @@ async def check_card_api(card, site, proxy, session, gateway_name):
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, max_retries=2):
     lr = None; ap = list(proxies) if proxies else []
     for _ in range(max_retries):
-        acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
-        if not acs: _SITE_ERRORS_COUNT.clear(); acs = sites
-        s = random.choice(acs)
+        # FIX: Force empty site string for Razorpay to strictly prevent API 404 server exceptions
+        if gateway_name == "Razorpay":
+            s = ""
+        else:
+            acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
+            if not acs: _SITE_ERRORS_COUNT.clear(); acs = sites
+            s = random.choice(acs)
+            
         p = random.choice(ap) if ap else None
         r = await check_card_api(card, s, p, session, gateway_name)
         if not r.get('retry'):
-            if r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: _SITE_ERRORS_COUNT[s] = 0
+            if r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
+                if gateway_name != "Razorpay": _SITE_ERRORS_COUNT[s] = 0
             return r
         lr = r; await asyncio.sleep(DELAY)
     if lr: return {'status': 'Dead', 'message': f'{str(lr["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': lr.get('price', '-')}
@@ -471,7 +512,7 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
 def format_card_result(status, card, gateway, response, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}
     
-    # Format Currency Correctly based on Gateway (₹ for Razorpay)
+    # Currency Formatting (₹ for Razorpay)
     if "₹" in str(price):
         ps = sf(f"{price}")
     else:
@@ -567,7 +608,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
         
-        # New Gateway Selection Keyboard mapping
+        # Exact UI Mapping for Gateway selection grid matching sc.jpeg
         kb = [
             [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success"), InlineKeyboardButton(sf("Razorpay (1₹)"), callback_data="gate:Razorpay", style="success")],
             [InlineKeyboardButton(sf("Braintree (Soon)"), callback_data="gate:soon_Braintree", style="primary"), InlineKeyboardButton(sf("Stripe (Soon)"), callback_data="gate:soon_Stripe", style="primary")],
@@ -638,11 +679,11 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 if update.message.reply_to_message:
                     await context.bot.forward_message(chat_id=ADMIN_ID[0], from_chat_id=uid, message_id=update.message.reply_to_message.message_id)
-                    if txt: await context.bot.send_message(ADMIN_ID[0], f"💬 <b>Note:</b> {sf(txt)}\n📩 <b>From:</b> <code>{sf(str(uid))}</code>", parse_mode=ParseMode.HTML)
-                    else: await context.bot.send_message(ADMIN_ID[0], f"📩 <b>Feedback From:</b> <code>{sf(str(uid))}</code>", parse_mode=ParseMode.HTML)
+                    if txt: await context.bot.send_message(ADMIN_ID[0], f"💬 <b>Note:</b> {sf(txt)}\n📩 <b>From:</b> <code>{uid}</code>", parse_mode=ParseMode.HTML)
+                    else: await context.bot.send_message(ADMIN_ID[0], f"📩 <b>Feedback From:</b> <code>{uid}</code>", parse_mode=ParseMode.HTML)
                 else:
                     await context.bot.forward_message(chat_id=ADMIN_ID[0], from_chat_id=uid, message_id=update.message.message_id)
-                    await context.bot.send_message(ADMIN_ID[0], f"📩 <b>Feedback From:</b> <code>{sf(str(uid))}</code>", parse_mode=ParseMode.HTML)
+                    await context.bot.send_message(ADMIN_ID[0], f"📩 <b>Feedback From:</b> <code>{uid}</code>", parse_mode=ParseMode.HTML)
             except Exception: pass
         await styled_reply(update, f"<b>{CE_STAR} {sf('Your message has been delivered to the Owner.')}</b>", use_gif=True)
 
@@ -718,7 +759,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             kdb[c] = {"tier": pi["tier"], "days": pi["duration_days"], "used": False, "used_by": None, "generated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             gc.append(c)
         await save_keys(kdb)
-        t = f"<b>{CE_STAR} {sf('Successfully Generated')} <code>{sf(str(amt))}</code> {sf('Key(s)!')}</b>\n\n├ <b>{sf('Plan')}:</b> <code>{sf(pi['name'])}</code>\n├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n╰ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n\n"
+        t = f"<b>{CE_STAR} {sf('Successfully Generated')} <code>{sf(str(amt))}</code> {sf('Key(s)!')}</b>\n\n├ <b>{sf('Plan')}:</b> <code>{sf(pi['name'])}</code>\n├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n╰ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n\n"
         for c in gc: t += f"<code>{sf(c)}</code>\n"
         await styled_reply(update, t, use_gif=True)
 
@@ -746,12 +787,12 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ├ <b>{CE_STAR} {sf('User')}:</b> <a href="tg://user?id={uid}">{safe_name}</a>
 ├ <b>{sf('Plan')}:</b> <code>{sf(t)}</code>
 ├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>
-├ <b>{CE_GEAR} {sf('Mass Limit')}:</b> <code>{sf(str(limit))} CCs</code>
+├ <b>{CE_GEAR} {sf('Mass Limit')}:</b> <code>{sf(str(limit))} {sf('CCs')}</code>
 ╰ <b>{CE_TIME} {sf('Expires On')}:</b> <code>{sf(ed)}</code>"""
         await styled_reply(update, msg, use_gif=True, specific_gif=REDEEM_GIF)
         
         try:
-            an = f"<b>{CE_STAR} {sf('New Key Redeemed!')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_STAR} {sf('User')}:</b> <a href='tg://user?id={uid}'>{safe_name}</a> (<code>{sf(str(uid))}</code>)\n├ <b>{sf('Plan')}:</b> <code>{sf(t)}</code>\n├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>\n╰ <b>{CE_TIME} {sf('Time')}:</b> <code>{sf(rt)}</code>"
+            an = f"<b>{CE_STAR} {sf('New Key Redeemed!')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_STAR} {sf('User')}:</b> <a href='tg://user?id={uid}'>{safe_name}</a> (<code>{sf(str(uid))}</code>)\n├ <b>{sf('Plan')}:</b> <code>{sf(t)}</code>\n├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>\n╰ <b>{CE_TIME} {sf('Time')}:</b> <code>{sf(rt)}</code>"""
             if ADMIN_ID:
                 for admin in ADMIN_ID:
                     await styled_send(context.bot, admin, an, use_gif=True, specific_gif=REDEEM_GIF)
@@ -832,7 +873,7 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cp = await get_user_plan(uid)
     t = f"<b>{CE_STAR} {sf('VIP Subscription Plans')}</b>\n\n"
     for _, pi in PLANS.items():
-        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n│ ╰ <b>{CE_STAR} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
+        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_STAR} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
     t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
     kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
     await styled_edit(q.message, t, buttons=kb)

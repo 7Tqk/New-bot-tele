@@ -21,6 +21,11 @@ from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filt
 from telegram.error import RetryAfter, Conflict, TimedOut, NetworkError, Forbidden, BadRequest
 from telegram.constants import ParseMode
 
+from telethon.errors import FloodWaitError, UserNotParticipantError
+from telethon import TelegramClient, events, Button
+from telethon.tl.types import ChannelParticipantBanned
+from telethon.tl.functions.channels import GetParticipantRequest
+
 from database2 import (
     init_db, ensure_user, get_user_plan, set_user_plan,
     get_all_user_proxies, add_proxy_db, remove_proxy_by_index,
@@ -68,7 +73,7 @@ CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-WORKERS = 50  # تمت زيادة عدد الـ Workers إلى 50
+WORKERS = 50  
 API_TIMEOUT = 30  
 DELAY = 1.0  
 HIT_DELAY = 0.2
@@ -83,9 +88,8 @@ USER_LAST_REQ = {}
 ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
 
-# ====================== GLOBAL CHARGED FONT ENGINE & REVERSE TRANSLATOR ======================
+# ====================== GLOBAL CHARGED FONT ENGINE ======================
 def sf(text) -> str:
-    """Converts ALL English letters and Numbers to Mathematical Sans-Serif Bold (𝗖𝗛𝗔𝗥𝗚𝗘𝗗 style)"""
     if text is None: return ""
     res = ""
     for c in str(text):
@@ -96,7 +100,6 @@ def sf(text) -> str:
     return res
 
 def unsf(text) -> str:
-    """Reverts Mathematical Sans-Serif Bold back to standard ASCII for database checking"""
     if text is None: return ""
     res = ""
     for c in str(text):
@@ -111,14 +114,14 @@ def escape_html(text):
     if not text: return "Unknown"
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-# ====================== USER REQUESTED PREMIUM ANIMATED EMOJIS ======================
+# ====================== PREMIUM EMOJIS ======================
 CE_STAR = '<tg-emoji emoji-id="6201647288947839133">⭐</tg-emoji>'
 CE_FIRE = '<tg-emoji emoji-id="5445189224682779974">🔥</tg-emoji>'
 CE_GEAR = '<tg-emoji emoji-id="5445358884480916784">⚙️</tg-emoji>'
 CE_ROCKET = '<tg-emoji emoji-id="5445163772706582819">🚀</tg-emoji>'
 CE_TIME = '<tg-emoji emoji-id="5447311106030726740">⏱</tg-emoji>'
 
-# ====================== 250+ COUNTRIES FLAGS ALGORITHM ======================
+# ====================== COUNTRIES FLAGS ======================
 ALL_COUNTRY_CODES = ["AD","AE","AF","AG","AI","AL","AM","AO","AQ","AR","AS","AT","AU","AW","AX","AZ","BA","BB","BD","BE","BF","BG","BH","BI","BJ","BL","BM","BN","BO","BQ","BR","BS","BT","BV","BW","BY","BZ","CA","CC","CD","CF","CG","CH","CI","CK","CL","CM","CN","CO","CR","CU","CV","CW","CX","CY","CZ","DE","DJ","DK","DM","DO","DZ","EC","EE","EG","EH","ER","ES","ET","FI","FJ","FK","FM","FO","FR","GA","GB","GD","GE","GF","GG","GH","GI","GL","GM","GN","GP","GQ","GR","GS","GT","GU","GW","GY","HK","HM","HN","HR","HT","HU","ID","IE","IL","IM","IN","IO","IQ","IR","IS","IT","JE","JM","JO","JP","KE","KG","KH","KI","KM","KN","KP","KR","KW","KY","KZ","LA","LB","LC","LI","LK","LR","LS","LT","LU","LV","LY","MA","MC","MD","ME","MF","MG","MH","MK","ML","MM","MN","MO","MP","MQ","MR","MS","MT","MU","MV","MW","MX","MY","MZ","NA","NC","NE","NF","NG","NI","NL","NO","NP","NR","NU","NZ","OM","PA","PE","PF","PG","PH","PK","PL","PM","PN","PR","PS","PT","PW","PY","QA","RE","RO","RS","RU","RW","SA","SB","SC","SD","SE","SG","SH","SI","SJ","SK","SL","SM","SN","SO","SR","SS","ST","SV","SX","SY","SZ","TC","TD","TF","TG","TH","TJ","TK","TL","TM","TN","TO","TR","TT","TV","TW","TZ","UA","UG","UM","US","UY","UZ","VA","VC","VE","VG","VI","VN","VU","WF","WS","YE","YT","ZA","ZM","ZW"]
 COUNTRY_FLAGS = {code: chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397) for code in ALL_COUNTRY_CODES}
 
@@ -127,7 +130,7 @@ def get_flag_emoji(country_code, fallback="🏳️"):
     c = country_code.upper()
     return COUNTRY_FLAGS.get(c, chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397) if c.isalpha() else fallback)
 
-# ====================== GIF ASSETS (EXPANDED & FORCED) ======================
+# ====================== GIF ASSETS (EXPANDED) ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
 REDEEM_GIF = "https://media.giphy.com/media/l41YkxvU8c7J7Bba0/giphy.gif"
 ANIME_GIFS = [
@@ -142,7 +145,13 @@ ANIME_GIFS = [
     "https://media.giphy.com/media/26tn33aiTi1jIGs14/giphy.gif",
     "https://media.giphy.com/media/l0HlHFRbmaZtBRhXG/giphy.gif",
     "https://media.giphy.com/media/3oKIPa2TdahYIGANYc/giphy.gif",
-    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcGZtbzF1Z2UwbTNqcjFqZ3B5ZXRkZG5uYXFzYnp3dTkxM2FpYnN0ZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/LpwBqCorPvXI0zEDhI/giphy.gif"
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcGZtbzF1Z2UwbTNqcjFqZ3B5ZXRkZG5uYXFzYnp3dTkxM2FpYnN0ZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/LpwBqCorPvXI0zEDhI/giphy.gif",
+    "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif",
+    "https://media.giphy.com/media/wW95fEq09hOI8/giphy.gif",
+    "https://media.giphy.com/media/13HgwGsXF0aiGY/giphy.gif",
+    "https://media.giphy.com/media/aBfS8WqcRGDgA/giphy.gif",
+    "https://media.giphy.com/media/7kn27lnYSAE9O/giphy.gif",
+    "https://media.giphy.com/media/5Zesu5VP1d2Ew/giphy.gif"
 ]
 
 PLANS = {
@@ -203,38 +212,50 @@ def get_cc_limit(plan, uid=0):
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== STRICT FORCED GIF ENGINE ======================
+# ====================== STRICT FORCED GIF ENGINE (CACHE + BYTES) ======================
+async def get_gif_media(specific_url=None):
+    url = specific_url or random.choice(ANIME_GIFS)
+    if url in _GIF_FILE_IDS:
+        return _GIF_FILE_IDS[url], url
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.read()
+                    bio = io.BytesIO(data)
+                    bio.name = 'animation.gif'
+                    return bio, url
+    except Exception as e:
+        logger.error(f"Failed to download GIF bytes: {e}")
+    return url, url
+
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
-    use_gif = True  # إجبار تشغيل الـ GIF دائماً
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     target = update.callback_query.message if update.callback_query else update.message
     if not target: return None
 
-    url = specific_gif or random.choice(ANIME_GIFS)
-    media_to_send = _GIF_FILE_IDS.get(url, url)
+    media_obj, url = await get_gif_media(specific_gif)
     
     for _ in range(3):
         try: 
             msg = await target.reply_animation(
-                animation=media_to_send, 
+                animation=media_obj, 
                 caption=text, 
                 reply_markup=markup, 
                 parse_mode=ParseMode.HTML,
-                read_timeout=30,
-                write_timeout=30,
-                connect_timeout=30
+                read_timeout=30, write_timeout=30, connect_timeout=30
             )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+            # حفظ الـ file_id لسرعة الإرسال مستقبلاً
+            if url and isinstance(media_obj, io.BytesIO) and getattr(msg, 'animation', None):
                 _GIF_FILE_IDS[url] = msg.animation.file_id
             return msg
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after + 1)
         except Exception:
-            # Fallback لصورة مختلفة في حال حصل عطل بهذه الصورة
-            media_to_send = random.choice(ANIME_GIFS)
+            media_obj, url = await get_gif_media()
             await asyncio.sleep(1)
 
-    # Fallback أخير لضمان عدم حدوث خطأ كلي 
     try: 
         return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
     except Exception: 
@@ -254,30 +275,26 @@ async def styled_edit(msg, text, buttons=None):
         return None
 
 async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_gif=None):
-    use_gif = True # إجبار تشغيل الـ GIF دائماً
     markup = InlineKeyboardMarkup(buttons) if buttons else None
-    url = specific_gif or random.choice(ANIME_GIFS)
-    media_to_send = _GIF_FILE_IDS.get(url, url)
+    media_obj, url = await get_gif_media(specific_gif)
     
     for _ in range(3):
         try: 
             msg = await bot.send_animation(
                 chat_id=chat_id, 
-                animation=media_to_send, 
+                animation=media_obj, 
                 caption=text, 
                 reply_markup=markup, 
                 parse_mode=ParseMode.HTML,
-                read_timeout=30,
-                write_timeout=30,
-                connect_timeout=30
+                read_timeout=30, write_timeout=30, connect_timeout=30
             )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+            if url and isinstance(media_obj, io.BytesIO) and getattr(msg, 'animation', None):
                 _GIF_FILE_IDS[url] = msg.animation.file_id
             return msg
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after + 1)
         except Exception:
-            media_to_send = random.choice(ANIME_GIFS)
+            media_obj, url = await get_gif_media()
             await asyncio.sleep(1)
 
     try: 
@@ -327,22 +344,40 @@ def parse_proxy_format(proxy):
 
 _CACHED_SITES = []
 _LAST_SITES_FETCH = 0
+
+# 🔥 فلتر ذكي لتدمير البوابات والروابط التالفة وتنظيف الملف
 async def get_github_sites():
     global _CACHED_SITES, _LAST_SITES_FETCH
     now = time.time()
     if _CACHED_SITES and (now - _LAST_SITES_FETCH < 600): return _CACHED_SITES
+    
+    domain_regex = re.compile(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         async with aiohttp.ClientSession() as s:
             async with s.get(GITHUB_SITES_URL, headers=headers, timeout=10) as r:
                 if r.status == 200:
-                    _CACHED_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
-                    _LAST_SITES_FETCH = now
+                    raw_text = await r.text()
+                    valid_sites = []
+                    for line in raw_text.split('\n'):
+                        clean = re.sub(r'^https?://', '', line.strip()).split('/')[0].strip()
+                        if domain_regex.match(clean): valid_sites.append(clean)
+                    if valid_sites:
+                        _CACHED_SITES = list(set(valid_sites))
+                        _LAST_SITES_FETCH = now
     except Exception: pass
+    
     if not _CACHED_SITES and os.path.exists('sites.txt'):
         try:
             async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
-                _CACHED_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
+                raw_text = await f.read()
+                valid_sites = []
+                for line in raw_text.split('\n'):
+                    clean = re.sub(r'^https?://', '', line.strip()).split('/')[0].strip()
+                    if domain_regex.match(clean): valid_sites.append(clean)
+                if valid_sites:
+                    _CACHED_SITES = list(set(valid_sites))
         except Exception: pass
     return _CACHED_SITES
 
@@ -419,7 +454,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"<b>{CE_FIRE} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
 
-# ====================== STRICT CHECKER API (SHOPIFY ONLY - STRIPE DISABLED) ======================
+# ====================== STRICT CHECKER API ======================
 async def get_bin_info(bin_code):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
@@ -474,8 +509,6 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
     lr = None; ap = list(proxies) if proxies else []
     for _ in range(max_retries):
         p = random.choice(ap) if ap else None
-        
-        # الفحص فقط على المواقع المتوفرة في sites.txt
         acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
         if not acs: _SITE_ERRORS_COUNT.clear(); acs = sites
         s = random.choice(acs)
@@ -580,7 +613,6 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
         
-        # تم إغلاق بوابة Stripe بالكامل وتغيير حالتها إلى Soon
         kb = [
             [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success"), 
              InlineKeyboardButton(sf("Stripe (Soon)"), callback_data="gate:soon_Stripe", style="primary")],
@@ -849,7 +881,7 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cp = await get_user_plan(uid)
     t = f"<b>{CE_STAR} {sf('VIP Subscription Plans')}</b>\n\n"
     for _, pi in PLANS.items():
-        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n│ ╰ <b>{CE_STAR} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
+        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_STAR} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
     t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
     kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
     await styled_edit(q.message, t, buttons=kb)
@@ -932,7 +964,7 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
         PENDING_FILES.pop(uid, None)
         return await styled_edit(msg_obj, f"<b>{CE_FIRE} {sf('Process Cancelled.')}</b>", buttons=None)
     cards = PENDING_FILES.pop(uid, None)
-    if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
+    if not cards: return await q.answer("⚠️ Session expired or invalid file.", show_alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": [], "total": len(cards), "gate": gn}
     await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(WORKERS))}</code>\n╰ <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
@@ -988,19 +1020,14 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             except Exception: break
             try:
                 c_st = time.time()
-                
-                # الفحص الان يتم حصرياً عبر الـ API وباستخدام مواقع الجيت هب
                 res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
-                
                 if is_stopped(): break 
-                
                 c_el = time.time() - c_st
                 status = res.get('status', 'Dead')
                 chk += 1
                 
                 raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
                 short_msg = (raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg
-                
                 last_resp = sf(short_msg)
                 
                 if status == 'Charged':

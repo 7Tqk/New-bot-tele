@@ -119,21 +119,46 @@ def escape_html(text):
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 # ====================== NATIVE TELEGRAM PREMIUM CUSTOM EMOJIS ======================
-CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
-CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
 CE_CROWN = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'
 CE_DIAMOND = '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>'
-CE_FLY = '<tg-emoji emoji-id="5231005931550030290">💸</tg-emoji>'
-CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
-CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
-CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
-CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
-CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
+CE_DIAMOND2 = '<tg-emoji emoji-id="5260681660189408650">💎</tg-emoji>'
 CE_MIC = '<tg-emoji emoji-id="5224736245665511429">🎤</tg-emoji>'
 CE_SMILE = '<tg-emoji emoji-id="5461117441612462242">🙂</tg-emoji>'
 CE_CHART = '<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji>'
 CE_GLASSES = '<tg-emoji emoji-id="5391112412445288650">🥸</tg-emoji>'
 CE_CLOWN = '<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji>'
+CE_FLY = '<tg-emoji emoji-id="5231449120635370684">💸</tg-emoji>'
+CE_SHIELD = '<tg-emoji emoji-id="5251203410396458957">🛡️</tg-emoji>'
+CE_SEARCH = '<tg-emoji emoji-id="5231012545799666522">🔍</tg-emoji>'
+CE_SPARKLES = '<tg-emoji emoji-id="5325547803936572038">✨</tg-emoji>'
+CE_GAME = '<tg-emoji emoji-id="5361741454685256344">🎮</tg-emoji>'
+CE_MEDAL = '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>'
+CE_CALENDAR = '<tg-emoji emoji-id="5413879192267805083">🗓️</tg-emoji>'
+CE_CLIP = '<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji>'
+CE_HOURGLASS = '<tg-emoji emoji-id="5386367538735104399">⌛</tg-emoji>'
+CE_STAR = '<tg-emoji emoji-id="5794073296492303710">⭐</tg-emoji>'
+CE_THINK1 = '<tg-emoji emoji-id="5917785839428967062">🤔</tg-emoji>'
+CE_THINK2 = '<tg-emoji emoji-id="5918248669399754192">🤔</tg-emoji>'
+CE_THINK3 = '<tg-emoji emoji-id="5916025950809625537">🤔</tg-emoji>'
+CE_ALIEN = '<tg-emoji emoji-id="6028356293540977715">👾</tg-emoji>'
+CE_PHONE = '<tg-emoji emoji-id="5445059250382469069">📲</tg-emoji>'
+CE_FLASH = '<tg-emoji emoji-id="5445388803223091254">⚡️</tg-emoji>'
+CE_TEARS = '<tg-emoji emoji-id="6201792892634140208">🥲</tg-emoji>'
+CE_SHY = '<tg-emoji emoji-id="6201647288947839133">🤭</tg-emoji>'
+CE_CHECK = '<tg-emoji emoji-id="5445189224682779974">✔️</tg-emoji>'
+CE_DOWN = '<tg-emoji emoji-id="5445358884480916784">🔽</tg-emoji>'
+CE_CARD = '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>'
+CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
+CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
+
+# Compatibility Aliases
+CE_CASH = CE_FLY
+CE_PARTY = CE_SPARKLES
+CE_CANDLE = CE_HOURGLASS
+CE_TOP = CE_MEDAL
+CE_GEAR = CE_SHIELD
+CE_SNOW = CE_DIAMOND2
+CE_BOOM = CE_FLASH
 
 # ====================== FLAGS ======================
 ALL_COUNTRY_CODES = ["AE","AF","AR","AT","AU","BE","BG","BR","CA","CH","CL","CN","CO","CR","CZ","DE","DK","DZ","EC","EE","EG","ES","FI","FR","GB","GR","HK","HR","HU","ID","IE","IL","IN","IT","JP","KR","KW","KZ","LB","LT","LU","LV","MA","MT","MX","MY","NG","NL","NO","NZ","OM","PA","PE","PH","PK","PL","PT","QA","RO","RS","RU","SA","SE","SG","SI","SK","TH","TR","TW","UA","US","UY","VN","ZA"]
@@ -151,7 +176,7 @@ ANIME_GIFS = [
     "https://i.giphy.com/1n4iuWZFnTeN6qvdpD.gif",
     "https://i.giphy.com/11KzOet1ElBDz2.gif",
     "https://i.giphy.com/4ilFRqgbzbx4c.gif",
-    "https://i.giphy.com/xT1R9yebNpKAAJjH0s.gif",
+    "https://i.giphy.com/xT1R9yebNpKAAJH0s.gif",
     "https://i.giphy.com/108BDeJ2BvtZRu.gif"
 ]
 
@@ -358,34 +383,34 @@ async def is_user_joined(uid, bot):
     return True
 
 async def send_welcome_menu(update_or_bot, uid, plan, limit):
-    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
+    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_HOURGLASS} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_HOURGLASS} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_HOURGLASS} /users - {sf('System Status')}\n ╰ {CE_HOURGLASS} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
     
     t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
 
-<b>{CE_TOP} {sf('Checker Engine')}:</b>
+<b>{CE_MEDAL} {sf('Checker Engine')}:</b>
  ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>
 
-<b>{CE_GEAR} {sf('Proxy Manager')}:</b>
- ├ {CE_CANDLE} /addpxy - {sf('Add Proxies')}
- ├ {CE_CANDLE} /proxy - {sf('View Proxies')}
- ╰ {CE_CANDLE} /rmpxy - {sf('Remove Proxies')}
+<b>{CE_SHIELD} {sf('Proxy Manager')}:</b>
+ ├ {CE_HOURGLASS} /addpxy - {sf('Add Proxies')}
+ ├ {CE_HOURGLASS} /proxy - {sf('View Proxies')}
+ ╰ {CE_HOURGLASS} /rmpxy - {sf('Remove Proxies')}
 
 <b>{CE_DIAMOND} {sf('Account Settings')}:</b>
- ├ {CE_CANDLE} /info - {sf('Profile Info')}
- ├ {CE_CANDLE} /redeem - {sf('Redeem Key')}
- ├ {CE_CANDLE} /fb - {sf('Send Feedback')}
- ╰ {CE_CANDLE} /plan - {sf('View Subscriptions')}{admin_panel}
+ ├ {CE_HOURGLASS} /info - {sf('Profile Info')}
+ ├ {CE_HOURGLASS} /redeem - {sf('Redeem Key')}
+ ├ {CE_HOURGLASS} /fb - {sf('Send Feedback')}
+ ╰ {CE_HOURGLASS} /plan - {sf('View Subscriptions')}{admin_panel}
 
 <b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
+    kb = [[InlineKeyboardButton(CE_STAR + sf("View Plans"), callback_data="show_plans", style="primary")]]
     
     if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(CE_CLIP + sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(CE_ALIEN + sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
     elif is_valid_url(JOIN_CHANNEL_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(CE_CLIP + sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
     elif is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(CE_ALIEN + sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
         
     if isinstance(update_or_bot, Update):
         await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
@@ -404,9 +429,9 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return True
         
     kb = []
-    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
-    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
-    if kb: kb.append([InlineKeyboardButton(sf("Verify"), callback_data="check_joined", style="success")])
+    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(CE_CLIP + sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
+    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton(CE_ALIEN + sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+    if kb: kb.append([InlineKeyboardButton(CE_CHECK + sf("Verify"), callback_data="check_joined", style="success")])
     
     await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
@@ -492,7 +517,7 @@ def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}
     ps = sf(f"{str(price)}") if price and price != "-" else sf("-")
     
-    h = f"<b>{CE_CROWN} {sf('PAYMENT SUCCEEDED')} {CE_PARTY}</b>"
+    h = f"<b>{CE_CROWN} {sf('PAYMENT SUCCEEDED')} {CE_SPARKLES}</b>"
     
     country_code = str(bi.get('country_code', '')).strip()
     flag = get_flag_emoji(country_code) if country_code else "🏳️"
@@ -502,12 +527,12 @@ def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
 
 <b>{CE_DIAMOND} {sf('Card')}:</b> <code>{card}</code>
 
-<b>{CE_BOOM} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
+<b>{CE_FLASH} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
 
-<b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>
-<b>{CE_CASH} {sf('Price')}:</b> <code>{ps}</code>
+<b>{CE_MEDAL} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>
+<b>{CE_FLY} {sf('Price')}:</b> <code>{ps}</code>
 
-<b>{CE_GEAR} {sf('Bank Info')}:</b>
+<b>{CE_SHIELD} {sf('Bank Info')}:</b>
  ├ <b>{sf('Bank')}:</b> <code>{sf(bi.get('bank', '-'))}</code>
  ├ <b>{sf('Country')}:</b> <code>{cd}</code>
  ├ <b>{sf('Brand')}:</b> <code>{sf(bi.get('brand', '-'))}</code>
@@ -524,12 +549,12 @@ async def _send_global_hit(gateway, price, uid, bot, elapsed):
         plan_name = plan.title() if plan else "Free"
         ps = f" {sf(f'{str(price)}')}" if price and str(price) != "-" else ""
         
-        h = f"<b>{CE_CROWN} {sf('PAYMENT SUCCEEDED')} {CE_PARTY}</b>"
+        h = f"<b>{CE_CROWN} {sf('PAYMENT SUCCEEDED')} {CE_SPARKLES}</b>"
         
         text = f"""{h}
 
-<b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>{ps}
-<b>{CE_BOOM} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
+<b>{CE_MEDAL} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>{ps}
+<b>{CE_FLASH} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
 <b>{CE_CHART} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>
 <b>{CE_SMILE} {sf('User')}:</b> <a href="tg://user?id={uid}">{safe_name}</a> (<code>{sf(plan_name)}</code>)"""
 
@@ -543,7 +568,7 @@ async def _send_mass_hit(card, gateway, price, uid, elapsed, bot):
     try:
         bi = await get_bin_info(card.split("|")[0])
         msg = format_card_result(card, gateway, price, bi, elapsed)
-        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")]]
+        kb = [[InlineKeyboardButton(CE_MAN + sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")]]
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
     except Exception: pass
 
@@ -552,13 +577,13 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
     global _MAINTENANCE_MODE
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
     uid = update.effective_user.id
-    pm = await styled_reply(update, f"<b>{CE_CANDLE} {sf('Processing file data...')}</b>", use_gif=True)
+    pm = await styled_reply(update, f"<b>{CE_HOURGLASS} {sf('Processing file data...')}</b>", use_gif=True)
     try:
         if uid in ACTIVE_MTXT_PROCESSES and not ACTIVE_MTXT_PROCESSES[uid].get("stopped", True): 
-            return await styled_edit(pm, f"<b>{CE_BOOM} {sf('A process is already active! Please wait for it to finish.')}</b>")
+            return await styled_edit(pm, f"<b>{CE_FLASH} {sf('A process is already active! Please wait for it to finish.')}</b>")
         doc = update.message.document
         if doc.file_size > 3 * 1024 * 1024: 
-            return await styled_edit(pm, f"<b>{CE_BOOM} {sf('File too large! (Max 3MB)')}</b>")
+            return await styled_edit(pm, f"<b>{CE_FLASH} {sf('File too large! (Max 3MB)')}</b>")
         if not await force_join_check(update, context): 
             try: await pm.delete()
             except Exception: pass
@@ -586,10 +611,10 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         PENDING_FILES[uid] = cards
         
         kb = [
-            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success")],
-            [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel", style="danger")]
+            [InlineKeyboardButton(CE_FLASH + sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success")],
+            [InlineKeyboardButton(CE_CLOWN + sf("Cancel"), callback_data="gate:cancel", style="danger")]
         ]
-        await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
+        await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_MEDAL} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
 
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -616,7 +641,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if cmd in ["start", "cmds", "commands"]:
         if _MAINTENANCE_MODE and uid not in ADMIN_ID: 
-            return await styled_reply(update, f"<b>{CE_GEAR} {sf('System Maintenance')}</b>\n\n├ {sf('The bot is currently undergoing upgrades.')}\n╰ {sf('Please try again later.')}", use_gif=True)
+            return await styled_reply(update, f"<b>{CE_SHIELD} {sf('System Maintenance')}</b>\n\n├ {sf('The bot is currently undergoing upgrades.')}\n╰ {sf('Please try again later.')}", use_gif=True)
         if not await force_join_check(update, context): return
         await ensure_user(uid)
         plan = await get_user_plan(uid)
@@ -633,7 +658,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ├ <b>{sf('ID')}:</b> <code>{sf(str(uid))}</code>
 ├ <b>{CE_SMILE} {sf('Status')}:</b> <code>{sf('Active') if is_paid_plan(plan) else sf('Free')}</code>
 ├ <b>{CE_DIAMOND} {sf('Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Bronze')}</code>
-╰ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(limit))} {sf('CCs')}</code>"""
+╰ <b>{CE_SHIELD} {sf('Limit')}:</b> <code>{sf(str(limit))} {sf('CCs')}</code>"""
         await styled_reply(update, t, use_gif=True)
 
     elif cmd == "plan":
@@ -641,9 +666,9 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cp = await get_user_plan(uid)
         t = f"<b>{CE_CROWN} {sf('VIP Subscription Plans')}</b>\n\n"
         for _, pi in PLANS.items():
-            t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
+            t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_HOURGLASS} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_SHIELD} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_FLY} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
         t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
-        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
+        kb = [[InlineKeyboardButton(CE_MAN + sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(CE_DOWN + sf("Back"), callback_data="back_start", style="danger")]]
         await styled_reply(update, t, buttons=kb, use_gif=True)
 
     elif cmd == "fb":
@@ -683,14 +708,14 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not lines: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies found in your message.')}</b>", use_gif=True)
         db_p = await get_all_user_proxies(uid)
         eu = {p['proxy_url'] for p in db_p} if db_p else set()
-        if len(eu) >= 100: return await styled_reply(update, f"<b>{CE_BOOM} {sf('Limit 100/100 reached.')}</b>", use_gif=True)
+        if len(eu) >= 100: return await styled_reply(update, f"<b>{CE_FLASH} {sf('Limit 100/100 reached.')}</b>", use_gif=True)
         parsed = []
         for l in lines:
             px = parse_proxy_format(l)
             if px and px['proxy_url'] not in eu: parsed.append(px); eu.add(px['proxy_url'])
         if not parsed: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('All proxies are already added or invalid.')}</b>", use_gif=True)
         parsed = parsed[:100-len(eu)]
-        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Adding proxies...')}</b>", use_gif=True)
+        tm = await styled_reply(update, f"<b>{CE_SHIELD} {sf('Adding proxies...')}</b>", use_gif=True)
         c = 0
         for p2 in parsed: await add_proxy_db(uid, p2); c += 1
         await styled_edit(tm, f"<b>{CE_SMILE} {sf('Successfully Added')}:</b> <code>{sf(str(c))} {sf('Proxies')}</code>")
@@ -699,7 +724,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await force_join_check(update, context): return
         proxies = await get_all_user_proxies(uid)
         if not proxies: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('You do not have any proxies saved.')}</b>", use_gif=True)
-        t = f"<b>{CE_GEAR} {sf('Your Proxies')} ({sf(str(len(proxies)))}/{sf('100')})</b>\n\n"
+        t = f"<b>{CE_SHIELD} {sf('Your Proxies')} ({sf(str(len(proxies)))}/{sf('100')})</b>\n\n"
         for i, p in enumerate(proxies[:30], 1): t += f"<code>{sf(str(i))}.</code> <code>{sf(p['ip'])}:{sf(str(p['port']))}</code>\n"
         if len(proxies) > 30: t += f"\n<i>+{sf(str(len(proxies)-30))} {sf('more...')}</i>"
         await styled_reply(update, t, use_gif=True)
@@ -735,7 +760,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             kdb[c] = {"tier": pi["tier"], "days": pi["duration_days"], "used": False, "used_by": None, "generated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             gc.append(c)
         await save_keys(kdb)
-        t = f"<b>{CE_PARTY} {sf('Successfully Generated')} <code>{sf(str(amt))}</code> {sf('Key(s)!')}</b>\n\n├ <b>{sf('Plan')}:</b> <code>{sf(pi['name'])}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n╰ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n\n"
+        t = f"<b>{CE_SPARKLES} {sf('Successfully Generated')} <code>{sf(str(amt))}</code> {sf('Key(s)!')}</b>\n\n├ <b>{sf('Plan')}:</b> <code>{sf(pi['name'])}</code>\n├ <b>{CE_HOURGLASS} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n╰ <b>{CE_SHIELD} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n\n"
         for c in gc: t += f"<code>{sf(c)}</code>\n"
         await styled_reply(update, t, use_gif=True)
 
@@ -747,7 +772,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kdb = await load_keys()
         if c not in kdb: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid Key. Please check and try again.')}</b>", use_gif=True)
         ki = kdb[c]
-        if ki["used"]: return await styled_reply(update, f"<b>{CE_BOOM} {sf('This Key has already been redeemed.')}</b>", use_gif=True)
+        if ki["used"]: return await styled_reply(update, f"<b>{CE_FLASH} {sf('This Key has already been redeemed.')}</b>", use_gif=True)
         t, d = ki["tier"], ki["days"]
         await set_user_plan(uid, t, d)
         kdb[c]["used"], kdb[c]["used_by"], rt = True, uid, datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -759,17 +784,17 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_name = _USER_NAMES.get(uid, f"User {uid}")
         safe_name = escape_html(sf(user_name))
         
-        msg = f"""<b>{CE_PARTY} {sf('Subscription Activated Successfully!')}</b>
+        msg = f"""<b>{CE_SPARKLES} {sf('Subscription Activated Successfully!')}</b>
 
 ├ <b>{CE_SMILE} {sf('User')}:</b> <a href="tg://user?id={uid}">{safe_name}</a>
 ├ <b>{CE_DIAMOND} {sf('Plan')}:</b> <code>{sf(t)}</code>
-├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>
-├ <b>{CE_GEAR} {sf('Mass Limit')}:</b> <code>{sf(str(limit))} CCs</code>
+├ <b>{CE_HOURGLASS} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>
+├ <b>{CE_SHIELD} {sf('Mass Limit')}:</b> <code>{sf(str(limit))} CCs</code>
 ╰ <b>{CE_CHART} {sf('Expires On')}:</b> <code>{sf(ed)}</code>"""
         await styled_reply(update, msg, use_gif=True, specific_gif=REDEEM_GIF)
         
         try:
-            an = f"<b>{CE_PARTY} {sf('New Key Redeemed!')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={uid}'>{safe_name}</a> (<code>{sf(str(uid))}</code>)\n├ <b>{CE_DIAMOND} {sf('Plan')}:</b> <code>{sf(t)}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(rt)}</code>"
+            an = f"<b>{CE_SPARKLES} {sf('New Key Redeemed!')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={uid}'>{safe_name}</a> (<code>{sf(str(uid))}</code>)\n├ <b>{CE_DIAMOND} {sf('Plan')}:</b> <code>{sf(t)}</code>\n├ <b>{CE_HOURGLASS} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(rt)}</code>"
             if ADMIN_ID:
                 for admin in ADMIN_ID:
                     await styled_send(context.bot, admin, an, use_gif=True, specific_gif=REDEEM_GIF)
@@ -785,7 +810,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ki = kdb[c]
         u, ub = ki.get("used", False), ki.get("used_by", "None")
         se, st = ('🔴', "Used") if u else ('🟢', "Active")
-        m = f"<b>{CE_DIAMOND} {sf('Key Information')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_SMILE} {sf('Status')}:</b> <code>{sf(st)}</code>\n├ <b>{sf('Plan Tier')}:</b> <code>{sf(ki.get('tier', 'Unknown'))}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(ki.get('days', 0)))} {sf('Days')}</code>\n╰ <b>{CE_CHART} {sf('Generated')}:</b> <code>{sf(ki.get('generated_at', 'Unknown'))}</code>"
+        m = f"<b>{CE_DIAMOND} {sf('Key Information')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_SMILE} {sf('Status')}:</b> <code>{sf(st)}</code>\n├ <b>{sf('Plan Tier')}:</b> <code>{sf(ki.get('tier', 'Unknown'))}</code>\n├ <b>{CE_HOURGLASS} {sf('Duration')}:</b> <code>{sf(str(ki.get('days', 0)))} {sf('Days')}</code>\n╰ <b>{CE_CHART} {sf('Generated')}:</b> <code>{sf(ki.get('generated_at', 'Unknown'))}</code>"
         if u: 
             prof_name = escape_html(sf(_USER_NAMES.get(ub, f"User {ub}")))
             m += f"\n\n├ <b>{CE_SMILE} {sf('Redeemed By')}:</b> <code>{sf(str(ub))}</code> <a href='tg://user?id={ub}'>[{prof_name}]</a>\n╰ <b>{CE_CHART} {sf('Redeem Time')}:</b> <code>{sf(ki.get('redeemed_at', 'Not yet'))}</code>"
@@ -797,7 +822,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if a: _MAINTENANCE_MODE = (a == 'on')
         else: _MAINTENANCE_MODE = not _MAINTENANCE_MODE
         t = "ON" if _MAINTENANCE_MODE else "OFF"
-        await styled_reply(update, f"<b>{CE_GEAR} {sf('Maintenance Mode')}:</b> {sf(t)}", use_gif=True)
+        await styled_reply(update, f"<b>{CE_SHIELD} {sf('Maintenance Mode')}:</b> {sf(t)}", use_gif=True)
 
     elif cmd in ["users", "user"]:
         if uid not in ADMIN_ID: return
@@ -815,7 +840,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             un = escape_html(sf(_USER_NAMES.get(u, f"User {u}")))
             recent_users_info.append(f"  │  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>")
             
-        text = f"<b>{CE_GEAR} {sf('Global System Status')}</b>\n\n├ <b>{sf('Total Session Users')}:</b> <code>{sf(str(len(USER_LAST_REQ)))}</code>\n"
+        text = f"<b>{CE_SHIELD} {sf('Global System Status')}</b>\n\n├ <b>{sf('Total Session Users')}:</b> <code>{sf(str(len(USER_LAST_REQ)))}</code>\n"
         if recent_users_info: text += f"  │  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>\n"
         else: text += f"  ╰ {sf('Recent Users')}: <code>{sf('None')}</code>\n\n"
             
@@ -836,9 +861,9 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             proc["stopped"] = True
             for t in proc.get("tasks", []):
                 if not t.done(): t.cancel()
-        admin_msg = f"<b>{CE_BOOM} {sf('Access Revoked')}</b>\n├ <b>{CE_SMILE} {sf('User')}:</b> <code>{sf(str(tu))}</code>\n╰ <b>{sf('Status')}:</b> <code>{sf('Demoted to Free')}</code>"
+        admin_msg = f"<b>{CE_FLASH} {sf('Access Revoked')}</b>\n├ <b>{CE_SMILE} {sf('User')}:</b> <code>{sf(str(tu))}</code>\n╰ <b>{sf('Status')}:</b> <code>{sf('Demoted to Free')}</code>"
         await styled_reply(update, admin_msg, use_gif=True)
-        try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
+        try: await styled_send(context.bot, tu, f"<b>{CE_FLASH} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
 # ====================== CALLBACK FUNCTIONS ======================
@@ -850,9 +875,9 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cp = await get_user_plan(uid)
     t = f"<b>{CE_CROWN} {sf('VIP Subscription Plans')}</b>\n\n"
     for _, pi in PLANS.items():
-        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
+        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_HOURGLASS} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_SHIELD} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_FLY} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
     t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
-    kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
+    kb = [[InlineKeyboardButton(CE_MAN + sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(CE_DOWN + sf("Back"), callback_data="back_start", style="danger")]]
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
 
@@ -864,34 +889,34 @@ async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plan = await get_user_plan(uid)
     limit = get_cc_limit(plan, uid)
     
-    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
+    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_HOURGLASS} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_HOURGLASS} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_HOURGLASS} /users - {sf('System Status')}\n ╰ {CE_HOURGLASS} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
     
     t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
 
-<b>{CE_TOP} {sf('Checker Engine')}:</b>
+<b>{CE_MEDAL} {sf('Checker Engine')}:</b>
  ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>
 
-<b>{CE_GEAR} {sf('Proxy Manager')}:</b>
- ├ {CE_CANDLE} /addpxy - {sf('Add Proxies')}
- ├ {CE_CANDLE} /proxy - {sf('View Proxies')}
- ╰ {CE_CANDLE} /rmpxy - {sf('Remove Proxies')}
+<b>{CE_SHIELD} {sf('Proxy Manager')}:</b>
+ ├ {CE_HOURGLASS} /addpxy - {sf('Add Proxies')}
+ ├ {CE_HOURGLASS} /proxy - {sf('View Proxies')}
+ ╰ {CE_HOURGLASS} /rmpxy - {sf('Remove Proxies')}
 
 <b>{CE_DIAMOND} {sf('Account Settings')}:</b>
- ├ {CE_CANDLE} /info - {sf('Profile Info')}
- ├ {CE_CANDLE} /redeem - {sf('Redeem Key')}
- ├ {CE_CANDLE} /fb - {sf('Send Feedback')}
- ╰ {CE_CANDLE} /plan - {sf('View Subscriptions')}{admin_panel}
+ ├ {CE_HOURGLASS} /info - {sf('Profile Info')}
+ ├ {CE_HOURGLASS} /redeem - {sf('Redeem Key')}
+ ├ {CE_HOURGLASS} /fb - {sf('Send Feedback')}
+ ╰ {CE_HOURGLASS} /plan - {sf('View Subscriptions')}{admin_panel}
 
 <b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
+    kb = [[InlineKeyboardButton(CE_STAR + sf("View Plans"), callback_data="show_plans", style="primary")]]
     
     if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(CE_CLIP + sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(CE_ALIEN + sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
     elif is_valid_url(JOIN_CHANNEL_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(CE_CLIP + sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
     elif is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(CE_ALIEN + sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
         
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
@@ -934,7 +959,7 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     cards = PENDING_FILES.pop(uid, None)
     if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": [], "total": len(cards), "gate": gn}
-    await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(WORKERS))}</code>\n╰ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
+    await styled_edit(msg_obj, f"<b>{CE_SHIELD} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_SHIELD} {sf('Threads')}:</b> <code>{sf(str(WORKERS))}</code>\n╰ <b>{CE_MEDAL} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
 
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
@@ -961,17 +986,17 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
             h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
-            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
+            dt = f"<b>━━━ {CE_SHIELD} {sf('CHECKING IN PROGRESS')} {CE_SHIELD} ━━━</b>\n\n├ <b>{CE_MEDAL} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_SHIELD} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_FLASH} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
             
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
             kb = [
-                [InlineKeyboardButton(sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none", style="success" if percent == 100 else "primary")],
-                [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
-                [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
-                [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
-                [InlineKeyboardButton(sf(f"🚀 Speed: {cpm} CPM"), callback_data="none", style="primary")],
-                [InlineKeyboardButton(sf("🛑 Stop Process"), callback_data=f"{stop_prefix}:{uid}", style="danger")]
+                [InlineKeyboardButton(CE_MAIL + sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none", style="success" if percent == 100 else "primary")],
+                [InlineKeyboardButton(CE_FLASH + sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(CE_CHECK + sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
+                [InlineKeyboardButton(CE_TEARS + sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(CE_CLOWN + sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
+                [InlineKeyboardButton(CE_CHART + sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
+                [InlineKeyboardButton(CE_GAME + sf(f"🚀 Speed: {cpm} CPM"), callback_data="none", style="primary")],
+                [InlineKeyboardButton(CE_HOURGLASS + sf("🛑 Stop Process"), callback_data=f"{stop_prefix}:{uid}", style="danger")]
             ]
             try: await styled_edit(msg_obj, dt, buttons=kb)
             except asyncio.CancelledError: break
@@ -1028,14 +1053,14 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     h, m, s = el // 3600, (el % 3600) // 60, el % 60
     avg_cpm = int((chk / el) * 60) if el > 0 else 0
     
-    ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
+    ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_SPARKLES}</b>\n\n├ <b>{CE_MEDAL} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_SHIELD} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_FLASH} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     
     fkb = [
-        [InlineKeyboardButton(sf(f"📄 {chk}/{tot} (100%)"), callback_data="none", style="success")],
-        [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
-        [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
-        [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
-        [InlineKeyboardButton(sf(f"🚀 Average Speed: {avg_cpm} CPM"), callback_data="none", style="primary")]
+        [InlineKeyboardButton(CE_MAIL + sf(f"📄 {chk}/{tot} (100%)"), callback_data="none", style="success")],
+        [InlineKeyboardButton(CE_FLASH + sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(CE_CHECK + sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
+        [InlineKeyboardButton(CE_TEARS + sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(CE_CLOWN + sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
+        [InlineKeyboardButton(CE_CHART + sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
+        [InlineKeyboardButton(CE_GAME + sf(f"🚀 Average Speed: {avg_cpm} CPM"), callback_data="none", style="primary")]
     ]
     try: await styled_edit(msg_obj, ft, buttons=fkb)
     except Exception: pass

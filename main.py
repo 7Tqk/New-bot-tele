@@ -1,6 +1,6 @@
 # ==============================================================================
-# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 
-# (RUSSIAN DEEP-LINK EMOJI METHOD, FORCED GIF ENGINE, COLORED BUTTONS)
+# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄 SYSTEM 
+# (PREMIUM NATIVE CUSTOM EMOJI ENGINE, FORCED GIF ENGINE, COLORED BUTTONS)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -66,7 +66,7 @@ GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.
 KEYS_FILE = "redeem_keys.json"
 
 WORKERS = 70  
-DELAY = 2.0  
+DELAY = 0.5  
 HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}
@@ -118,22 +118,22 @@ def escape_html(text):
     if not text: return "Unknown"
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-# ====================== RUSSIAN METHOD PREMIUM EMOJIS ======================
-CE_CASH = '<a href="tg://emoji?id=5409048419211682843">💵</a>'
-CE_PARTY = '<a href="tg://emoji?id=5461151367559141950">🎉</a>'
-CE_CROWN = '<a href="tg://emoji?id=5217822164362739968">👑</a>'
-CE_DIAMOND = '<a href="tg://emoji?id=5427168083074628963">💎</a>'
-CE_FLY = '<a href="tg://emoji?id=5231005931550030290">💸</a>'
-CE_CANDLE = '<a href="tg://emoji?id=5451882707875276247">🕯</a>'
-CE_TOP = '<a href="tg://emoji?id=5415655814079723871">🔝</a>'
-CE_GEAR = '<a href="tg://emoji?id=5341715473882955310">⚙️</a>'
-CE_SNOW = '<a href="tg://emoji?id=5449449325434266744">❄️</a>'
-CE_BOOM = '<a href="tg://emoji?id=5276032951342088188">💥</a>'
-CE_MIC = '<a href="tg://emoji?id=5224736245665511429">🎤</a>'
-CE_SMILE = '<a href="tg://emoji?id=5461117441612462242">🙂</a>'
-CE_CHART = '<a href="tg://emoji?id=5246762912428603768">📉</a>'
-CE_GLASSES = '<a href="tg://emoji?id=5391112412445288650">🥸</a>'
-CE_CLOWN = '<a href="tg://emoji?id=5269531045165816230">🤡</a>'
+# ====================== NATIVE TELEGRAM PREMIUM CUSTOM EMOJIS ======================
+CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
+CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
+CE_CROWN = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'
+CE_DIAMOND = '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>'
+CE_FLY = '<tg-emoji emoji-id="5231005931550030290">💸</tg-emoji>'
+CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
+CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
+CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
+CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
+CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
+CE_MIC = '<tg-emoji emoji-id="5224736245665511429">🎤</tg-emoji>'
+CE_SMILE = '<tg-emoji emoji-id="5461117441612462242">🙂</tg-emoji>'
+CE_CHART = '<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji>'
+CE_GLASSES = '<tg-emoji emoji-id="5391112412445288650">🥸</tg-emoji>'
+CE_CLOWN = '<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji>'
 
 # ====================== FLAGS ======================
 ALL_COUNTRY_CODES = ["AE","AF","AR","AT","AU","BE","BG","BR","CA","CH","CL","CN","CO","CR","CZ","DE","DK","DZ","EC","EE","EG","ES","FI","FR","GB","GR","HK","HR","HU","ID","IE","IL","IN","IT","JP","KR","KW","KZ","LB","LT","LU","LV","MA","MT","MX","MY","NG","NL","NO","NZ","OM","PA","PE","PH","PK","PL","PT","QA","RO","RS","RU","SA","SE","SG","SI","SK","TH","TR","TW","UA","US","UY","VN","ZA"]
@@ -338,8 +338,9 @@ def is_dead_site_error(err):
     if not err: return True
     e = str(err).lower()
     bad_keywords = [
-        'step 0', 'step 0 failed', 'max ret', 'cloudflare', 'timed out', 
-        'bad gateway', 'service unavailable', 'gateway timeout', 'site dead', 'session_error'
+        'step 0', 'step 0 failed', 'step 1', 'step 1 failed', 'missing stable', 'missing stablei',
+        'max ret', 'cloudflare', 'timed out', 'bad gateway', 'service unavailable', 
+        'gateway timeout', 'site dead', 'session_error'
     ]
     return any(k in e for k in bad_keywords)
 
@@ -849,7 +850,7 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cp = await get_user_plan(uid)
     t = f"<b>{CE_CROWN} {sf('VIP Subscription Plans')}</b>\n\n"
     for _, pi in PLANS.items():
-        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
+        t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
     t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
     kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
     await styled_edit(q.message, t, buttons=kb)

@@ -27,23 +27,31 @@ from database2 import (
     clear_all_proxies, mark_user_joined
 )
 
-# محرك متطور لدعم التحديث الجديد لتليقرام (الأزرار الملونة والإيموجي المتحرك ناتيف)
-_original_inline_init = telegram.InlineKeyboardButton.__init__
-def _patched_inline_init(self, *args, **kwargs):
-    self.style = kwargs.pop('style', None)
-    self.icon_custom_emoji_id = kwargs.pop('icon_custom_emoji_id', None)
-    _original_inline_init(self, *args, **kwargs)
-telegram.InlineKeyboardButton.__init__ = _patched_inline_init
+# 🔥 محرك التسجيل والحقن الذكي لضمان تشغيل الأزرار الملونة والتاغات ناتيف بدون كراش الـ _frozen
+BUTTON_REGISTRY = {}
+_original_inline_keyboard_button = telegram.InlineKeyboardButton
 
-_original_inline_to_dict = telegram.InlineKeyboardButton.to_dict
-def _patched_inline_to_dict(self, *args, **kwargs):
-    d = _original_inline_to_dict(self, *args, **kwargs)
-    if getattr(self, 'style', None):
-        d['style'] = self.style
-    if getattr(self, 'icon_custom_emoji_id', None):
-        d['icon_custom_emoji_id'] = self.icon_custom_emoji_id
+def CustomInlineKeyboardButton(*args, **kwargs):
+    style = kwargs.pop('style', None)
+    icon_custom_emoji_id = kwargs.pop('icon_custom_emoji_id', None)
+    btn = _original_inline_keyboard_button(*args, **kwargs)
+    if style or icon_custom_emoji_id:
+        BUTTON_REGISTRY[id(btn)] = {'style': style, 'icon_custom_emoji_id': icon_custom_emoji_id}
+    else:
+        BUTTON_REGISTRY.pop(id(btn), None)
+    return btn
+
+telegram.InlineKeyboardButton = CustomInlineKeyboardButton
+
+_original_to_dict = _original_inline_keyboard_button.to_dict
+def _patched_to_dict(self, *args, **kwargs):
+    d = _original_to_dict(self, *args, **kwargs)
+    extra = BUTTON_REGISTRY.get(id(self))
+    if extra:
+        if extra.get('style'): d['style'] = extra['style']
+        if extra.get('icon_custom_emoji_id'): d['icon_custom_emoji_id'] = extra['icon_custom_emoji_id']
     return d
-telegram.InlineKeyboardButton.to_dict = _patched_inline_to_dict
+_original_inline_keyboard_button.to_dict = _patched_to_dict
 
 # Logging configuration
 logging.basicConfig(stream=sys.stdout, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -1107,12 +1115,12 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
             kb = [
-                [InlineKeyboardButton(f'<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji> {chk}/{tot} ({percent}%)', callback_data="none", style="success" if percent == 100 else "primary", icon_custom_emoji_id="5445163772706582819")],
-                [InlineKeyboardButton(f'<tg-emoji emoji-id="5231449120635370684">💸</tg-emoji> Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'<tg-emoji emoji-id="5445189224682779974">✔️</tg-emoji> Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
-                [InlineKeyboardButton(f'<tg-emoji emoji-id="6201792892634140208">🥲</tg-emoji> Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji> Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
-                [InlineKeyboardButton(f'<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji> Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
-                [InlineKeyboardButton(f'<tg-emoji emoji-id="5361741454685256344">🎮</tg-emoji> Speed: {cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")],
-                [InlineKeyboardButton('<tg-emoji emoji-id="5386367538735104399">⌛</tg-emoji> Stop Process', callback_data=f"{stop_prefix}:{uid}", style="danger", icon_custom_emoji_id="5386367538735104399")]
+                [InlineKeyboardButton(sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none", style="success" if percent == 100 else "primary")],
+                [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
+                [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
+                [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
+                [InlineKeyboardButton(sf(f"🚀 Speed: {cpm} CPM"), callback_data="none", style="primary")],
+                [InlineKeyboardButton(sf("⌛ Stop Process"), callback_data=f"{stop_prefix}:{uid}", style="danger")]
             ]
             try: await styled_edit(msg_obj, dt, buttons=kb)
             except asyncio.CancelledError: break
@@ -1173,10 +1181,10 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     
     fkb = [
         [InlineKeyboardButton(sf(f"📬 {chk}/{tot} (100%)"), callback_data="none", style="success")],
-        [InlineKeyboardButton(f'<tg-emoji emoji-id="5231449120635370684">💸</tg-emoji> Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'<tg-emoji emoji-id="5445189224682779974">✔️</tg-emoji> Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
-        [InlineKeyboardButton(f'<tg-emoji emoji-id="6201792892634140208">🥲</tg-emoji> Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji> Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
-        [InlineKeyboardButton(f'<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji> Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
-        [InlineKeyboardButton(f'<tg-emoji emoji-id="5361741454685256344">🎮</tg-emoji> Average Speed: {avg_cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")]
+        [InlineKeyboardButton(sf(f"💸 Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✔️ Approved: {app}"), callback_data="none", style="success")],
+        [InlineKeyboardButton(sf(f"🥲 Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"🤡 Declined: {dec}"), callback_data="none", style="danger")],
+        [InlineKeyboardButton(sf(f"📉 Errors: {err}"), callback_data="none", style="danger")],
+        [InlineKeyboardButton(sf(f"🎮 Average Speed: {avg_cpm} CPM"), callback_data="none", style="primary")]
     ]
     try: await styled_edit(msg_obj, ft, buttons=fkb)
     except Exception: pass

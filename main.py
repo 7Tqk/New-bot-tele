@@ -15,7 +15,7 @@ import logging
 from html import unescape
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions
 from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters, ContextTypes, Defaults
 from telegram.error import RetryAfter, Conflict, TimedOut, NetworkError, Forbidden, BadRequest
 from telegram.constants import ParseMode
@@ -225,7 +225,7 @@ async def send_forced_gif(target_func, text, markup, url):
 
     try:
         if hasattr(target_func, '__self__') and hasattr(target_func.__self__, 'reply_text'):
-            return await target_func.__self__.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+            return await target_func.__self__.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
     except: pass
     return None
 
@@ -237,7 +237,7 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, sp
     if use_gif or specific_gif: return await send_forced_gif(target.reply_animation, text, markup, url)
     
     for retry in range(3):
-        try: return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        try: return await target.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
         except RetryAfter as e: await asyncio.sleep(e.retry_after + 0.5)
         except Exception: return None
 
@@ -247,7 +247,7 @@ async def styled_edit(msg, text, buttons=None):
         try:
             if msg.animation or msg.photo or msg.video or msg.document: 
                 return await msg.edit_caption(caption=text, reply_markup=markup, parse_mode=ParseMode.HTML)
-            return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+            return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after + 0.5)
         except Exception: 
@@ -260,13 +260,13 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
     if use_gif or specific_gif: return await send_forced_gif(_bot_send_anim, text, markup, url)
     
     for retry in range(3):
-        try: return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        try: return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
         except RetryAfter as e: await asyncio.sleep(e.retry_after + 0.5)
         except Exception: return None
 
 # ====================== DATABASE & LIMITS ======================
 async def load_keys():
-    async with get_system_lock("keys"):
+    with getattr(get_system_lock("keys"), '_lock', asyncio.Lock()): # Safe lock handling
         if os.path.exists(KEYS_FILE):
             try:
                 async with aiofiles.open(KEYS_FILE, 'r', encoding='utf-8') as f:
@@ -276,7 +276,7 @@ async def load_keys():
         return {}
 
 async def save_keys(keys_data):
-    async with get_system_lock("keys"):
+    with getattr(get_system_lock("keys"), '_lock', asyncio.Lock()):
         try:
             async with aiofiles.open(KEYS_FILE, 'w', encoding='utf-8') as f:
                 await f.write(json.dumps(keys_data, indent=4))
@@ -401,14 +401,14 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
 
 <b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
+    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans")]]
     
     if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK)])
     elif is_valid_url(JOIN_CHANNEL_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK)])
     elif is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK)])
         
     if isinstance(update_or_bot, Update):
         await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
@@ -427,9 +427,9 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return True
         
     kb = []
-    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
-    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
-    if kb: kb.append([InlineKeyboardButton(sf("Verify"), callback_data="check_joined", style="success")])
+    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK)])
+    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK)])
+    if kb: kb.append([InlineKeyboardButton(sf("Verify"), callback_data="check_joined")])
     
     await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
@@ -592,7 +592,7 @@ async def _send_global_hit(gateway, price, uid, bot, elapsed, response_msg="Card
         
         for _ in range(3):
             try:
-                await bot.send_message(chat_id=cid, text=text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+                await bot.send_message(chat_id=cid, text=text, parse_mode=ParseMode.HTML)
                 break
             except RetryAfter as e: await asyncio.sleep(e.retry_after + 0.5)
             except Exception: break
@@ -603,7 +603,7 @@ async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session):
     try:
         bi = await get_bin_info(card.split("|")[0], session)
         msg = format_card_result(card, gateway, price, bi, elapsed)
-        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")]]
+        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt")]]
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
     except Exception: pass
 
@@ -646,8 +646,8 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         PENDING_FILES[uid] = cards
         
         kb = [
-            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success")],
-            [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel", style="danger")]
+            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify")],
+            [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel")]
         ]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
@@ -703,7 +703,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for _, pi in PLANS.items():
             t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
         t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
-        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
+        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt")], [InlineKeyboardButton(sf("Back"), callback_data="back_start")]]
         await styled_reply(update, t, buttons=kb, use_gif=True)
 
     elif cmd == "fb":
@@ -945,7 +945,7 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for _, pi in PLANS.items():
         t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
     t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
-    kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
+    kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt")], [InlineKeyboardButton(sf("Back"), callback_data="back_start")]]
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
 
@@ -978,14 +978,14 @@ async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
+    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans")]]
     
     if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK)])
     elif is_valid_url(JOIN_CHANNEL_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK)])
     elif is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK)])
         
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
@@ -1063,12 +1063,12 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
             kb = [
-                [InlineKeyboardButton(sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none", style="success" if percent == 100 else "primary")],
-                [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
-                [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
-                [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
-                [InlineKeyboardButton(sf(f"🚀 Speed: {cpm} CPM"), callback_data="none", style="primary")],
-                [InlineKeyboardButton(sf("🛑 Stop Process"), callback_data=f"{stop_prefix}:{uid}", style="danger")]
+                [InlineKeyboardButton(sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none")],
+                [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none")],
+                [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none")],
+                [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none")],
+                [InlineKeyboardButton(sf(f"🚀 Speed: {cpm} CPM"), callback_data="none")],
+                [InlineKeyboardButton(sf("🛑 Stop Process"), callback_data=f"{stop_prefix}:{uid}")]
             ]
             try: await styled_edit(msg_obj, dt, buttons=kb)
             except asyncio.CancelledError: break
@@ -1128,11 +1128,11 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     
     fkb = [
-        [InlineKeyboardButton(sf(f"📄 {chk}/{tot} (100%)"), callback_data="none", style="success")],
-        [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
-        [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
-        [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
-        [InlineKeyboardButton(sf(f"🚀 Average Speed: {avg_cpm} CPM"), callback_data="none", style="primary")]
+        [InlineKeyboardButton(sf(f"📄 {chk}/{tot} (100%)"), callback_data="none")],
+        [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none")],
+        [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none")],
+        [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none")],
+        [InlineKeyboardButton(sf(f"🚀 Average Speed: {avg_cpm} CPM"), callback_data="none")]
     ]
     try: await styled_edit(msg_obj, ft, buttons=fkb)
     except Exception: pass
@@ -1166,8 +1166,8 @@ async def post_init(app: Application):
     asyncio.create_task(check_sites_loop())
 
 def main():
-    # فرض وضع الـ HTML كخيار افتراضي إجباري لكافة رسائل وتعديلات البوت لضمان عمل الإيموجيات المخصصة
-    bot_defaults = Defaults(parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    # هنا تم حل المشكلة عبر استخدام link_preview_options المتوافقة مع تليجرام v21+
+    bot_defaults = Defaults(parse_mode=ParseMode.HTML, link_preview_options=LinkPreviewOptions(is_disabled=True))
     
     app = Application.builder().token(BOT_TOKEN).defaults(bot_defaults).read_timeout(60).write_timeout(60).connect_timeout(60).post_init(post_init).build()
     app.add_error_handler(global_error_handler)

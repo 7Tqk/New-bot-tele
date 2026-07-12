@@ -158,14 +158,14 @@ CE_CARD = '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>'
 CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
 CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
 
-# Compatibility Mappings
-CE_CASH = CE_FLY
-CE_PARTY = CE_SPARKLES
-CE_CANDLE = CE_HOURGLASS
-CE_TOP = CE_MEDAL
-CE_GEAR = CE_SHIELD
-CE_SNOW = CE_DIAMOND2
-CE_BOOM = CE_FLASH
+# تحديث وتعيين المعرفات المستخرجة والمؤكدة بنجاح عبر الـ Dump
+CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
+CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
+CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
+CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
+CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
+CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
+CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
 
 # ====================== FLAGS ======================
 ALL_COUNTRY_CODES = ["AE","AF","AR","AT","AU","BE","BG","BR","CA","CH","CL","CN","CO","CR","CZ","DE","DK","DZ","EC","EE","EG","ES","FI","FR","GB","GR","HK","HR","HU","ID","IE","IL","IN","IT","JP","KR","KW","KZ","LB","LT","LU","LV","MA","MT","MX","MY","NG","NL","NO","NZ","OM","PA","PE","PH","PK","PL","PT","QA","RO","RS","RU","SA","SE","SG","SI","SK","TH","TR","TW","UA","US","UY","VN","ZA"]
@@ -1214,7 +1214,8 @@ def main():
     
     while True:
         try:
-            app.run_polling(drop_pending_updates=True)
+            # 🎯 لمسة التأمين النهائية: تم تفعيل مهلات الـ 60 ثانية لحلقة الـ polling أيضاً لحمايتها تماماً على الهاتف والـ VPN
+            app.run_polling(drop_pending_updates=True, read_timeout=60, write_timeout=60, connect_timeout=60)
             break
         except Conflict:
             logger.warning("Conflict detected. Retrying...")

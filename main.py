@@ -27,6 +27,13 @@ from database2 import (
     clear_all_proxies, mark_user_joined
 )
 
+# محرك الحماية والتوافق للأزرار الملونة لضمان عدم كراش البوت عند استقبال الملفات
+_original_inline_init = telegram.InlineKeyboardButton.__init__
+def _patched_inline_init(self, *args, **kwargs):
+    kwargs.pop('style', None)
+    _original_inline_init(self, *args, **kwargs)
+telegram.InlineKeyboardButton.__init__ = _patched_inline_init
+
 # Logging configuration
 logging.basicConfig(stream=sys.stdout, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger("VIP_BOT")
@@ -423,7 +430,7 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
  ├ {CE_CANDLE} /info - {sf('Profile Info')}
  ├ {CE_CANDLE} /redeem - {sf('Redeem Key')}
  ├ {CE_CANDLE} /fb - {sf('Send Feedback')}
- ╰ {CE_CANDLE} {sf('View Subscriptions')}{admin_panel}
+ ╰ {CE_CANDLE} /plan - {sf('View Subscriptions')}{admin_panel}
 
 <b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
@@ -840,7 +847,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif cmd == "gen":
         if uid not in ADMIN_ID: return
-        if len(args) < 1: return await styled_reply(update, f"💡 {sf('Format')}: <code>/gen [plan] [qty]</code>", use_gif=True)
+        if len(args) < 1: return await styled_reply(update, f"{CE_FLASH} {sf('Format')}: <code>/gen [plan] [qty]</code>", use_gif=True)
         pk = args[0].lower()
         amt = int(args[1]) if len(args) > 1 else 1
         if pk not in PLANS: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid Plan. Use: plan1, plan2, plan3, plan4')}</b>", use_gif=True)
@@ -860,7 +867,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await force_join_check(update, context): return
         raw_c = args[0].strip() if args else ""
         c = unsf(raw_c)
-        if not c: return await styled_reply(update, f"💡 {sf('Format')}: <code>/redeem [Key]</code>", use_gif=True)
+        if not c: return await styled_reply(update, f"{CE_FLASH} {sf('Format')}: <code>/redeem [Key]</code>", use_gif=True)
         kdb = await load_keys()
         if c not in kdb: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid Key. Please check and try again.')}</b>", use_gif=True)
         ki = kdb[c]
@@ -897,7 +904,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         raw_c = args[0].strip() if args else ""
         c = unsf(raw_c)
         kdb = await load_keys()
-        if not c: return await styled_reply(update, f"💡 {sf('Format')}: <code>/validate [Key]</code>", use_gif=True)
+        if not c: return await styled_reply(update, f"{CE_FLASH} {sf('Format')}: <code>/validate [Key]</code>", use_gif=True)
         if c not in kdb: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Key not found in database.')}</b>", use_gif=True)
         ki = kdb[c]
         u = ki.get("used", False)
@@ -1087,11 +1094,11 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             
             kb = [
                 [InlineKeyboardButton(sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none", style="success" if percent == 100 else "primary")],
-                [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
-                [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
-                [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
-                [InlineKeyboardButton(sf(f"🚀 Speed: {cpm} CPM"), callback_data="none", style="primary")],
-                [InlineKeyboardButton(sf("🛑 Stop Process"), callback_data=f"{stop_prefix}:{uid}", style="danger")]
+                [InlineKeyboardButton(sf(f"💸 Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✔️ Approved: {app}"), callback_data="none", style="success")],
+                [InlineKeyboardButton(sf(f"🥲 Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"🤡 Declined: {dec}"), callback_data="none", style="danger")],
+                [InlineKeyboardButton(sf(f"📉 Errors: {err}"), callback_data="none", style="danger")],
+                [InlineKeyboardButton(sf(f"🎮 Speed: {cpm} CPM"), callback_data="none", style="primary")],
+                [InlineKeyboardButton(sf("⌛ Stop Process"), callback_data=f"{stop_prefix}:{uid}", style="danger")]
             ]
             try: await styled_edit(msg_obj, dt, buttons=kb)
             except asyncio.CancelledError: break
@@ -1151,7 +1158,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     
     fkb = [
-        [InlineKeyboardButton(sf(f"📄 {chk}/{tot} (100%)"), callback_data="none", style="success")],
+        [InlineKeyboardButton(sf(f"📬 {chk}/{tot} (100%)"), callback_data="none", style="success")],
         [InlineKeyboardButton(sf(f"💸 Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✔️ Approved: {app}"), callback_data="none", style="success")],
         [InlineKeyboardButton(sf(f"🥲 Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"🤡 Declined: {dec}"), callback_data="none", style="danger")],
         [InlineKeyboardButton(sf(f"📉 Errors: {err}"), callback_data="none", style="danger")],

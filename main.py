@@ -91,8 +91,8 @@ GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.
 KEYS_FILE = "redeem_keys.json"
 
 WORKERS = 80  
-DELAY = 2.0  
-HIT_DELAY = 0.5
+DELAY = 1.0  
+HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 3

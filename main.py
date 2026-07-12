@@ -192,14 +192,22 @@ def get_flag_emoji(country_code, fallback="🏳️"):
     c = country_code.upper()
     return COUNTRY_FLAGS.get(c, chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397) if c.isalpha() else fallback)
 
+# ====================== BULLETPROOF i.giphy DIRECT CDN LINKS (MOVIES EXPANDED) ======================
 WELCOME_GIF = "https://i.giphy.com/3o7aD2d7hy9ktXNDP2.gif"
 REDEEM_GIF = "https://i.giphy.com/l41YkxvU8c7J7Bba0.gif"
+
+# 🎬 تم التوسيع هنا بإضافة باقة من أرقى ملفات الـ GIFs السينمائية المذهلة للأفلام العالمية
 ANIME_GIFS = [
-    "https://i.giphy.com/1n4iuWZFnTeN6qvdpD.gif",
-    "https://i.giphy.com/11KzOet1ElBDz2.gif",
-    "https://i.giphy.com/4ilFRqgbzbx4c.gif",
-    "https://i.giphy.com/xT1R9yebNpKAAJH0s.gif",
-    "https://i.giphy.com/108BDeJ2BvtZRu.gif"
+    "https://i.giphy.com/X3Yj4X96MK4wM.gif",        # The Great Gatsby Cheers (فخامة هوليوود)
+    "https://i.giphy.com/3rVgN21VK2DuU.gif",        # The Matrix Digital Rain (مصفوفة الماتريكس)
+    "https://i.giphy.com/MeE378J7w7bTq.gif",        # Iron Man Tech HUD (تقنيات آيرون مان)
+    "https://i.giphy.com/vlnZpsw8S_Z04.gif",        # Blade Runner 2049 Neon Vibe (نيون المستقبل)
+    "https://i.giphy.com/3o7abIile68G58510k.gif",     # Star Wars Hyperspace (سرعة الضوء حرب النجوم)
+    "https://i.giphy.com/13m24iFmhomZi0.gif",        # Batman Dark Knight (باتمان فخامة الليل)
+    "https://i.giphy.com/l3vR1603ssT69vWb6.gif",        # Interstellar Wormhole (الثقب الدودي إنترستيلر)
+    "https://i.giphy.com/XjY7D2H47Y0j6.gif",        # The Godfather Nod (العرّاب)
+    "https://i.giphy.com/20K8866h4693G.gif",        # Pulp Fiction John Travolta (بولب فيكشن)
+    "https://i.giphy.com/d3mlE7uhRoVX2Im4.gif"         # Inception / Smart Thinking (ذكاء العقل الباطن)
 ]
 
 PLANS = {
@@ -443,7 +451,6 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
 
 <b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    # 🎯 تم إزالة جميع الإيموجيات العادية من النص لكي يظهر الإيموجي المتحرك فقط بشكل سليم
     kb = [
         [InlineKeyboardButton('View Plans', callback_data="show_plans", style="primary", icon_custom_emoji_id="5413879192267805083"),
          InlineKeyboardButton('Redeem Key', callback_data="prompt_redeem", style="success", icon_custom_emoji_id="5451882707875276247")]
@@ -1071,7 +1078,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
-            # 🎯 تم تفريغ الإيموجيات العادية المكتوبة من نصوص لوحة المتابعة الحية لتفعيل الإيموجي المتحرك الفردي بوضوح
             kb = [
                 [InlineKeyboardButton(f'{chk}/{tot} ({percent}%)', callback_data="none", style="success" if percent == 100 else "primary", icon_custom_emoji_id="5445163772706582819")],
                 [InlineKeyboardButton(f'Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],

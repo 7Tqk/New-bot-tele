@@ -27,13 +27,6 @@ from database2 import (
     clear_all_proxies, mark_user_joined
 )
 
-# محرك الحماية والتوافق للأزرار الملونة لضمان عدم كراش البوت عند استقبال الملفات
-_original_inline_init = telegram.InlineKeyboardButton.__init__
-def _patched_inline_init(self, *args, **kwargs):
-    kwargs.pop('style', None)
-    _original_inline_init(self, *args, **kwargs)
-telegram.InlineKeyboardButton.__init__ = _patched_inline_init
-
 # Logging configuration
 logging.basicConfig(stream=sys.stdout, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger("VIP_BOT")
@@ -158,14 +151,14 @@ CE_CARD = '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>'
 CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
 CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
 
-# المعرفات المستخرجة والمثبتة بنجاح
-CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
-CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
-CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
-CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
-CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
-CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
-CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
+# Compatibility Mappings
+CE_CASH = CE_FLY
+CE_PARTY = CE_SPARKLES
+CE_CANDLE = CE_HOURGLASS
+CE_TOP = CE_MEDAL
+CE_GEAR = CE_SHIELD
+CE_SNOW = CE_DIAMOND2
+CE_BOOM = CE_FLASH
 
 # ====================== FLAGS ======================
 ALL_COUNTRY_CODES = ["AE","AF","AR","AT","AU","BE","BG","BR","CA","CH","CL","CN","CO","CR","CZ","DE","DK","DZ","EC","EE","EG","ES","FI","FR","GB","GR","HK","HR","HU","ID","IE","IL","IN","IT","JP","KR","KW","KZ","LB","LT","LU","LV","MA","MT","MX","MY","NG","NL","NO","NZ","OM","PA","PE","PH","PK","PL","PT","QA","RO","RS","RU","SA","SE","SG","SI","SK","TH","TR","TW","UA","US","UY","VN","ZA"]
@@ -350,7 +343,7 @@ def extract_cc(text):
         y = '20' + y if len(y) == 2 else y
         cards.append(f"{c}|{m}|{y}|{cv}")
     if not cards:
-        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text): cards.append(f"{c}|{m}|{y}|{cv}")
+        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text): cards.append(f"{c}|{m}|y|{cv}")
     if not cards:
         for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
     return list(dict.fromkeys(cards))
@@ -430,21 +423,18 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
  ├ {CE_CANDLE} /info - {sf('Profile Info')}
  ├ {CE_CANDLE} /redeem - {sf('Redeem Key')}
  ├ {CE_CANDLE} /fb - {sf('Send Feedback')}
- ╰ {CE_CANDLE} /plan - {sf('View Subscriptions')}{admin_panel}
+ ╰ {CE_CANDLE} {sf('View Subscriptions')}{admin_panel}
 
 <b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    kb = [
-        [InlineKeyboardButton('<tg-emoji emoji-id="5413879192267805083">🗓️</tg-emoji> View Plans', callback_data="show_plans", style="primary"),
-         InlineKeyboardButton('<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji> Redeem Key', callback_data="prompt_redeem", style="success")]
-    ]
+    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
     
     if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton('<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji> Channel', url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton('<tg-emoji emoji-id="6028356293540977715">👾</tg-emoji> Group', url=JOIN_GROUP_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
     elif is_valid_url(JOIN_CHANNEL_LINK):
-        kb.append([InlineKeyboardButton('<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji> Channel', url=JOIN_CHANNEL_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
     elif is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton('<tg-emoji emoji-id="6028356293540977715">👾</tg-emoji> Group', url=JOIN_GROUP_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
         
     if isinstance(update_or_bot, Update):
         await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
@@ -463,9 +453,9 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return True
         
     kb = []
-    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton('<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji> Channel', url=JOIN_CHANNEL_LINK, style="primary")])
-    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton('<tg-emoji emoji-id="6028356293540977715">👾</tg-emoji> Group', url=JOIN_GROUP_LINK, style="primary")])
-    if kb: kb.append([InlineKeyboardButton('<tg-emoji emoji-id="5445189224682779974">✔️</tg-emoji> Verify', callback_data="check_joined", style="success")])
+    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
+    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+    if kb: kb.append([InlineKeyboardButton(sf("Verify"), callback_data="check_joined", style="success")])
     
     await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
@@ -637,7 +627,7 @@ async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session):
     try:
         bi = await get_bin_info(card.split("|")[0], session)
         msg = format_card_result(card, gateway, price, bi, elapsed)
-        kb = [[InlineKeyboardButton('<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji> Contact Owner', url="https://t.me/Dddadddyttt", style="primary")]]
+        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")]]
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
     except Exception: pass
 
@@ -680,8 +670,8 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         PENDING_FILES[uid] = cards
         
         kb = [
-            [InlineKeyboardButton('<tg-emoji emoji-id="5445388803223091254">⚡️</tg-emoji> Shopify (Charge)', callback_data="gate:Shopify", style="success")],
-            [InlineKeyboardButton('<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji> Cancel', callback_data="gate:cancel", style="danger")]
+            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success")],
+            [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel", style="danger")]
         ]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
@@ -737,7 +727,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for _, pi in PLANS.items():
             t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
         t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
-        kb = [[InlineKeyboardButton('<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji> Contact Owner', url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton('<tg-emoji emoji-id="5445358884480916784">🔽</tg-emoji> Back', callback_data="back_start", style="danger")]]
+        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
         await styled_reply(update, t, buttons=kb, use_gif=True)
 
     elif cmd == "fb":
@@ -935,7 +925,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 un = escape_html(_USER_NAMES.get(u, f"User {u}"))
                 gate = p.get("gate", "Unknown")
                 total = p.get("total", "?")
-                active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id='{u}'>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
+                active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
                 
         recent_users_info = []
         sorted_users = sorted(USER_LAST_REQ.items(), key=lambda x: x[1], reverse=True)[:15] 
@@ -980,7 +970,7 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for _, pi in PLANS.items():
         t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
     t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
-    kb = [[InlineKeyboardButton('<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji> Contact Owner', url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton('<tg-emoji emoji-id="5445358884480916784">🔽</tg-emoji> Back', callback_data="back_start", style="danger")]]
+    kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
 
@@ -1013,28 +1003,17 @@ async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    kb = [
-        [InlineKeyboardButton('<tg-emoji emoji-id="5794073296492303710">⭐</tg-emoji> View Plans', callback_data="show_plans", style="primary"),
-         InlineKeyboardButton('<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji> Redeem Key', callback_data="prompt_redeem", style="success")]
-    ]
+    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
     
     if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton('<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji> Channel', url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton('<tg-emoji emoji-id="6028356293540977715">👾</tg-emoji> Group', url=JOIN_GROUP_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
     elif is_valid_url(JOIN_CHANNEL_LINK):
-        kb.append([InlineKeyboardButton('<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji> Channel', url=JOIN_CHANNEL_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
     elif is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton('<tg-emoji emoji-id="6028356293540977715">👾</tg-emoji> Group', url=JOIN_GROUP_LINK, style="primary")])
+        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
         
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
-
-# زر التوجيه والترحيب بالـ Redeem لتسهيل العملية
-async def prompt_redeem_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    t = f"<b>{CE_CANDLE} {sf('Please send your key using the command directly like this')} :</b>\n\n<code>/redeem VIP-XXXXXXXXXX</code>"
-    kb = [[InlineKeyboardButton('<tg-emoji emoji-id="5445358884480916784">🔽</tg-emoji> Back', callback_data="back_start", style="danger")]]
-    await styled_edit(q.message, t, buttons=kb)
 
 async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -1107,12 +1086,12 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
             kb = [
-                [InlineKeyboardButton(f'<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji> {chk}/{tot} ({percent}%)', callback_data="none", style="success" if percent == 100 else "primary")],
-                [InlineKeyboardButton(f'<tg-emoji emoji-id="5231449120635370684">💸</tg-emoji> Charged: {chg}', callback_data="none", style="success"), InlineKeyboardButton(f'<tg-emoji emoji-id="5445189224682779974">✔️</tg-emoji> Approved: {app}', callback_data="none", style="success")],
-                [InlineKeyboardButton(f'<tg-emoji emoji-id="6201792892634140208">🥲</tg-emoji> Insuff: {ins}', callback_data="none", style="success"), InlineKeyboardButton(f'<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji> Declined: {dec}', callback_data="none", style="danger")],
-                [InlineKeyboardButton(f'<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji> Errors: {err}', callback_data="none", style="danger")],
-                [InlineKeyboardButton(f'<tg-emoji emoji-id="5361741454685256344">🎮</tg-emoji> Speed: {cpm} CPM', callback_data="none", style="primary")],
-                [InlineKeyboardButton('<tg-emoji emoji-id="5386367538735104399">⌛</tg-emoji> Stop Process', callback_data=f"{stop_prefix}:{uid}", style="danger")]
+                [InlineKeyboardButton(sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none", style="success" if percent == 100 else "primary")],
+                [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
+                [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
+                [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
+                [InlineKeyboardButton(sf(f"🚀 Speed: {cpm} CPM"), callback_data="none", style="primary")],
+                [InlineKeyboardButton(sf("🛑 Stop Process"), callback_data=f"{stop_prefix}:{uid}", style="danger")]
             ]
             try: await styled_edit(msg_obj, dt, buttons=kb)
             except asyncio.CancelledError: break
@@ -1172,11 +1151,11 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     
     fkb = [
-        [InlineKeyboardButton(sf(f"📬 {chk}/{tot} (100%)"), callback_data="none", style="success")],
-        [InlineKeyboardButton(f'<tg-emoji emoji-id="5231449120635370684">💸</tg-emoji> Charged: {chg}', callback_data="none", style="success"), InlineKeyboardButton(f'<tg-emoji emoji-id="5445189224682779974">✔️</tg-emoji> Approved: {app}', callback_data="none", style="success")],
-        [InlineKeyboardButton(f'<tg-emoji emoji-id="6201792892634140208">🥲</tg-emoji> Insuff: {ins}', callback_data="none", style="success"), InlineKeyboardButton(f'<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji> Declined: {dec}', callback_data="none", style="danger")],
-        [InlineKeyboardButton(f'<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji> Errors: {err}', callback_data="none", style="danger")],
-        [InlineKeyboardButton(f'<tg-emoji emoji-id="5361741454685256344">🎮</tg-emoji> Average Speed: {avg_cpm} CPM', callback_data="none", style="primary")]
+        [InlineKeyboardButton(sf(f"📄 {chk}/{tot} (100%)"), callback_data="none", style="success")],
+        [InlineKeyboardButton(sf(f"💸 Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✔️ Approved: {app}"), callback_data="none", style="success")],
+        [InlineKeyboardButton(sf(f"🥲 Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"🤡 Declined: {dec}"), callback_data="none", style="danger")],
+        [InlineKeyboardButton(sf(f"📉 Errors: {err}"), callback_data="none", style="danger")],
+        [InlineKeyboardButton(sf(f"🎮 Average Speed: {avg_cpm} CPM"), callback_data="none", style="primary")]
     ]
     try: await styled_edit(msg_obj, ft, buttons=fkb)
     except Exception: pass
@@ -1221,7 +1200,6 @@ def main():
     app.add_handler(CallbackQueryHandler(stop_chk_cb, pattern=r"^stop_chk:"))
     app.add_handler(CallbackQueryHandler(plans_cb, pattern=r"^show_plans$"))
     app.add_handler(CallbackQueryHandler(back_start_cb, pattern=r"^back_start$"))
-    app.add_handler(CallbackQueryHandler(prompt_redeem_cb, pattern=r"^prompt_redeem$"))
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     

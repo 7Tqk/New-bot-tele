@@ -90,8 +90,8 @@ GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.
 KEYS_FILE = "redeem_keys.json"
 
 WORKERS = 40  
-DELAY = 2.9  
-HIT_DELAY = 1.5
+DELAY = 3.5  
+HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 3
@@ -102,6 +102,16 @@ _USER_NAMES = {}
 USER_LAST_REQ = {}
 ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
+
+# نظام الفلترة والتجميد العالمي لمنع الـ Rate Limit والـ 429 نهائياً
+_RATE_LIMIT_EVENT = None
+
+def get_rate_limit_event():
+    global _RATE_LIMIT_EVENT
+    if _RATE_LIMIT_EVENT is None:
+        _RATE_LIMIT_EVENT = asyncio.Event()
+        _RATE_LIMIT_EVENT.set()
+    return _RATE_LIMIT_EVENT
 
 # ====================== SAFE CHARGED FONT ENGINE & TAG PROTECTION ======================
 def sf(text) -> str:
@@ -154,7 +164,8 @@ CE_CLOWN = '<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji>'
 CE_FLY = '<tg-emoji emoji-id="5231449120635370684">💸</tg-emoji>'
 CE_SHIELD = '<tg-emoji emoji-id="5251203410396458957">🛡️</tg-emoji>'
 CE_SEARCH = '<tg-emoji emoji-id="5231012545799666522">🔍</tg-emoji>'
-CE_SPARKLES = '<tg-emoji emoji-id="5325547803936572038">✨</tg-emoji>'
+switch_emoji = '<tg-emoji emoji-id="5325547803936572038">✨</tg-emoji>'
+CE_SPARKLES = switch_emoji
 CE_GAME = '<tg-emoji emoji-id="5361741454685256344">🎮</tg-emoji>'
 CE_MEDAL = '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>'
 CE_CALENDAR = '<tg-emoji emoji-id="5413879192267805083">🗓️</tg-emoji>'
@@ -511,7 +522,15 @@ async def check_shopify_api(card, site, proxy, session):
         headers = {"User-Agent": "Mozilla/5.0"}
         async with session.get(req_url, headers=headers, timeout=90) as resp:
             if resp.status == 429:
+                event = get_rate_limit_event()
+                if event.is_set():
+                    event.clear()  # تجميد فوري لجميع الخيوط الـ 80 لمنع استمرار الطلبات السيئة
+                    async def resume_workers():
+                        await asyncio.sleep(random.uniform(8.0, 15.0))  # منح السيرفر وقت كافي للتنفس وفك الـ IP
+                        event.set()
+                    asyncio.create_task(resume_workers())
                 return {'status': 'Rate Limit', 'message': 'Server Error 429', 'card': card, 'retry': True}
+                
             text_data = await resp.text()
             if resp.status != 200: 
                 return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
@@ -549,7 +568,11 @@ async def remove_proxy_by_url(uid, proxy_url):
 
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
     lr = None
+    event = get_rate_limit_event()
+    
     for attempt in range(max_retries):
+        await event.wait()  # الانتظار الإلزامي هنا إذا كانت هناك حالة تجميد عالمية بسبب الـ 429
+        
         if not proxies: 
             p_dict = p = None
         else:
@@ -574,7 +597,8 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
         msg_lower = str(msg).lower()
             
         if status == 'Rate Limit' or '429' in msg_lower:
-            await asyncio.sleep(random.uniform(3.0, 6.0))
+            await event.wait()  # التأكد من عدم تخطي التجميد إلا بعد فك القفل بالكامل
+            await asyncio.sleep(random.uniform(2.0, 4.0))  # تهدئة فردية للخيط لضمان توزيع الهجمات
             lr = r
             continue
 

@@ -15,6 +15,7 @@ import logging
 from html import unescape
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
+import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions
 from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters, ContextTypes, Defaults
 from telegram.error import RetryAfter, Conflict, TimedOut, NetworkError, Forbidden, BadRequest
@@ -25,6 +26,13 @@ from database2 import (
     get_all_user_proxies, add_proxy_db, remove_proxy_by_index,
     clear_all_proxies, mark_user_joined
 )
+
+# محرك الحماية والتوافق للأزرار الملونة لضمان عدم كراش البوت عند استقبال الملفات
+_original_inline_init = telegram.InlineKeyboardButton.__init__
+def _patched_inline_init(self, *args, **kwargs):
+    kwargs.pop('style', None)
+    _original_inline_init(self, *args, **kwargs)
+telegram.InlineKeyboardButton.__init__ = _patched_inline_init
 
 # Logging configuration
 logging.basicConfig(stream=sys.stdout, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -118,21 +126,46 @@ def escape_html(text):
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 # ====================== NATIVE TELEGRAM PREMIUM CUSTOM EMOJIS ======================
-CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
-CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
 CE_CROWN = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'
 CE_DIAMOND = '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>'
-CE_FLY = '<tg-emoji emoji-id="5231005931550030290">💸</tg-emoji>'
-CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
-CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
-CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
-CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
-CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
+CE_DIAMOND2 = '<tg-emoji emoji-id="5260681660189408650">💎</tg-emoji>'
 CE_MIC = '<tg-emoji emoji-id="5224736245665511429">🎤</tg-emoji>'
 CE_SMILE = '<tg-emoji emoji-id="5461117441612462242">🙂</tg-emoji>'
 CE_CHART = '<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji>'
 CE_GLASSES = '<tg-emoji emoji-id="5391112412445288650">🥸</tg-emoji>'
 CE_CLOWN = '<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji>'
+CE_FLY = '<tg-emoji emoji-id="5231449120635370684">💸</tg-emoji>'
+CE_SHIELD = '<tg-emoji emoji-id="5251203410396458957">🛡️</tg-emoji>'
+CE_SEARCH = '<tg-emoji emoji-id="5231012545799666522">🔍</tg-emoji>'
+CE_SPARKLES = '<tg-emoji emoji-id="5325547803936572038">✨</tg-emoji>'
+CE_GAME = '<tg-emoji emoji-id="5361741454685256344">🎮</tg-emoji>'
+CE_MEDAL = '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>'
+CE_CALENDAR = '<tg-emoji emoji-id="5413879192267805083">🗓️</tg-emoji>'
+CE_CLIP = '<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji>'
+CE_HOURGLASS = '<tg-emoji emoji-id="5386367538735104399">⌛</tg-emoji>'
+CE_STAR = '<tg-emoji emoji-id="5794073296492303710">⭐</tg-emoji>'
+CE_THINK1 = '<tg-emoji emoji-id="5917785839428967062">🤔</tg-emoji>'
+CE_THINK2 = '<tg-emoji emoji-id="5918248669399754192">🤔</tg-emoji>'
+CE_THINK3 = '<tg-emoji emoji-id="5916025950809625537">🤔</tg-emoji>'
+CE_ALIEN = '<tg-emoji emoji-id="6028356293540977715">👾</tg-emoji>'
+CE_PHONE = '<tg-emoji emoji-id="5445059250382469069">📲</tg-emoji>'
+CE_FLASH = '<tg-emoji emoji-id="5445388803223091254">⚡️</tg-emoji>'
+CE_TEARS = '<tg-emoji emoji-id="6201792892634140208">🥲</tg-emoji>'
+CE_SHY = '<tg-emoji emoji-id="6201647288947839133">🤭</tg-emoji>'
+CE_CHECK = '<tg-emoji emoji-id="5445189224682779974">✔️</tg-emoji>'
+CE_DOWN = '<tg-emoji emoji-id="5445358884480916784">🔽</tg-emoji>'
+CE_CARD = '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>'
+CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
+CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
+
+# Compatibility Mappings
+CE_CASH = CE_FLY
+CE_PARTY = CE_SPARKLES
+CE_CANDLE = CE_HOURGLASS
+CE_TOP = CE_MEDAL
+CE_GEAR = CE_SHIELD
+CE_SNOW = CE_DIAMOND2
+CE_BOOM = CE_FLASH
 
 # ====================== FLAGS ======================
 ALL_COUNTRY_CODES = ["AE","AF","AR","AT","AU","BE","BG","BR","CA","CH","CL","CN","CO","CR","CZ","DE","DK","DZ","EC","EE","EG","ES","FI","FR","GB","GR","HK","HR","HU","ID","IE","IL","IN","IT","JP","KR","KW","KZ","LB","LT","LU","LV","MA","MT","MX","MY","NG","NL","NO","NZ","OM","PA","PE","PH","PK","PL","PT","QA","RO","RS","RU","SA","SE","SG","SI","SK","TH","TR","TW","UA","US","UY","VN","ZA"]
@@ -150,7 +183,7 @@ ANIME_GIFS = [
     "https://i.giphy.com/1n4iuWZFnTeN6qvdpD.gif",
     "https://i.giphy.com/11KzOet1ElBDz2.gif",
     "https://i.giphy.com/4ilFRqgbzbx4c.gif",
-    "https://i.giphy.com/xT1R9yebNpKAAJjH0s.gif",
+    "https://i.giphy.com/xT1R9yebNpKAAJH0s.gif",
     "https://i.giphy.com/108BDeJ2BvtZRu.gif"
 ]
 
@@ -317,7 +350,7 @@ def extract_cc(text):
         y = '20' + y if len(y) == 2 else y
         cards.append(f"{c}|{m}|{y}|{cv}")
     if not cards:
-        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text): cards.append(f"{c}|{m}|y|{cv}")
+        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text): cards.append(f"{c}|{m}|{y}|{cv}")
     if not cards:
         for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
     return list(dict.fromkeys(cards))
@@ -664,7 +697,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.message.document:
             mime = update.message.document.mime_type or ""
             fname = update.message.document.file_name or ""
-            if mime.startswith('text/') or mime == 'application/octet-stream' or fname.endswith('.txt'):
+            if mime.startswith('text/') or mime == 'application/octet-stream' or fname.lower().endswith('.txt'):
                 await auto_file_check_cmd(update, context)
         return
 
@@ -899,7 +932,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 un = escape_html(_USER_NAMES.get(u, f"User {u}"))
                 gate = p.get("gate", "Unknown")
                 total = p.get("total", "?")
-                active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id='{u}'>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
+                active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
                 
         recent_users_info = []
         sorted_users = sorted(USER_LAST_REQ.items(), key=lambda x: x[1], reverse=True)[:15] 
@@ -1137,15 +1170,16 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     await cleanup_user_http_session(uid)
 
 async def stop_chk_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    puid = int(q.data.split(":")[1])
-    if q.from_user.id != puid and q.from_user.id not in ADMIN_ID: return await q.answer("⚠️ Not yours!", show_alert=True)
+    key_data = update.callback_query.data
+    puid = int(key_data.split(":")[1])
+    if update.callback_query.from_user.id != puid and update.callback_query.from_user.id not in ADMIN_ID:
+        return await update.callback_query.answer("⚠️ Not yours!", show_alert=True)
     proc = ACTIVE_MTXT_PROCESSES.get(puid)
     if proc:
         proc["stopped"] = True
         for t in proc.get("tasks", []):
             if not t.done(): t.cancel()
-    await q.answer("🛑 Stopped Immediately!", show_alert=True)
+    await update.callback_query.answer("🛑 Stopped Immediately!", show_alert=True)
 
 async def empty_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE): await update.callback_query.answer()
 

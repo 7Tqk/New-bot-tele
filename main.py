@@ -387,19 +387,19 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
 <b>{CE_TOP} {sf('Checker Engine')}:</b>
  ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>
 
-<b>{CE_GEAR} {sf('Proxy Manager')}:</b>
- ├ {CE_CANDLE} /addpxy - {sf('Add Proxies')}
- ├ {CE_CANDLE} /proxy - {sf('View Proxies')}
- ├ {CE_CANDLE} /checkpxy - {sf('Clean Proxies')}
- ╰ {CE_CANDLE} /rmpxy - {sf('Remove Proxies')}
+<b>CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' {sf('Proxy Manager')}:</b>
+ ├ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /addpxy - {sf('Add Proxies')}
+ ├ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /proxy - {sf('View Proxies')}
+ ├ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /checkpxy - {sf('Clean Proxies')}
+ ╰ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /rmpxy - {sf('Remove Proxies')}
 
-<b>{CE_DIAMOND} {sf('Account Settings')}:</b>
- ├ {CE_CANDLE} /info - {sf('Profile Info')}
- ├ {CE_CANDLE} /redeem - {sf('Redeem Key')}
- ├ {CE_CANDLE} /fb - {sf('Send Feedback')}
- ╰ {CE_CANDLE} /plan - {sf('View Subscriptions')}{admin_panel}
+<b>CE_DIAMOND = '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>' {sf('Account Settings')}:</b>
+ ├ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /info - {sf('Profile Info')}
+ ├ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /redeem - {sf('Redeem Key')}
+ ├ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /fb - {sf('Send Feedback')}
+ ╰ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /plan - {sf('View Subscriptions')}{admin_panel}
 
-<b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
+<b>CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
     kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
     

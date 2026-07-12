@@ -16,7 +16,7 @@ from html import unescape
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters, ContextTypes, Defaults
 from telegram.error import RetryAfter, Conflict, TimedOut, NetworkError, Forbidden, BadRequest
 from telegram.constants import ParseMode
 
@@ -387,19 +387,19 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
 <b>{CE_TOP} {sf('Checker Engine')}:</b>
  ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>
 
-<b>CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' {sf('Proxy Manager')}:</b>
- ├ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /addpxy - {sf('Add Proxies')}
- ├ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /proxy - {sf('View Proxies')}
- ├ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /checkpxy - {sf('Clean Proxies')}
- ╰ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /rmpxy - {sf('Remove Proxies')}
+<b>{CE_GEAR} {sf('Proxy Manager')}:</b>
+ ├ {CE_CANDLE} /addpxy - {sf('Add Proxies')}
+ ├ {CE_CANDLE} /proxy - {sf('View Proxies')}
+ ├ {CE_CANDLE} /checkpxy - {sf('Clean Proxies')}
+ ╰ {CE_CANDLE} /rmpxy - {sf('Remove Proxies')}
 
-<b>CE_DIAMOND = '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>' {sf('Account Settings')}:</b>
- ├ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /info - {sf('Profile Info')}
- ├ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /redeem - {sf('Redeem Key')}
- ├ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /fb - {sf('Send Feedback')}
- ╰ CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' /plan - {sf('View Subscriptions')}{admin_panel}
+<b>{CE_DIAMOND} {sf('Account Settings')}:</b>
+ ├ {CE_CANDLE} /info - {sf('Profile Info')}
+ ├ {CE_CANDLE} /redeem - {sf('Redeem Key')}
+ ├ {CE_CANDLE} /fb - {sf('Send Feedback')}
+ ╰ {CE_CANDLE} /plan - {sf('View Subscriptions')}{admin_panel}
 
-<b>CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>' {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
+<b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
     kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
     
@@ -1058,7 +1058,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
             h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
-            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')}  ━━━</b>\n\n├ <b>CE_DIAMOND = <tg-emoji emoji-id="5427168083074628963">💎</tg-emoji> {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>CE_DIAMOND = <tg-emoji emoji-id="5427168083074628963">💎</tg-emoji> {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>CE_DIAMOND = <tg-emoji emoji-id="5427168083074628963">💎</tg-emoji> {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>CE_DIAMOND = <tg-emoji emoji-id="5427168083074628963">💎</tg-emoji> {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
+            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
             
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
@@ -1166,7 +1166,10 @@ async def post_init(app: Application):
     asyncio.create_task(check_sites_loop())
 
 def main():
-    app = Application.builder().token(BOT_TOKEN).read_timeout(60).write_timeout(60).connect_timeout(60).post_init(post_init).build()
+    # فرض وضع الـ HTML كخيار افتراضي إجباري لكافة رسائل وتعديلات البوت لضمان عمل الإيموجيات المخصصة
+    bot_defaults = Defaults(parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    
+    app = Application.builder().token(BOT_TOKEN).defaults(bot_defaults).read_timeout(60).write_timeout(60).connect_timeout(60).post_init(post_init).build()
     app.add_error_handler(global_error_handler)
     
     app.add_handler(MessageHandler(filters.ALL, master_router))

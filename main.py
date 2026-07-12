@@ -158,7 +158,7 @@ CE_CARD = '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>'
 CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
 CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
 
-# تحديث وتعيين المعرفات المستخرجة والمؤكدة بنجاح عبر الـ Dump
+# المعرفات المستخرجة من الـ Dump لكي تعمل وتتحرك بكل مكان
 CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
 CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
 CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
@@ -1199,6 +1199,7 @@ async def post_init(app: Application):
 def main():
     bot_defaults = Defaults(parse_mode=ParseMode.HTML, link_preview_options=LinkPreviewOptions(is_disabled=True))
     
+    # المهلات والانتظار مأمنة هنا داخل البيلدر بشكل أساسي وممتاز
     app = Application.builder().token(BOT_TOKEN).defaults(bot_defaults).read_timeout(60).write_timeout(60).connect_timeout(60).post_init(post_init).build()
     app.add_error_handler(global_error_handler)
     
@@ -1214,8 +1215,8 @@ def main():
     
     while True:
         try:
-            # 🎯 لمسة التأمين النهائية: تم تفعيل مهلات الـ 60 ثانية لحلقة الـ polling أيضاً لحمايتها تماماً على الهاتف والـ VPN
-            app.run_polling(drop_pending_updates=True, read_timeout=60, write_timeout=60, connect_timeout=60)
+            # 🎯 تم الإصلاح هنا: تركناها بدون باراميترات الوقت لأنها مأخوذة تلقائياً من البيلدر في الأعلى
+            app.run_polling(drop_pending_updates=True)
             break
         except Conflict:
             logger.warning("Conflict detected. Retrying...")

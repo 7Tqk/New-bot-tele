@@ -1058,7 +1058,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
             h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
-            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
+            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')}  ━━━</b>\n\n├ <b>CE_DIAMOND = <tg-emoji emoji-id="5427168083074628963">💎</tg-emoji> {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>CE_DIAMOND = <tg-emoji emoji-id="5427168083074628963">💎</tg-emoji> {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>CE_DIAMOND = <tg-emoji emoji-id="5427168083074628963">💎</tg-emoji> {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>CE_DIAMOND = <tg-emoji emoji-id="5427168083074628963">💎</tg-emoji> {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
             
             percent = int((chk / tot) * 100) if tot > 0 else 0
             

@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄 SYSTEM (PROXIES CLEANER INTEGRATED)
+# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (PROXIES CLEANER INTEGRATED)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -169,7 +169,7 @@ CE_PHONE = '<tg-emoji emoji-id="5445059250382469069">📲</tg-emoji>'
 CE_FLASH = '<tg-emoji emoji-id="5445388803223091254">⚡️</tg-emoji>'
 CE_TEARS = '<tg-emoji emoji-id="6201792892634140208">🥲</tg-emoji>'
 CE_SHY = '<tg-emoji emoji-id="6201647288947839133">🤭</tg-emoji>'
-CE_CHECK = '<tg-emoji emoji-id="5445189224682779974">✔️</tg-emoji>'
+CE_CHECK = '<tg-emoji emoji-id="5445189224682779974"><b>✔️</b></tg-emoji>'
 CE_DOWN = '<tg-emoji emoji-id="5445358884480916784">🔽</tg-emoji>'
 CE_CARD = '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>'
 CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
@@ -196,18 +196,17 @@ def get_flag_emoji(country_code, fallback="🏳️"):
 WELCOME_GIF = "https://i.giphy.com/3o7aD2d7hy9ktXNDP2.gif"
 REDEEM_GIF = "https://i.giphy.com/l41YkxvU8c7J7Bba0.gif"
 
-# 🎬 تم التوسيع هنا بإضافة باقة من أرقى ملفات الـ GIFs السينمائية المذهلة للأفلام العالمية
 ANIME_GIFS = [
-    "https://i.giphy.com/X3Yj4X96MK4wM.gif",        # The Great Gatsby Cheers (فخامة هوليوود)
-    "https://i.giphy.com/3rVgN21VK2DuU.gif",        # The Matrix Digital Rain (مصفوفة الماتريكس)
-    "https://i.giphy.com/MeE378J7w7bTq.gif",        # Iron Man Tech HUD (تقنيات آيرون مان)
-    "https://i.giphy.com/vlnZpsw8S_Z04.gif",        # Blade Runner 2049 Neon Vibe (نيون المستقبل)
-    "https://i.giphy.com/3o7abIile68G58510k.gif",     # Star Wars Hyperspace (سرعة الضوء حرب النجوم)
-    "https://i.giphy.com/13m24iFmhomZi0.gif",        # Batman Dark Knight (باتمان فخامة الليل)
-    "https://i.giphy.com/l3vR1603ssT69vWb6.gif",        # Interstellar Wormhole (الثقب الدودي إنترستيلر)
-    "https://i.giphy.com/XjY7D2H47Y0j6.gif",        # The Godfather Nod (العرّاب)
-    "https://i.giphy.com/20K8866h4693G.gif",        # Pulp Fiction John Travolta (بولب فيكشن)
-    "https://i.giphy.com/d3mlE7uhRoVX2Im4.gif"         # Inception / Smart Thinking (ذكاء العقل الباطن)
+    "https://i.giphy.com/X3Yj4X96MK4wM.gif",        
+    "https://i.giphy.com/3rVgN21VK2DuU.gif",        
+    "https://i.giphy.com/MeE378J7w7bTq.gif",        
+    "https://i.giphy.com/vlnZpsw8S_Z04.gif",        
+    "https://i.giphy.com/3o7abIile68G58510k.gif",     
+    "https://i.giphy.com/13m24iFmhomZi0.gif",        
+    "https://i.giphy.com/l3vR1603ssT69vWb6.gif",        
+    "https://i.giphy.com/XjY7D2H47Y0j6.gif",        
+    "https://i.giphy.com/20K8866h4693G.gif",        
+    "https://i.giphy.com/d3mlE7uhRoVX2Im4.gif"         
 ]
 
 PLANS = {
@@ -413,7 +412,7 @@ def is_dead_site_error(err):
     bad_keywords = [
         'step 0', 'step 0 failed', 'step 1', 'step 1 failed', 'missing stable', 'missing stablei',
         'max ret', 'cloudflare', 'timed out', 'bad gateway', 'service unavailable', 
-        'gateway timeout', 'site dead', 'session_error'
+        'gateway timeout', 'site dead', 'session_error', 'max retries', 'max retries exceeded'
     ]
     return any(k in e for k in bad_keywords)
 
@@ -511,8 +510,11 @@ async def check_shopify_api(card, site, proxy, session):
         
         headers = {"User-Agent": "Mozilla/5.0"}
         async with session.get(req_url, headers=headers, timeout=90) as resp:
+            if resp.status == 429:
+                return {'status': 'Rate Limit', 'message': 'Server Error 429', 'card': card, 'retry': True}
             text_data = await resp.text()
-            if resp.status != 200: return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
+            if resp.status != 200: 
+                return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
             try: rj = json.loads(text_data)
             except Exception: return {'status': 'Site Error', 'message': 'Format Error', 'card': card, 'retry': True}
             
@@ -522,7 +524,7 @@ async def check_shopify_api(card, site, proxy, session):
         st = str(rj.get('Status', '')).strip().lower()
         rl = rm.lower()
         
-        if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway']):
+        if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret']):
             return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
         if 'insufficient' in rl or 'funds' in rl or 'balance' in rl:
             return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': pr}
@@ -545,32 +547,54 @@ async def remove_proxy_by_url(uid, proxy_url):
                     break
     except Exception: pass
 
-async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=2):
+async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
     lr = None
-    for _ in range(max_retries):
-        if not proxies: p_dict = p = None
+    for attempt in range(max_retries):
+        if not proxies: 
+            p_dict = p = None
         else:
             p_dict = random.choice(proxies)
             p = p_dict['proxy_url']
         
         acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
-        if not acs: _SITE_ERRORS_COUNT.clear(); acs = sites
+        if not acs: 
+            _SITE_ERRORS_COUNT.clear()
+            acs = sites
+            await asyncio.sleep(1.5) 
+            
         s = random.choice(acs) if acs else ""
+        if not s:
+            return {'status': 'Dead', 'message': 'No Available Sites', 'card': card}
         
         if gateway_name == "Shopify": r = await check_shopify_api(card, s, p, session)
         else: return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
+        
+        status = r.get('status')
+        msg = r.get('message', '')
+        msg_lower = str(msg).lower()
             
-        if r.get('status') == 'Site Error':
+        if status == 'Rate Limit' or '429' in msg_lower:
+            await asyncio.sleep(random.uniform(3.0, 6.0))
+            lr = r
+            continue
+
+        if status == 'Site Error' or is_dead_site_error(msg):
             _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
-            msg_lower = str(r.get('message', '')).lower()
+            if any(k in msg_lower for k in ['step 0', 'step 0 failed', 'max ret', 'site dead']):
+                _SITE_ERRORS_COUNT[s] = _MAX_SITE_ERRORS 
+                
             if p_dict and any(k in msg_lower for k in ['proxy', 'tunnel', 'connection close', 'timeout', 'refused', '407', '502', '504', 'bad gateway', 'site error', 'format error']):
                 if p_dict in proxies:
                     try: proxies.remove(p_dict)
                     except ValueError: pass
                 asyncio.create_task(remove_proxy_by_url(uid, p))
+            lr = r
+            await asyncio.sleep(DELAY)
+            continue
             
         if not r.get('retry'):
-            if r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: _SITE_ERRORS_COUNT[s] = 0
+            if status in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
+                _SITE_ERRORS_COUNT[s] = max(0, _SITE_ERRORS_COUNT.get(s, 0) - 1)
             return r
         lr = r; await asyncio.sleep(DELAY)
         
@@ -1104,7 +1128,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             async with sem:
                 try:
                     c_st = time.time()
-                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=2)
+                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=3)
                     if is_stopped(): break 
                     c_el = time.time() - c_st
                     status = res.get('status', 'Dead')

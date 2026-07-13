@@ -84,7 +84,7 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# [تم التحديث] تركيب الـ API المحلي الجديد لضمان أعلى استقرار وسرعة فحص قصوى
+# الرابط المحلي الخاص بك بالصيغة الهندسية الصحيحة الشاملة للمسار /sh
 SHOPIFY_API_URL_1 = 'http://192.168.0.3:5000/sh'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
@@ -350,11 +350,12 @@ def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
 _USER_HTTP_SESSIONS = {}
+# [تم الإصلاح الجوهري هنا] إزالة القيود الصارمة ومهلات الـ Timeout الافتراضية للجلسة لكي تعمل إعدادات التايم آوت المخصصة بحرية وبدون تعارض كود داخلي
 async def get_user_http_session(uid):
     key = f"{uid}_msp"
     if key not in _USER_HTTP_SESSIONS or _USER_HTTP_SESSIONS[key].closed:
         connector = aiohttp.TCPConnector(limit=WORKERS + 20, ssl=False, enable_cleanup_closed=True, force_close=False, ttl_dns_cache=300)
-        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=12, connect=4, sock_read=8), connector=connector)
+        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(connector=connector)
     return _USER_HTTP_SESSIONS[key]
 
 async def cleanup_user_http_session(uid):
@@ -549,12 +550,11 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# [الحفاظ على التوافقية الكاملة] تنظيف البروكسيات وبناء المعاملات بما يتوافق 100% مع الـ API الجديد لحل مشكلة الـ Error كلياً
+# [تحديث الحماية والتوافقية الكاملة] تنظيف البروكسيات وبناء المعاملات بما يتوافق 100% مع الـ API لرفع الكفاءة
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         
-        # هندسة وتصفية البروكسي وعزل البادئات المسببة لأخطاء الشبكة في السيرفر
         if proxy_str and "://" in proxy_str:
             proxy_str = proxy_str.split("://")[-1]
         
@@ -566,14 +566,14 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         
         proxy_param = f"&proxy={quote(proxy_str)}" if proxy_str else "&proxy="
         
-        # بناء الرابط المشفر بالهيكلية الصارمة المطلوبة للسيرفر الجديد الخام (?cc=...&site=...&proxy=...)
         req_url = f"{api_url}?cc={card_encoded}&site={site_encoded}{proxy_param}"
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         
-        async with session.get(req_url, headers=headers, timeout=12) as resp:
+        # [تعديل مهلة السيرفر المحلي] رفع المهلة إلى 25 ثانية كاملة لتعمل الجلسة الآن بحرية مطلقة بدون قيود
+        async with session.get(req_url, headers=headers, timeout=25) as resp:
             if resp.status == 429:
                 return {'status': 'Rate Limit', 'message': 'API Rate Limited (429)', 'card': card, 'retry': True}
             if resp.status in [502, 503, 504]:
@@ -1333,7 +1333,7 @@ async def post_init(app: Application):
     asyncio.create_task(check_sites_loop())
 
 def main():
-    bot_defaults = Defaults(parse_mode=ParseMode.HTML, link_preview_options=LinkPreviewOptions(is_disabled=True))
+    bot_defaults = Defaults(parse_mode=ParseMode.HTML, link_preview_options=True)
     app = Application.builder().token(BOT_TOKEN).defaults(bot_defaults).read_timeout(60).write_timeout(60).connect_timeout(60).post_init(post_init).build()
     app.add_error_handler(global_error_handler)
     

@@ -84,7 +84,7 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-SHOPIFY_API_URL_1 = 'https://autosh.up.railway.app//shopii'
+SHOPIFY_API_URL_1 = 'http://62.72.20.10:8081/'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
@@ -613,7 +613,7 @@ async def remove_proxy_by_url(uid, proxy_url):
                     break
     except Exception: pass
 
-# [تم التحديث الجوهري] حذف نظام التعليق الجماعي (Global Cooldown) لمنع تجميد خيوط الفحص كلياً وتسريع العملية تلقائياً
+# [تم التحديث الجوهري] التصفية والحذف التلقائي للبروكسيات الميتة أثناء الفحص الحي لضمان أعلى سرعة CPM منعاً لتجميد خيوط الفحص كلياً
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
     lr = None
     for attempt in range(max_retries):
@@ -636,7 +636,16 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
             status = r.get('status')
             msg = str(r.get('message', '')).lower()
             
-            # إذا واجه الخيط ضغطاً، ينام الخيط الفردي الحالي فقط لمدة ثانية لحماية الفحص ولا يجمد الـ 70 خيطاً معاً
+            # إذا تبين أن الخطأ من البروكسي، نحذفه من الداتابيز ومن اللستة النشطة الممرة حالياً فوراً
+            if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'bad gateway', 'timeout']):
+                if p_dict:
+                    if p_dict in proxies:
+                        proxies.remove(p_dict)
+                    asyncio.create_task(remove_proxy_by_url(uid, p_dict['proxy_url']))
+                lr = r
+                continue
+
+            # إذا واجه الخيط ضغطاً، ينام الخيط الفردي الحالي فقط لحماية الفحص ولا يجمد باقي الخيوط الحية
             if status == 'Rate Limit' or any(k in msg for k in ['429', '504', '405', 'gateway']):
                 await asyncio.sleep(random.uniform(1.0, 1.8))
                 lr = r
@@ -855,44 +864,70 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         proxies = await get_all_user_proxies(uid)
         if not proxies: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies found to check.')}</b>", use_gif=True)
             
-        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Starting proxy check... Please wait.')}</b>", use_gif=True)
+        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Starting real gateway proxy check... Please wait.')}</b>", use_gif=True)
         dead_indices = []
 
-        async def _check_socket(index, ip_addr, port_num):
+        # دالة فحص حقيقية عبر بروتوكول HTTP للتأكد من كفاءة ونفوذ البروكسي عبر بوابة مخصصة
+        async def _check_proxy_via_gateway(index, p_dict):
+            proxy_url = p_dict['proxy_url']
             try:
-                _, writer = await asyncio.wait_for(asyncio.open_connection(ip_addr, int(port_num)), timeout=3.0)
-                writer.close()
-                await writer.wait_closed()
-            except Exception: dead_indices.append(index)
+                timeout = aiohttp.ClientTimeout(total=6, connect=3)
+                async with aiohttp.ClientSession(timeout=timeout) as test_session:
+                    async with test_session.get("https://api.ipify.org", proxy=proxy_url) as r:
+                        if r.status == 200:
+                            return
+            except Exception:
+                pass
+            dead_indices.append(index)
 
-        tasks = [_check_socket(idx, p['ip'], p['port']) for idx, p in enumerate(proxies)]
+        tasks = [_check_proxy_via_gateway(idx, p) for idx, p in enumerate(proxies)]
         await asyncio.gather(*tasks)
                 
         deleted_count = 0
+        # تم تطبيق مصفوفة الحذف العكسي لضمان بقاء المؤشرات الرياضية لقاعدة البيانات متزنة تماماً أثناء التكرار السريع
         for idx in sorted(dead_indices, reverse=True):
             await remove_proxy_by_index(uid, idx)
             deleted_count += 1
             
         if deleted_count > 0:
-            await styled_edit(tm, f"<b>{CE_SMILE} {sf('Check Done')}</b>\n\n├ {sf('Removed')}: <code>{deleted_count}</code> {sf('Dead Proxies')}\n╰ {sf('Remaining')}: <code>{len(proxies) - deleted_count}</code> {sf('Active Proxies')}")
-        else: await styled_edit(tm, f"<b>{CE_SMILE} {sf('All proxies are working perfectly!')}</b>")
+            await styled_edit(tm, f"<b>{CE_SMILE} {sf('Check Done')}</b>\n\n├ {sf('Removed Dead')}: <code>{deleted_count}</code> {sf('Proxies')}\n╰ {sf('Remaining Active')}: <code>{len(proxies) - deleted_count}</code> {sf('Proxies')}")
+        else: 
+            await styled_edit(tm, f"<b>{CE_SMILE} {sf('All proxies are working perfectly via Gateway!')}</b>")
 
     elif cmd == "rmpxy":
         if not await force_join_check(update, context): return
         proxies = await get_all_user_proxies(uid)
         if not proxies: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies to remove.')}</b>", use_gif=True)
-        if not args: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Specify all or the proxy number.')}</b>", use_gif=True)
-        arg = args[0].strip().lower()
-        if arg == 'all':
+        if not args: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Specify all, proxy number, or proxy text.')}</b>", use_gif=True)
+        
+        arg = args[0].strip()
+        
+        # الخيار الأول: مسح وتصفير كافة البروكسيات بالكامل من الحساب
+        if arg.lower() == 'all':
             c = await clear_all_proxies(uid)
             return await styled_reply(update, f"<b>{CE_SMILE} {sf('Cleared')} <code>{sf(str(c))}</code> {sf('Proxies successfully.')}</b>", use_gif=True)
+        
+        # الخيار الثاني: محاولة استنتاج الرقم الترتيبي للبروكسي من نص الرسالة
         try:
             idx = int(arg) - 1
             if 0 <= idx < len(proxies): 
                 await remove_proxy_by_index(uid, idx)
-                await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy removed.')}</b>", use_gif=True)
-            else: await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid proxy number.')}</b>", use_gif=True)
-        except Exception: await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid proxy number.')}</b>", use_gif=True)
+                return await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy removed successfully by index.')}</b>", use_gif=True)
+        except ValueError:
+            pass
+            
+        # الخيار الثالث: محاولة الحذف والمطابقة من خلال كتابة نص البروكسي أو الأيبي مباشرة
+        found = False
+        for idx, p in enumerate(proxies):
+            if arg in p['proxy_url'] or p['ip'] in arg:
+                await remove_proxy_by_index(uid, idx)
+                found = True
+                break
+                
+        if found:
+            await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy matched and removed successfully.')}</b>", use_gif=True)
+        else:
+            await styled_reply(update, f"<b>{CE_CLOWN} {sf('Proxy not found or invalid format.')}</b>", use_gif=True)
 
     elif cmd == "gen":
         if uid not in ADMIN_ID: return

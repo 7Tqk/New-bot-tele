@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝘚𝘎𝘖𝘗𝘐𝘍𝘠 𝘝𝘐𝘗 𝘉𝘖𝘛 - 𝘜𝘓𝘛𝘐𝘔𝘈𝘛𝘌 𝘗𝘙𝘖𝘋𝘜𝘊𝘛𝘐𝘖𝘕 𝘚𝘠𝘚𝘛𝘌 SYSTEM (HIGH-SPEED CPM ENGINE)
+# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -264,7 +264,8 @@ async def send_forced_gif(target_func, text, markup, url):
                 animation=media_to_send, caption=text, reply_markup=markup,
                 parse_mode=ParseMode.HTML, read_timeout=40, write_timeout=40
             )
-            if url not in _GIF_FILE_IDS && getattr(msg, 'animation', None):
+            # [تم إصلاح المعامل المنطقي هنا من && إلى and]
+            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
                 _GIF_FILE_IDS[url] = msg.animation.file_id
             return msg
         except RetryAfter as e:

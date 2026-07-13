@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
+# 𝘚𝘎𝘖𝘗𝘐𝘍𝘠 𝘝𝘐𝘗 𝘉𝘖𝘛 - 𝘜𝘓𝘛𝘐𝘔𝘈𝘛𝘌 𝘗𝘙𝘖𝘋𝘜𝘊𝘛𝘐𝘖𝘕 𝘚𝘠𝘚𝘛𝘌 SYSTEM (HIGH-SPEED CPM ENGINE)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -264,7 +264,7 @@ async def send_forced_gif(target_func, text, markup, url):
                 animation=media_to_send, caption=text, reply_markup=markup,
                 parse_mode=ParseMode.HTML, read_timeout=40, write_timeout=40
             )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+            if url not in _GIF_FILE_IDS && getattr(msg, 'animation', None):
                 _GIF_FILE_IDS[url] = msg.animation.file_id
             return msg
         except RetryAfter as e:
@@ -616,10 +616,11 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
 
             if status == 'Site Error' or is_dead_site_error(msg) or 'step 0' in msg or 'max ret' in msg:
                 _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
-                if p_dict and proxies and p_dict in proxies:
-                    try: proxies.remove(p_dict)
-                    except ValueError: pass
-                    asyncio.create_task(remove_proxy_by_url(uid, p))
+                # [تم التعطيل والتعليق برمجياً بنجاح لحماية البروكسيات من الحذف الخاطئ عند سقوط الـ API]
+                # if p_dict and proxies and p_dict in proxies:
+                #     try: proxies.remove(p_dict)
+                #     except ValueError: pass
+                #     asyncio.create_task(remove_proxy_by_url(uid, p))
                 lr = r
                 continue
         else:

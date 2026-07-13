@@ -84,12 +84,12 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# [تم التحديث] تركيب رابط الـ API الجديد كلياً والمرفوع على منصة Railway لإنهاء التعليق والتقطيع
+# رابط الـ API الرئيسي المرفوع على منصة Railway
 SHOPIFY_API_URL_1 = 'https://web-production-7c318.up.railway.app/sh'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-WORKERS = 25  
+WORKERS = 49  
 DELAY = 1.6  
 HIT_DELAY = 1.0
 
@@ -350,10 +350,19 @@ def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
 _USER_HTTP_SESSIONS = {}
+# ======================== [تم التحديث هنا لحل مشكلة الـ Timeout] ========================
 async def get_user_http_session(uid):
     key = f"{uid}_msp"
     if key not in _USER_HTTP_SESSIONS or _USER_HTTP_SESSIONS[key].closed:
-        connector = aiohttp.TCPConnector(limit=WORKERS + 20, ssl=False, enable_cleanup_closed=True, force_close=False, ttl_dns_cache=300)
+        # تحديد limit_per_host لجدولة اتصالات Railway في الطابور الداخلي بدون خنق الخادم
+        connector = aiohttp.TCPConnector(
+            limit=WORKERS + 20, 
+            limit_per_host=5, 
+            ssl=False, 
+            enable_cleanup_closed=True, 
+            force_close=False, 
+            ttl_dns_cache=300
+        )
         _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(connector=connector)
     return _USER_HTTP_SESSIONS[key]
 
@@ -382,7 +391,7 @@ def parse_proxy_format(proxy):
     pt, proxy = (pm.group(1).lower(), pm.group(2)) if pm else ('http', proxy)
     if re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy): u, pw, h, p = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
     elif re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy): h, p, u, pw = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy).groups()
-    elif re.match(r'^([^(:@]+):(\d+)$', proxy): h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups(); u = pw = ''
+    elif re.match(r'^([^:@]+):(\d+)$', proxy): h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups(); u = pw = ''
     else: return None
     if not h or not p: return None
     pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
@@ -466,7 +475,7 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
     elif is_valid_url(JOIN_GROUP_LINK):
         kb.append([InlineKeyboardButton('Group', url=JOIN_GROUP_LINK, style="primary", icon_custom_emoji_id="6028356293540977715")])
         
-    if isinstance(update_or_bot, Update):
+        if isinstance(update_or_bot, Update):
         await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
     else:
         await styled_send(update_or_bot, uid, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
@@ -496,7 +505,7 @@ async def get_bin_info(bin_code, session=None):
         return _BIN_CACHE[b6]
         
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
     
     try:
@@ -549,7 +558,7 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# ======================== [تعديل الجزء الخاص بالـ API فقط دون تغيير أي شيء آخر] ========================
+# ======================== [تعديل دالة الفحص] ========================
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
@@ -571,7 +580,9 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         
-        async with session.get(req_url, headers=headers, timeout=12) as resp:
+        # تعيين مهلة ذكية للاتصال وقراءة الـ Sockets منعاً للتعليق المستمر
+        timeout_setup = aiohttp.ClientTimeout(total=14, connect=4, sock_read=10)
+        async with session.get(req_url, headers=headers, timeout=timeout_setup) as resp:
             if resp.status == 429:
                 return {'status': 'Rate Limit', 'message': 'API Rate Limited (429)', 'card': card, 'retry': True}
             if resp.status in [502, 503, 504]:
@@ -615,7 +626,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
                 return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': price, 'retry': False}
             return {'status': 'Approved', 'message': response_msg, 'card': card, 'gateway': gt, 'price': price, 'retry': False}
 
-        # إذا كانت هناك أخطاء بروكسي أو اتصال حقيقية
+        # فرز أخطاء الاتصال الحقيقية التي تتطلب محاولة أخرى ببروكسي آخر
         if is_dead_site_error(response_msg) or any(k in response_text for k in ['timeout', 'max retries', 'cloudflare', 'bad gateway', 'tunnel']):
             return {'status': 'Site Error', 'message': response_msg, 'card': card, 'retry': True, 'gateway': gt, 'price': price}
 
@@ -626,6 +637,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
     except Exception as e: 
         return {'status': 'Site Error', 'message': f'API Error: {str(e)[:15]}', 'card': card, 'retry': False}
+
 # ======================================================================================================
 
 async def remove_proxy_by_url(uid, proxy_url):
@@ -1298,7 +1310,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 except Exception: err += 1; chk += 1
                 finally:
                     queue.task_done()
-                    if not is_stopped(): await asyncio.sleep(DELAY / WORKERS)
+                    # تم تعديل التوقيت الزمني عشوائياً لمنع خنق خادم Railway واستقبال الدفق بكفاءة كاملة
+                    if not is_stopped(): await asyncio.sleep(random.uniform(0.1, 0.4))
 
     wt = [asyncio.create_task(worker(i)) for i in range(WORKERS)]
     process_store[uid]["tasks"] = wt + [ut]

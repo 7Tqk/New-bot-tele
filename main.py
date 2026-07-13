@@ -72,9 +72,9 @@ CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-WORKERS = 40  
+WORKERS = 70  
 API_TIMEOUT = 30  
-DELAY = 1.8  
+DELAY = 1.0  
 HIT_DELAY = 1.5
 
 _SITE_ERRORS_COUNT = {}

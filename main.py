@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 组织𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧🇪 SYSTEM (PROXIES CLEANER INTEGRATED)
+# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩🇮𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢 organisers𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧🇪 SYSTEM (PROXIES CLEANER INTEGRATED)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -27,7 +27,7 @@ from database2 import (
     clear_all_proxies, mark_user_joined
 )
 
-# محرك تسجيل الأزرار وتمرير الخصائص الملونة والإيموجيات المتحركة بشكل رسمي لتليجرام
+# محرك تسجيل الأزرار وتمرير الخصائص الملونة والإيموجيات المتحركة بشكل رسمي لتليجرام لضمان عدم الكراش
 BUTTON_REGISTRY = {}
 _original_inline_keyboard_button = telegram.InlineKeyboardButton
 
@@ -84,7 +84,7 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# الرابط الفردي السريع والمعتمد الحقيقي للفحص البرمجي
+# الرابط الفردي السريع والمعتمد الحقيقي للفحص البرمجي لعدم حدوث أي تضارب
 SHOPIFY_API_URL = 'https://autosh.up.railway.app/shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
@@ -184,7 +184,7 @@ CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
 
 CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
 CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
-CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
+CE_CANDLE = '<tg-emoji emoji-id="5447453226498552490">🕯</tg-emoji>'
 CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
 CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
 CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
@@ -375,7 +375,7 @@ def parse_proxy_format(proxy):
     pt, proxy = (pm.group(1).lower(), pm.group(2)) if pm else ('http', proxy)
     if re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy): u, pw, h, p = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
     elif re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy): h, p, u, pw = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy).groups()
-    elif re.match(r'^([^(:@]+):(\d+)$', proxy): h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups(); u = pw = ''
+    elif re.match(r'^([^:@]+):(\d+)$', proxy): h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups(); u = pw = ''
     else: return None
     if not h or not p: return None
     pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
@@ -425,7 +425,7 @@ async def is_user_joined(uid, bot):
         except Exception: pass 
     return True
 
-# ====================== SCRIPT FUNCTIONS ======================
+# ====================== DATA ENGINE MAPPING ======================
 async def send_welcome_menu(update_or_bot, uid, plan, limit, edit_msg=None):
     admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')}\n ├ {CE_CANDLE} /validate {sf('[key]')}\n ├ {CE_CANDLE} /users\n ╰ {CE_CANDLE} /maint" if uid in ADMIN_ID else ""
     t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>\n\n<b>{CE_TOP} {sf('Checker Engine')}:</b>\n ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>\n\n<b>{CE_GEAR} {sf('Proxy Manager')}:</b>\n ├ {CE_CANDLE} /addpxy\n ├ {CE_CANDLE} /proxy\n ├ {CE_CANDLE} /checkpxy\n ╰ {CE_CANDLE} /rmpxy\n\n<b>{CE_DIAMOND} {sf('Account Settings')}:</b>\n ├ {CE_CANDLE} /info\n ├ {CE_CANDLE} /redeem\n ├ {CE_CANDLE} /fb\n ╰ {CE_CANDLE} /plan{admin_panel}\n\n<b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
@@ -496,6 +496,16 @@ async def check_shopify_api(card, site, proxy, session):
             return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
         return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
     except Exception as e: return {'status': 'Site Error', 'message': f'Error: {str(e)[:20]}', 'card': card, 'retry': True}
+
+async def remove_proxy_by_url(uid, proxy_url):
+    try:
+        current_proxies = await get_all_user_proxies(uid)
+        if current_proxies:
+            for idx, p in enumerate(current_proxies):
+                if p.get('proxy_url') == proxy_url:
+                    await remove_proxy_by_index(uid, idx)
+                    break
+    except Exception: pass
 
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
     global _IS_COOLING_DOWN
@@ -585,10 +595,10 @@ async def _send_global_hit(gateway, price, uid, bot, elapsed, response_msg="Card
         gateway_clean = escape_html(str(gateway))
         price_clean = str(price).replace('$', '').strip()
         
-        text = f"""{CE_CROWN} <b>{sf('HIT')}</b> ⏩ 𝗖𝗵𝗮𝗿𝗴𝗲𝗱 {CE_DIAMOND}
- │ <b>{sf('Response')}</b> ⏩ <code>Card Charged {sf(price_clean)} {sf('USD')}</code>
- │ <b>{sf('Gateway')}</b> ⏩ <code>{sf(gateway_clean)}</code>
- │ <b>{sf('User')}</b> ⏩ <a href="tg://user?id={uid}">{sf(safe_name)}</a> | {CE_FLASH} <code>{sf(plan_name)}</code>"""
+        text = f"""{CE_CROWN} <b>𝗛𝗜𝗧</b> ⏩ 𝗖𝗵𝗮𝗿𝗴𝗲𝗱 {CE_DIAMOND}
+ │ <b>Response</b> ⏩ Card Charged {price_clean} USD {CE_BOOM}
+ │ <b>Gateway</b> ⏩ {gateway_clean}
+ │ <b>User</b> ⏩ <a href="tg://user?id={uid}">{safe_name}</a> | {CE_FLASH} <code>{plan_name}</code>"""
 
         try: cid = int(HITS_GROUP_TARGET)
         except ValueError: cid = HITS_GROUP_TARGET

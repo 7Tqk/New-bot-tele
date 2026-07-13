@@ -84,8 +84,8 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# رابط الـ API الرئيسي المرفوع على منصة Railway
-SHOPIFY_API_URL_1 = 'https://web-production-7c318.up.railway.app/sh'
+# تم تغيير الرابط للـ API الجديد
+SHOPIFY_API_URL_1 = 'https://autosh.up.railway.app//shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
@@ -439,7 +439,6 @@ async def is_user_joined(uid, bot):
         except Exception: pass 
     return True
 
-# ======================== [تم تصحيح الإزاحة هنا بالكامل] ========================
 async def send_welcome_menu(update_or_bot, uid, plan, limit):
     admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /checkgates - {sf('Filter Gates Engine')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
     
@@ -478,8 +477,6 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
         await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
     else:
         await styled_send(update_or_bot, uid, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
-
-# ==============================================================================
 
 async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -580,7 +577,8 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         
-        timeout_setup = aiohttp.ClientTimeout(total=14, connect=4, sock_read=10)
+        # التعديل هنا: تحديد المهلة القصوى بـ 7 ثواني فقط كما طلبت
+        timeout_setup = aiohttp.ClientTimeout(total=7)
         async with session.get(req_url, headers=headers, timeout=timeout_setup) as resp:
             if resp.status == 429:
                 return {'status': 'Rate Limit', 'message': 'API Rate Limited (429)', 'card': card, 'retry': True}
@@ -629,7 +627,8 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         return {'status': 'Dead', 'message': response_msg, 'card': card, 'gateway': gt, 'price': price, 'retry': False}
         
     except asyncio.TimeoutError:
-        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
+        # رسالة الخطأ توضح أن المهلة (7 ثواني) انتهت
+        return {'status': 'Site Error', 'message': 'API Timeout (7s)', 'card': card, 'retry': True}
     except Exception as e: 
         return {'status': 'Site Error', 'message': f'API Error: {str(e)[:15]}', 'card': card, 'retry': False}
 

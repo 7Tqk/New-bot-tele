@@ -84,8 +84,8 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# [تم التحديث بالكامل] تم تركيب رابط الـ Railway الخاص بك بالصيغة والامتداد الصحيح تماماً للفحص بدون أخطاء
-SHOPIFY_API_URL_1 = 'https://apigccggfg-production.up.railway.app/check'
+# [تم التحديث بالكامل] تم تركيب رابط الـ API الجديد الخاص بك للفحص بدون أخطاء وبشكل مباشر
+SHOPIFY_API_URL_1 = 'https://autosh.up.railway.app/shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
@@ -514,7 +514,7 @@ async def get_bin_info(bin_code, session=None):
     except Exception: pass
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# [تم التحديث والتركيب البرمجي الصحيح] ربط دالة الفحص بالـ FastAPI لمعالجة كافة الردود بدقة متناهية وبدون أخطاء
+# ربط دالة الفحص بالـ FastAPI لمعالجة كافة الردود بدقة متناهية وبدون أخطاء وبمسار سليم
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy

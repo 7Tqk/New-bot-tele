@@ -84,7 +84,7 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# [تحديث] رابط الـ API الجديد الفريش والمطلوب حصرياً
+# رابط الـ API الجديد الفريش والمطلوب حصرياً
 SHOPIFY_API_URL_1 = 'https://autosh.up.railway.app//shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
@@ -174,7 +174,6 @@ CE_SHY = '<tg-emoji emoji-id="6201647288947839133">🤭</tg-emoji>'
 CE_CHECK = '<tg-emoji emoji-id="5445189224682779974"><b>✔️</b></tg-emoji>'
 CE_DOWN = '<tg-emoji emoji-id="5445358884480916784">🔽</tg-emoji>'
 CE_CARD = '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>'
-CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
 CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
 CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
 
@@ -550,7 +549,7 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# [تعديل جذري] دالة جلب رد الـ API الصافي بدون أي زيادات وتمرير الموقع المستورد فوراً
+# دالة جلب رد الـ API الصافي وتمرير الموقع المستورد فوراً
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
@@ -572,7 +571,8 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         
-        async with session.get(req_url, headers=headers, timeout=15) as resp:
+        # [تعديل] تم رفع الـ Timeout إلى 40 ثانية كاملة كما طلبت
+        async with session.get(req_url, headers=headers, timeout=40) as resp:
             text_data = await resp.text()
             
             # محاولة قراءة الرد كـ JSON، وإذا لم يكن كذلك، نأخذ النص الخام بالكامل

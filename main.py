@@ -68,13 +68,13 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-CHECKER_API_URL = 'https://autosh.up.railway.app/shopii'
+CHECKER_API_URL = 'https://web-production-3d364.up.railway.app/shopify'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-WORKERS = 70  
-API_TIMEOUT = 60  
-DELAY = 0.5  
+WORKERS = 15  
+API_TIMEOUT = 15  
+DELAY = 1.0  
 HIT_DELAY = 0.2
 
 _SITE_ERRORS_COUNT = {}
@@ -608,7 +608,6 @@ async def check_card_api(card, site, proxy, session, gateway_name):
         proxy_param = f"&proxy={proxy_str}" if proxy else ""
         req_url = f"{CHECKER_API_URL}?cc={card}&site={site}{proxy_param}"
         
-        # 🔥 تم تقليل مهلة الانتظار إلى 15 ثانية بدلاً من 90 حتى لا يعلق البوت
         async with session.get(req_url, timeout=15) as resp:
             text_data = await resp.text()
             if resp.status != 200: return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
@@ -641,7 +640,7 @@ async def check_card_api(card, site, proxy, session, gateway_name):
         return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
         
     except asyncio.TimeoutError: 
-        return {'status': 'Site Error', 'message': 'API Timeout (15s limit)', 'card': card, 'retry': True}
+        return {'status': 'Site Error', 'message': 'Connection Timeout', 'card': card, 'retry': True}
     except Exception as e: 
         return {'status': 'Site Error', 'message': f'Connection dropped: {str(e)[:20]}', 'card': card, 'retry': True}
 

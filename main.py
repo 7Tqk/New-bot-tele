@@ -14,7 +14,7 @@ import sys
 import logging
 from html import unescape
 from datetime import datetime, timedelta
-from urllib.parse import urlparse, quote # تم تحديث الاستيراد ليشمل quote لمنع تلف الروابط
+from urllib.parse import urlparse, quote 
 import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions
 from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters, ContextTypes, Defaults
@@ -84,11 +84,12 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-SHOPIFY_API_URL_1 = 'http://62.72.20.10:8081/'
+# [تم التحديث الجوهري] تركيب الـ API الجديد المشفر والمستقر المرفوع على Railway لإنهاء الـ Errors والبطء كلياً
+SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-WORKERS = 30  
+WORKERS = 70  
 DELAY = 1.6  
 HIT_DELAY = 1.0
 

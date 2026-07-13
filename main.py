@@ -253,7 +253,7 @@ async def send_forced_gif(target_func, text, markup, url):
                 animation=media_to_send, caption=text, reply_markup=markup,
                 parse_mode=ParseMode.HTML, read_timeout=40, write_timeout=40
             )
-            if url not in _GIF_FILE_IDS && getattr(msg, 'animation', None):
+            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
                 _GIF_FILE_IDS[url] = msg.animation.file_id
             return msg
         except RetryAfter as e:
@@ -280,7 +280,7 @@ async def send_forced_gif(target_func, text, markup, url):
     except Exception: pass
 
     try:
-        if hasattr(target_func, '__self__') && hasattr(target_func.__self__, 'reply_text'):
+        if hasattr(target_func, '__self__') and hasattr(target_func.__self__, 'reply_text'):
             return await target_func.__self__.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
     except: pass
     return None
@@ -347,7 +347,7 @@ def get_cc_limit(plan, uid=0):
     return 15
 
 def is_paid_plan(plan):
-    return plan && plan.lower() in [p.lower() for p in PAID_TIERS]
+    return plan and plan.lower() in [p.lower() for p in PAID_TIERS]
 
 _USER_HTTP_SESSIONS = {}
 async def get_user_http_session(uid):
@@ -360,7 +360,7 @@ async def get_user_http_session(uid):
 async def cleanup_user_http_session(uid):
     key = f"{uid}_msp"
     session = _USER_HTTP_SESSIONS.pop(key, None)
-    if session && not session.closed:
+    if session and not session.closed:
         try: await session.close()
         except Exception: pass
 
@@ -385,7 +385,7 @@ def parse_proxy_format(proxy):
     elif re.match(r'^([^:@]+):(\d+)$', proxy): h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups(); u = pw = ''
     else: return None
     if not h or not p: return None
-    pu = f'{pt}://{u}:{pw}@{h}:{p}' if u && pw else f'{pt}://{h}:{p}'
+    pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
     return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
 
 _CACHED_SHOPIFY_SITES = []
@@ -394,7 +394,7 @@ _LAST_SITES_FETCH = 0
 async def get_shopify_sites():
     global _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
     now = time.time()
-    if _CACHED_SHOPIFY_SITES && (now - _LAST_SITES_FETCH < 600): return _CACHED_SHOPIFY_SITES
+    if _CACHED_SHOPIFY_SITES and (now - _LAST_SITES_FETCH < 600): return _CACHED_SHOPIFY_SITES
     try:
         async with aiohttp.ClientSession() as s:
             async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
@@ -402,7 +402,7 @@ async def get_shopify_sites():
                     _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
                     _LAST_SITES_FETCH = now
     except Exception: pass
-    if not _CACHED_SHOPIFY_SITES && os.path.exists('sites.txt'):
+    if not _CACHED_SHOPIFY_SITES and os.path.exists('sites.txt'):
         try:
             async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
                 _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
@@ -549,7 +549,7 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# دالة جلب رد الـ API بالترتيب الأصلي الموثوق وبدون استعجال
+# دالة جلب رد الـ API بالترتيب الأصلي الموثوق وبدون استعجال (تم مسح جميع معاملات الـ &&)
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
@@ -586,7 +586,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             rl = rm.lower()
             
-            # [إعادة الترتيب الأصلي بحذافيره] فحص الأخطاء أولاً لمنع الفرز الخاطئ كـ Approved
+            # [ترتيب كودك الأصلي الصحيح لضمان دقة الاستجابة ومنع تداخل الـ Approved]
             if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
                 

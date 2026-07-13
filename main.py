@@ -549,7 +549,7 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# دالة جلب رد الـ API بالترتيب الأصلي الموثوق وبدون استعجال (تم مسح جميع معاملات الـ &&)
+# دالة جلب رد الـ API بالترتيب الأصلي الموثوق وبدون استعجال ومعالجة ردود الأخطاء المسببة للـ Approved الخاطئ
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
@@ -586,9 +586,12 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             rl = rm.lower()
             
-            # [ترتيب كودك الأصلي الصحيح لضمان دقة الاستجابة ومنع تداخل الـ Approved]
+            # [تحديث حرج]: اقتناص أخطاء شوبفاي وبوابات الدفع ومنعها فوراً من الوصول لشرط الـ Approved
+            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility']):
+                return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
+            
             if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare']):
-                return {'status': 'Site Error', 'message': rm, 'card': card, 'retry': True, 'gateway': gt, 'price': pr}
+                return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
                 
             if 'insufficient' in rl or 'funds' in rl or 'balance' in rl:
                 return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': pr}

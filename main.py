@@ -586,7 +586,8 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             rl = rm.lower()
             
-            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility']):
+            # [تحديث حرج]: اقتناص أخطاء شوبفاي وبوابات الدفع ومنعها فوراً من الوصول لشرط الـ Approved (تمت إضافة أخطاء التوكن هنا)
+            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
             if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare']):
@@ -1248,7 +1249,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     sem = asyncio.Semaphore(WORKERS)
 
     async def worker(wid):
-        # [تعديل السرعة الحرج - خطوة 1]: توزيع خروج الخيوط بفواصل زمنية مدروسة تمنع القفزات المفاجئة
+        # توزيع خروج الخيوط بفواصل زمنية مدروسة تمنع القفزات المفاجئة
         await asyncio.sleep(wid * 0.4)
         nonlocal chk, chg, app, ins, dec, err, last_resp
         while not queue.empty() and not is_stopped():
@@ -1276,7 +1277,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 except Exception: err += 1; chk += 1
                 finally:
                     queue.task_done()
-                    # [تعديل السرعة الحرج - خطوة 2]: زيادة استراحة الخيط الفردي لإجبار التناوب العضوي كارت وراء كارت
+                    # زيادة استراحة الخيط الفردي لإجبار التناوب العضوي كارت وراء كارت
                     if not is_stopped(): await asyncio.sleep(random.uniform(8.0, 14.0))
 
     wt = [asyncio.create_task(worker(i)) for i in range(WORKERS)]

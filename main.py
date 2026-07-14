@@ -257,7 +257,8 @@ async def send_forced_gif(target_func, text, markup, url):
                 animation=media_to_send, caption=text, reply_markup=markup,
                 parse_mode=ParseMode.HTML, read_timeout=40, write_timeout=40
             )
-            if url not in _GIF_FILE_IDS && getattr(msg, 'animation', None):
+            # [تم الإصلاح] تحويل معامل الربط من && إلى and التابع للغة بايثون
+            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
                 _GIF_FILE_IDS[url] = msg.animation.file_id
             return msg
         except RetryAfter as e:
@@ -284,7 +285,8 @@ async def send_forced_gif(target_func, text, markup, url):
     except Exception: pass
 
     try:
-        if hasattr(target_func, '__self__') && hasattr(target_func.__self__, 'reply_text'):
+        # [تم الإصلاح] تحويل معامل الربط الآخر من && إلى and التابع للغة بايثون أيضاً
+        if hasattr(target_func, '__self__') and hasattr(target_func.__self__, 'reply_text'):
             return await target_func.__self__.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
     except: pass
     return None

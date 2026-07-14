@@ -92,8 +92,8 @@ GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.
 KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة (تم تقليل الـ Workers إلى 20 لضمان استقرار سيرفر الاستضافة وتجنب الـ Rate Limit)
-WORKERS = 20  
-DELAY = 1.0  
+WORKERS = 40  
+DELAY = 2.9  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
 

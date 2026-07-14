@@ -181,6 +181,7 @@ CE_CARD = '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>'
 CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
 CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
 
+# ====================== CASH & STATUS EMOJIS ======================
 CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
 CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
 CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
@@ -426,7 +427,7 @@ async def get_shopify_sites():
                     _LAST_SITES_FETCH = now
     except Exception: pass
     
-    # الخطأ الثالث: توفير قائمة احتياطية مدمجة (Fallback) لمنع توقف دالة الفحص في حال فشل جلب المواقع
+    # القائمة الاحتياطية المدمجة لـ شوبيفاي
     if not _CACHED_SHOPIFY_SITES:
         _CACHED_SHOPIFY_SITES = [
             "touch-of-finland.myshopify.com",
@@ -692,10 +693,9 @@ async def remove_proxy_by_url(uid, proxy_url):
     except Exception: pass
 
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=6):
-    # [تم التعديل] إلغاء تدوير المواقع ومحاولات الفحص المتكررة لـ AuthNet لأنها تفحص من نفسها مباشرة
     if gateway_name == "AuthNet":
         last_res = {'status': 'Dead', 'message': 'API Error', 'card': card}
-        for attempt in range(3):  # محاولات بسيطة فقط في حال تعطل البروكسي
+        for attempt in range(3): 
             p = random.choice(proxies)['proxy_url'] if proxies else None
             r = await check_authnet_api(card, p, session)
             if r.get('status') == 'Site Error':
@@ -837,7 +837,6 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton('PayPal (Soon)', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
             [InlineKeyboardButton('Cancel', callback_data="gate:cancel", style="danger", icon_custom_emoji_id="5269531045165816230")]
         ]
-        # [تعديل صياغة النص]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
 
@@ -1083,7 +1082,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         m = f"<b>{CE_DIAMOND} {sf('Key Information')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_SMILE} {sf('Status')}:</b> <code>{sf(st)}</code>\n├ <b>{sf('Plan Tier')}:</b> <code>{sf(ki.get('tier', 'Unknown'))}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(ki.get('days', 0)))} {sf('Days')}</code>\n╰ <b>{CE_CHART} {sf('Generated')}:</b> <code>{sf(ki.get('generated_at', 'Unknown'))}</code>"
         if u and ub and str(ub).isdigit(): 
             prof_name = escape_html(_USER_NAMES.get(int(ub), f"User {ub}"))
-            m += f"\n\n├ <b>{CE_SMILE} {sf('Redeemed By')}:</b> <code>{sf(str(ub))}</code> <a href='tg://user?id='>[{prof_name}]</a>\n╰ <b>{CE_CHART} {sf('Redeem Time')}:</b> <code>{sf(ki.get('redeemed_at', 'Not yet'))}</code>"
+            m += f"\n\n├ <b>{CE_SMILE} {sf('Redeemed By')}:</b> <code>{sf(str(ub))}</code> <a href='tg://user?id={ub}'>[{prof_name}]</a>\n╰ <b>{CE_CHART} {sf('Redeem Time')}:</b> <code>{sf(ki.get('redeemed_at', 'Not yet'))}</code>"
         await styled_reply(update, m, use_gif=True)
 
     elif cmd == "maint":
@@ -1102,7 +1101,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 un = escape_html(_USER_NAMES.get(u, f"User {u}"))
                 gate = p.get("gate", "Unknown")
                 total = p.get("total", "?")
-                # الخطأ الثاني: تم ملء معرف المستخدم (u) في الرابط active_info ليعمل بشكل صحيح
                 active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
                 
         recent_users_info = []
@@ -1112,7 +1110,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             recent_users_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>")
             
         text = f"<b>{CE_GEAR} {sf('Global System Status')}</b>\n\n├ <b>{sf('Total Session Users')}:</b> <code>{sf(str(len(USER_LAST_REQ)))}</code>\n"
-        # الخطأ الأول: دمج القائمة بالكامل (join) بدلاً من استدعاء متغير u خارج حلقة الـ for لمنع انهيار البوت وحصول UnboundLocalError
         if recent_users_info: 
             text += f"├ <b>{sf('Recent Users')}:</b>\n" + "\n".join(recent_users_info) + "\n\n"
         else: 
@@ -1328,7 +1325,6 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": [], "total": len(cards), "gate": gn}
     
-    # [تم التعديل] تحديد عدد الـ Workers ديناميكياً (1 لـ AuthNet منعاً للضغط، و 45 لـ شوبيفاي)
     current_workers = 1 if gn == "AuthNet" else WORKERS
     await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(current_workers))}</code>\n╰ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
@@ -1347,7 +1343,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     last_resp = sf("Waiting for response...")
     def is_stopped(): return process_store.get(uid, {}).get("stopped", False)
 
-    # [تم التعديل] تطبيق عدد الـ Workers المتغير في اللوحة والعدادات
     current_workers = 1 if gate_name == "AuthNet" else WORKERS
 
     async def dashboard_updater():
@@ -1398,21 +1393,25 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
                     last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
                     
+                    # تم التأكيد: الإرسال لرسالة الهيت المستقلة مقتصر فقط وفقط على حالة الخصم الناجح (Charged)
                     if status == 'Charged':
                         chg += 1
                         asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
-                    elif status == 'Approved': app += 1
-                    elif status == 'Insufficient': ins += 1
-                    elif status == 'Site Error': err += 1
-                    else: dec += 1
+                    elif status == 'Approved': 
+                        app += 1
+                    elif status == 'Insufficient': 
+                        ins += 1
+                    elif status == 'Site Error': 
+                        err += 1
+                    else: 
+                        dec += 1
                 except asyncio.CancelledError: break
                 except Exception: err += 1; chk += 1
                 finally:
                     queue.task_done()
-            # [تم التعديل] إلغاء تأخير الـ 14 ثانية الطويل لـ AuthNet لأنها تفحص بالتسلسل (1 Worker) ولا تحتاج انتظار طويل
             if not is_stopped(): 
                 if gate_name == "AuthNet":
-                    await asyncio.sleep(0.5)  # سرعة استجابة فورية ومتسلسلة
+                    await asyncio.sleep(0.5) 
                 else:
                     await asyncio.sleep(random.uniform(8.0, 14.0))
 

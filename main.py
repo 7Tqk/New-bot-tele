@@ -91,8 +91,8 @@ AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-# التعديلات المطلوبة
-WORKERS = 40  
+# التعديلات المطلوبة (تم تقليل الـ Workers إلى 20 لضمان استقرار سيرفر الاستضافة وتجنب الـ Rate Limit)
+WORKERS = 20  
 DELAY = 1.0  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
@@ -616,7 +616,8 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
-            if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare']):
+            # تم حذف كلمة 'error' و 'session' لتجنب فرز الـ Decline الطبيعي للبطاقات كخطأ موقع
+            if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare', '502', '503', '504']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
                 
             if 'insufficient' in rl or 'funds' in rl or 'balance' in rl:
@@ -709,6 +710,7 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
     for attempt in range(max_retries):
         if not proxies: 
             p = None
+            p_dict = None
         else:
             p_dict = random.choice(proxies)
             p = p_dict['proxy_url']
@@ -728,10 +730,8 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
             msg = str(r.get('message', '')).lower()
             
             if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'bad gateway', 'timeout']):
-                if p_dict:
-                    if p_dict in proxies:
-                        proxies.remove(p_dict)
-                    asyncio.create_task(remove_proxy_by_url(uid, p_dict['proxy_url']))
+                if p_dict and p_dict in proxies:
+                    proxies.remove(p_dict)  # يتم حذفه من جلسة الفحص الحالية لتجنب البطء، ولكن لا يتم حذفه نهائياً من قاعدة البيانات لتجنب نفاد البروكسيات فجأة
                 lr = r
                 continue
 
@@ -1393,7 +1393,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
                     last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
                     
-                    # تم التأكيد: الإرسال لرسالة الهيت المستقلة مقتصر فقط وفقط على حالة الخصم الناجح (Charged)
                     if status == 'Charged':
                         chg += 1
                         asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))

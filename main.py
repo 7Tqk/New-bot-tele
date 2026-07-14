@@ -89,9 +89,11 @@ SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
+# التعديلات المطلوبة
 WORKERS = 40  
-DELAY = 3.0  
+DELAY = 5.0  
 HIT_DELAY = 1.0
+API_TIMEOUT = 60
 
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 3
@@ -575,7 +577,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         }
         
-        async with session.get(req_url, headers=headers, timeout=40) as resp:
+        async with session.get(req_url, headers=headers, timeout=API_TIMEOUT) as resp:
             text_data = await resp.text()
             
             try: 

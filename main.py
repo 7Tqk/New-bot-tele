@@ -84,7 +84,7 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# رابط الـ API الثابت والمطلوب
+# رابط الـ API
 SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
@@ -179,7 +179,7 @@ CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
 
 CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
 CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
-CE_CANDLE = '<tg-emoji emoji-id="5445163772706582819">🕯</tg-emoji>'
+CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
 CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
 CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
 CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
@@ -376,35 +376,14 @@ def extract_cc(text):
         for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
     return list(dict.fromkeys(cards))
 
-# [معالج البروكسيات الذكي والمصحح]: تفكيك جميع صيغ البروكسي القياسية في العالم دون تجميد
 def parse_proxy_format(proxy):
-    proxy = proxy.strip().replace(' ', '')
-    if not proxy: return None
-    
+    proxy = proxy.strip()
     pm = re.match(r'^(socks5|socks4|http|https)://(.+)$', proxy, re.IGNORECASE)
     pt, proxy = (pm.group(1).lower(), pm.group(2)) if pm else ('http', proxy)
-    
-    u, pw, h, p = '', '', '', ''
-    m1 = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy)
-    if m1:
-        u, pw, h, p = m1.groups()
-    else:
-        parts = proxy.split(':')
-        if len(parts) == 4:
-            if parts[1].isdigit():
-                h, p, u, pw = parts[0], parts[1], parts[2], parts[3]
-            elif parts[3].isdigit():
-                u, pw, h, p = parts[0], parts[1], parts[2], parts[3]
-            else:
-                return None
-        elif len(parts) == 2:
-            if parts[1].isdigit():
-                h, p = parts[0], parts[1]
-            else:
-                return None
-        else:
-            return None
-
+    if re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy): u, pw, h, p = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
+    elif re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy): h, p, u, pw = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy).groups()
+    elif re.match(r'^([^:@]+):(\d+)$', proxy): h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups(); u = pw = ''
+    else: return None
     if not h or not p: return None
     pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
     return {'ip': h, 'port': p, 'username': u or None, 'password': pw or None, 'proxy_url': pu, 'type': pt}
@@ -414,6 +393,7 @@ _LAST_SITES_FETCH = 0
 
 async def get_shopify_sites():
     global _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
+    now = time.time()
     if _CACHED_SHOPIFY_SITES: 
         return _CACHED_SHOPIFY_SITES
         
@@ -430,7 +410,7 @@ async def get_shopify_sites():
             async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
                 if r.status == 200:
                     _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
-                    _LAST_SITES_FETCH = time.time()
+                    _LAST_SITES_FETCH = now
     except Exception: pass
     
     return _CACHED_SHOPIFY_SITES
@@ -442,8 +422,7 @@ def is_dead_site_error(err):
         'step 0', 'step 0 failed', 'step 1', 'step 1 failed', 'missing stable', 'missing stablei',
         'max ret', 'cloudflare', 'timed out', 'bad gateway', 'service unavailable', 
         'gateway timeout', 'site dead', 'session_error', 'max retries', 'max retries exceeded',
-        '504', '502', '503', '429', 'tunnel', 'connection close', 'format error',
-        'cart failed', '422', 'payment token', 'unable to get payment token', 'rate limit'
+        '504', '502', '503', '429', 'tunnel', 'connection close', 'format error'
     ]
     return any(k in e for k in bad_keywords)
 
@@ -485,12 +464,18 @@ async def send_welcome_menu(update_or_bot, uid, plan, limit):
         [InlineKeyboardButton('View Plans', callback_data="show_plans", style="primary", icon_custom_emoji_id="5413879192267805083"),
          InlineKeyboardButton('Redeem Key', callback_data="prompt_redeem", style="success", icon_custom_emoji_id="5451882707875276247")]
     ]
+    
     if is_valid_url(JOIN_CHANNEL_LINK) and is_valid_url(JOIN_GROUP_LINK):
         kb.append([InlineKeyboardButton('Channel', url=JOIN_CHANNEL_LINK, style="primary", icon_custom_emoji_id="5305265301917549162"), InlineKeyboardButton('Group', url=JOIN_GROUP_LINK, style="primary", icon_custom_emoji_id="6028356293540977715")])
-    elif is_valid_url(JOIN_CHANNEL_LINK): kb.append([InlineKeyboardButton('Channel', url=JOIN_CHANNEL_LINK, style="primary", icon_custom_emoji_id="5305265301917549162")])
-    elif is_valid_url(JOIN_GROUP_LINK): kb.append([InlineKeyboardButton('Group', url=JOIN_GROUP_LINK, style="primary", icon_custom_emoji_id="6028356293540977715")])
-    if isinstance(update_or_bot, Update): await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
-    else: await styled_send(update_or_bot, uid, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
+    elif is_valid_url(JOIN_CHANNEL_LINK):
+        kb.append([InlineKeyboardButton('Channel', url=JOIN_CHANNEL_LINK, style="primary", icon_custom_emoji_id="5305265301917549162")])
+    elif is_valid_url(JOIN_GROUP_LINK):
+        kb.append([InlineKeyboardButton('Group', url=JOIN_GROUP_LINK, style="primary", icon_custom_emoji_id="6028356293540977715")])
+        
+    if isinstance(update_or_bot, Update):
+        await styled_reply(update_or_bot, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
+    else:
+        await styled_send(update_or_bot, uid, t, buttons=kb, use_gif=True, specific_gif=WELCOME_GIF)
 
 async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -515,7 +500,11 @@ async def get_bin_info(bin_code, session=None):
     b6 = str(bin_code)[:6]
     if b6 in _BIN_CACHE: 
         return _BIN_CACHE[b6]
-    headers = {"User-Agent": "Mozilla/5.0"}
+        
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    }
+    
     try:
         url1 = f"https://bins.antipublic.cc/bins/{b6}"
         async def fetch1(s):
@@ -524,6 +513,7 @@ async def get_bin_info(bin_code, session=None):
                     data = await r.json()
                     if data and isinstance(data, dict) and data.get('brand'): return data
                 return None
+        
         res = await fetch1(session) if (session and not session.closed) else await fetch1(aiohttp.ClientSession())
         if res:
             parsed = {
@@ -538,6 +528,31 @@ async def get_bin_info(bin_code, session=None):
             _BIN_CACHE[b6] = parsed
             return parsed
     except Exception: pass
+
+    try:
+        url2 = f"https://data.handyapi.com/bin/{b6}"
+        async def fetch2(s):
+            async with s.get(url2, headers=headers, timeout=4) as r:
+                if r.status == 200: return await r.json()
+                return None
+                
+        res2 = await fetch2(session) if (session and not session.closed) else await fetch2(aiohttp.ClientSession())
+        if res2 and res2.get("Status") == "SUCCESS":
+            country_obj = res2.get("Country", {})
+            bank_obj = res2.get("Bank", {})
+            parsed = {
+                "brand": str(res2.get("Scheme", "-")).upper(),
+                "type": str(res2.get("Type", "-")).upper(),
+                "level": str(res2.get("CardTier", "-")).upper(),
+                "bank": str(bank_obj.get("Name", "-")).upper(),
+                "country": str(country_obj.get("Name", "-")).upper(),
+                "country_code": str(country_obj.get("A2", "")).upper().strip(),
+                "flag": ""
+            }
+            _BIN_CACHE[b6] = parsed
+            return parsed
+    except Exception: pass
+
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
 async def check_shopify_api(api_url, card, site, proxy, session):
@@ -547,6 +562,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             proxy_str = proxy_str.split("://")[-1]
         
         card_encoded = quote(str(card).strip())
+        
         site_param = site.strip()
         if not site_param.startswith("http"):
             site_param = f"https://{site_param}"
@@ -572,9 +588,10 @@ async def check_shopify_api(api_url, card, site, proxy, session):
                 pr = "$10.00"
                 gt = "Shopify"
             
-            rl = unsf(rm).lower()
+            rl = rm.lower()
             
-            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token', 'cart failed', '422', 'status: 429', '429', 'rate limit', 'too many requests']):
+            # اضافة جميع اخطاء الموقع المستجدة (تتضمن رمز 422 وتوكن الدفع) لمنع الفرز الخاطئ كـ Approved
+            if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token', 'cart failed', '422']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
             if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'error', 'session', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare']):
@@ -612,7 +629,6 @@ async def remove_proxy_by_url(uid, proxy_url):
 async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=3):
     lr = None
     for attempt in range(max_retries):
-        p_dict = None  
         if not proxies: 
             p = None
         else:
@@ -811,7 +827,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception: pass
         await styled_reply(update, f"<b>{CE_SMILE} {sf('Your message has been delivered to the Owner.')}</b>", use_gif=True)
 
-    # [إصلاح دالة إضافة البروكسيات]: إضافة المجموعة كاملة دون قص وبجميع الصيغ المتاحة في السوق
     elif cmd == "addpxy":
         if not await force_join_check(update, context): return
         lines = []
@@ -820,10 +835,8 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f = await context.bot.get_file(update.message.reply_to_message.document.file_id)
                 fp = f"px_{uid}.txt"
                 await f.download_to_drive(fp)
-                async with aiofiles.open(fp, "r", encoding="utf-8", errors='ignore') as file:
-                    content = await file.read()
-                lines = content.split()
-                if os.path.exists(fp): os.remove(fp)
+                async with aiofiles.open(fp, "r", encoding="utf-8", errors='ignore') as file: lines = (await file.read()).split()
+                os.remove(fp)
             else:
                 raw_rep = update.message.reply_to_message.text or update.message.reply_to_message.caption or ""
                 lines = raw_rep.split()
@@ -832,34 +845,18 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide the proxies correctly.')}</b>", use_gif=True)
         
         if not lines: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies found in your message.')}</b>", use_gif=True)
-        
         db_p = await get_all_user_proxies(uid)
-        existing_urls = {p['proxy_url'] for p in db_p} if db_p else set()
-        initial_count = len(existing_urls)
-        
-        if initial_count >= 100: 
-            return await styled_reply(update, f"<b>{CE_BOOM} {sf('Limit 100/100 reached.')}</b>", use_gif=True)
-            
-        slots_left = 100 - initial_count
+        eu = {p['proxy_url'] for p in db_p} if db_p else set()
+        if len(eu) >= 100: return await styled_reply(update, f"<b>{CE_BOOM} {sf('Limit 100/100 reached.')}</b>", use_gif=True)
         parsed = []
-        
         for l in lines:
-            l_clean = l.strip().rstrip(',;').lstrip(',')
-            if not l_clean: continue
-            px = parse_proxy_format(l_clean)
-            if px and px['proxy_url'] not in existing_urls:
-                parsed.append(px)
-                existing_urls.add(px['proxy_url'])
-                if len(parsed) >= slots_left:
-                    break
-                    
+            px = parse_proxy_format(l)
+            if px and px['proxy_url'] not in eu: parsed.append(px); eu.add(px['proxy_url'])
         if not parsed: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('All proxies are already added or invalid.')}</b>", use_gif=True)
-        
+        parsed = parsed[:100-len(eu)]
         tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Adding proxies...')}</b>", use_gif=True)
         c = 0
-        for p2 in parsed: 
-            await add_proxy_db(uid, p2)
-            c += 1
+        for p2 in parsed: await add_proxy_db(uid, p2); c += 1
         await styled_edit(tm, f"<b>{CE_SMILE} {sf('Successfully Added')}:</b> <code>{sf(str(c))} {sf('Proxies')}</code>")
 
     elif cmd == "proxy":
@@ -1054,17 +1051,13 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
         except Exception: pass
 
-    # [إصلاح حرج لـ checkgates]: تصفير الكاش إجبارياً وتفعيل خطة الطوارئ المحلية لـ sites.txt فوراً دون إلقاء خطأ
     elif cmd == "checkgates":
         if uid not in ADMIN_ID:
             await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n╰ {sf('This command is restricted to administrators only.')}", use_gif=True)
             return
             
-        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Processing and extracting gates...')}</b>", use_gif=True)
+        tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Fetching and filtering gates...')}</b>", use_gif=True)
         try:
-            global _CACHED_SHOPIFY_SITES
-            _CACHED_SHOPIFY_SITES.clear()
-            
             raw_sites = []
             if update.message.reply_to_message and update.message.reply_to_message.document:
                 f = await context.bot.get_file(update.message.reply_to_message.document.file_id)
@@ -1072,39 +1065,36 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await f.download_to_drive(fp)
                 async with aiofiles.open(fp, "r", encoding="utf-8", errors='ignore') as file:
                     content = await file.read()
-                if os.path.exists(fp): os.remove(fp)
+                os.remove(fp)
                 raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
             else:
-                try:
-                    async with aiohttp.ClientSession() as s:
-                        async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}, timeout=15) as r:
-                            if r.status == 200:
-                                content = await r.text()
-                                raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
-                            else: raise Exception("Github non-200")
-                except Exception:
-                    if os.path.exists('sites.txt'):
-                        async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
-                            content = await f.read()
-                        raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
-                    else:
-                        return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf('GitHub link failed and no local sites.txt found.')}")
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
+                        if r.status == 200:
+                            content = await r.text()
+                            raw_sites = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.split('\n') if l.strip()]))
+                        else:
+                            return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('Failed to fetch file from GitHub.')}</b>")
             
             valid_format_sites = []
             for site in raw_sites:
                 site = site.lower().strip()
                 if not site or "." not in site: continue
-                site = site.split('/')[0].split('?')[0].strip()
-                valid_format_sites.append(site)
+                site = site.split('/')[0].split('?')[0]
+                if "myshopify.com" in site:
+                    valid_format_sites.append(site)
+                elif len(site) > 4:
+                    valid_format_sites.append(site)
                     
             raw_sites = list(set(valid_format_sites))
+            
             if not raw_sites:
-                return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('No targets found to clean.')}</b>")
+                return await styled_edit(tm, f"<b>{CE_CLOWN} {sf('No valid sites found to test.')}</b>")
                 
             admin_proxies = await get_all_user_proxies(uid)
             proxies_list = list(admin_proxies) if admin_proxies else []
             
-            await styled_edit(tm, f"<b>{CE_HOURGLASS} {sf('Purging and checking')} <code>{len(raw_sites)}</code> {sf('targets via proxies...')}</b>")
+            await styled_edit(tm, f"<b>{CE_HOURGLASS} {sf('Testing')} <code>{len(raw_sites)}</code> {sf('gates for Captcha & Errors...')}</b>")
             
             working_sites = []
             dead_count = 0
@@ -1131,19 +1121,21 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 tasks = [_validate_gate(site, test_session) for site in raw_sites]
                 await asyncio.gather(*tasks)
             
-            async with aiofiles.open('sites.txt', 'w', encoding='utf-8') as f:
-                await f.write('\n'.join(working_sites))
+            if working_sites:
+                async with aiofiles.open('sites.txt', 'w', encoding='utf-8') as f:
+                    await f.write('\n'.join(working_sites))
             
+            global _CACHED_SHOPIFY_SITES
             _CACHED_SHOPIFY_SITES = working_sites
             
-            res_msg = f"""<b>{CE_CROWN} {sf('Purge & Clean Completed')} {CE_PARTY}</b>
+            res_msg = f"""<b>{CE_CROWN} {sf('Gates Purge Completed')} {CE_PARTY}</b>
             
-├ <b>{sf('Total Evaluated')}:</b> <code>{sf(str(len(raw_sites)))}</code>
-├ <b>{CE_CHECK} {sf('Saved Working')}:</b> <code>{sf(str(len(working_sites)))}</code>
-├ <b>{CE_SHIELD} {sf('Removed Captcha/CF')}:</b> <code>{sf(str(captcha_count))}</code>
-╰ <b>{CE_CLOWN} {sf('Deleted Dead')}:</b> <code>{sf(str(dead_count))}</code>
+├ <b>{sf('Total Loaded')}:</b> <code>{sf(str(len(raw_sites)))}</code>
+├ <b>{CE_CHECK} {sf('Active & Clean')}:</b> <code>{sf(str(len(working_sites)))}</code>
+├ <b>{CE_SHIELD} {sf('Captcha/CF Blocked')}:</b> <code>{sf(str(captcha_count))}</code>
+╰ <b>{CE_CLOWN} {sf('Purged Dead')}:</b> <code>{sf(str(dead_count))}</code>
 
-<i>{sf('Non-working elements dropped permanently from database!')}</i>"""
+<i>{sf('Sites saved and applied permanently!')}</i>"""
             await styled_edit(tm, res_msg)
             
         except Exception as e:

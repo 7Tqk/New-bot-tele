@@ -93,7 +93,7 @@ KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة (تم تقليل الـ Workers إلى 20 لضمان استقرار سيرفر الاستضافة وتجنب الـ Rate Limit)
 WORKERS = 40  
-DELAY = 2.9  
+DELAY = 0.5  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
 

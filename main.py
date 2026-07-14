@@ -257,7 +257,7 @@ async def send_forced_gif(target_func, text, markup, url):
                 animation=media_to_send, caption=text, reply_markup=markup,
                 parse_mode=ParseMode.HTML, read_timeout=40, write_timeout=40
             )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+            if url not in _GIF_FILE_IDS && getattr(msg, 'animation', None):
                 _GIF_FILE_IDS[url] = msg.animation.file_id
             return msg
         except RetryAfter as e:
@@ -284,7 +284,7 @@ async def send_forced_gif(target_func, text, markup, url):
     except Exception: pass
 
     try:
-        if hasattr(target_func, '__self__') and hasattr(target_func.__self__, 'reply_text'):
+        if hasattr(target_func, '__self__') && hasattr(target_func.__self__, 'reply_text'):
             return await target_func.__self__.reply_text(text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
     except: pass
     return None
@@ -425,6 +425,15 @@ async def get_shopify_sites():
                     _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('\n') if l.strip()]))
                     _LAST_SITES_FETCH = now
     except Exception: pass
+    
+    # [تم الإصلاح] الخطأ الثالث: توفير قائمة احتياطية مدمجة (Fallback) لمنع توقف دالة الفحص في حال فشل جلب المواقع
+    if not _CACHED_SHOPIFY_SITES:
+        _CACHED_SHOPIFY_SITES = [
+            "touch-of-finland.myshopify.com",
+            "huckberry.myshopify.com",
+            "death-wish-coffee.myshopify.com",
+            "gymshark.myshopify.com"
+        ]
     
     return _CACHED_SHOPIFY_SITES
 
@@ -1100,17 +1109,22 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 un = escape_html(_USER_NAMES.get(u, f"User {u}"))
                 gate = p.get("gate", "Unknown")
                 total = p.get("total", "?")
-                active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id='>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
+                # [تم الإصلاح] الخطأ الثاني: تم ملء معرف المستخدم (u) في الرابط active_info ليعمل بشكل صحيح
+                active_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a> (<code>{sf(str(u))}</code>)\n  │  ╰ Gate: <code>{sf(gate)}</code> | CCs: <code>{sf(str(total))}</code>")
                 
         recent_users_info = []
         sorted_users = sorted(USER_LAST_REQ.items(), key=lambda x: x[1], reverse=True)[:15] 
         for u, _ in sorted_users:
             un = escape_html(_USER_NAMES.get(u, f"User {u}"))
-            recent_users_info.append(f"  │  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>")
+            recent_users_info.append(f"  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>")
             
         text = f"<b>{CE_GEAR} {sf('Global System Status')}</b>\n\n├ <b>{sf('Total Session Users')}:</b> <code>{sf(str(len(USER_LAST_REQ)))}</code>\n"
-        if recent_users_info: text += f"  │  ├ <b>{CE_SMILE} {sf('User')}:</b> <a href='tg://user?id={u}'>{un}</a>\n  │  ╰ ID: <code>{sf(str(u))}</code>\n"
-        else: text += f"  ╰ {sf('Recent Users')}: <code>{sf('None')}</code>\n\n"
+        # [تم الإصلاح] الخطأ الأول: دمج القائمة بالكامل (join) بدلاً من استدعاء متغير u خارج حلقة الـ for لمنع انهيار البوت وحصول UnboundLocalError
+        if recent_users_info: 
+            text += f"├ <b>{sf('Recent Users')}:</b>\n" + "\n".join(recent_users_info) + "\n\n"
+        else: 
+            text += f"├ <b>{sf('Recent Users')}:</b> <code>{sf('None')}</code>\n\n"
+            
         text += f"├ <b>{sf('Active Checkers')}:</b> <code>{sf(str(len(active_info)))}</code>\n"
         if active_info: text += f"╰ <b>{sf('Currently Checking')}:</b>\n" + "\n".join(active_info)
         else: text += f"╰ <b>{sf('Currently Checking')}:</b> <code>{sf('None')}</code>"

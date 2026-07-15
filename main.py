@@ -39,7 +39,9 @@ def CustomInlineKeyboardButton(*args, **kwargs):
         BUTTON_REGISTRY[id(btn)] = {'style': style, 'icon_custom_emoji_id': icon_custom_emoji_id}
     return btn
 
+# ربط الكلاس المعدل بالمرجعين المحلي والعام لضمان تفعيل ميزات الأزرار الملونة والمتحركة
 telegram.InlineKeyboardButton = CustomInlineKeyboardButton
+InlineKeyboardButton = CustomInlineKeyboardButton
 
 _original_to_dict = _original_inline_keyboard_button.to_dict
 def _patched_to_dict(self, *args, **kwargs):
@@ -1012,6 +1014,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         kb = [
             [InlineKeyboardButton('Shopify (Charge)', callback_data="gate:Shopify", style="success", icon_custom_emoji_id="5445388803223091254")],
             [InlineKeyboardButton('AuthNet ($20.00)', callback_data="gate:AuthNet", style="primary", icon_custom_emoji_id="5447453226498552490")],
+            [InlineKeyboardButton('PayPal (Soon)', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
             [InlineKeyboardButton('Cancel', callback_data="gate:cancel", style="danger", icon_custom_emoji_id="5269531045165816230")]
         ]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
@@ -1209,6 +1212,23 @@ async def gen_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     t_key = "\n".join([f"<code>{k}</code>" for k in generated])
     await styled_reply(update, f"<b>🔑 Generated {qty} Keys for {tier}:</b>\n\n{t_key}", use_gif=False)
 
+async def validate_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if uid not in ADMIN_ID: return
+    if not context.args:
+        await styled_reply(update, "<b>Usage:</b> <code>/validate [key]</code>", use_gif=False)
+        return
+    key = context.args[0].strip()
+    keys = await load_keys()
+    if key not in keys:
+        await styled_reply(update, f"<b>{CE_CLOWN} {sf('Key not found in database.')}</b>", use_gif=False)
+        return
+    kdata = keys[key]
+    status = "Used" if kdata["used"] else "Active/Unused"
+    used_by = kdata.get("used_by", "-")
+    expiry = kdata.get("expiry", "-")
+    await styled_reply(update, f"<b>🔑 Key Details:</b>\n\n├ <b>Key:</b> <code>{key}</code>\n├ <b>Tier:</b> <code>{kdata['tier']}</code>\n├ <b>Status:</b> <code>{status}</code>\n├ <b>Used By:</b> <code>{used_by}</code>\n╰ <b>Expiry:</b> <code>{expiry}</code>", use_gif=False)
+
 async def redeem_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     if not context.args:
@@ -1391,13 +1411,12 @@ def main():
         logger.error("No BOT_TOKEN set in environment variables.")
         sys.exit(1)
         
-    # تشغيل تهيئة قاعدة البيانات بشكل أسينك صحيح لتفادي تحذير الـ RuntimeWarning
+    # تهيئة قواعد البيانات بشكل متزامن وآمن قبل تفعيل البوت
     try:
         asyncio.run(init_db())
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
     
-    # تم حل المشكلة: تم استيراد فئة Defaults من حزمة telegram.ext بشكل سليم
     app = Application.builder().token(BOT_TOKEN).defaults(Defaults(parse_mode=ParseMode.HTML)).build()
     
     app.add_handler(CommandHandler("start", start_cmd))
@@ -1411,6 +1430,7 @@ def main():
     app.add_handler(CommandHandler("rmpxy", rmpxy_cmd))
     app.add_handler(CommandHandler("checkpxy", checkpxy_cmd))
     app.add_handler(CommandHandler("gen", gen_cmd))
+    app.add_handler(CommandHandler("validate", validate_cmd))
     app.add_handler(CommandHandler("redeem", redeem_cmd))
     app.add_handler(CommandHandler("users", users_cmd))
     app.add_handler(CommandHandler("checkgates", checkgates_cmd))

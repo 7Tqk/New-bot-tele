@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from urllib.parse import urlparse, quote 
 import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions
-from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters, ContextTypes, CommandHandler
+from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters, ContextTypes, CommandHandler, Defaults
 from telegram.error import RetryAfter, Conflict, TimedOut, NetworkError, Forbidden, BadRequest
 from telegram.constants import ParseMode
 
@@ -271,8 +271,7 @@ COUNTRY_NAME_TO_CODE = {
     "SOUTH GEORGIA AND THE SOUTH SANDWICH ISLANDS": "GS", "SPAIN": "ES", "SRI LANKA": "LK",
     "SUDAN": "SD", "SURINAME": "SR", "SVALBARD AND JAN MAYEN": "SJ", "SWAZILAND": "SZ", "ESWATINI": "SZ",
     "SWEDEN": "SE", "SWITZERLAND": "CH", "SYRIAN ARAB REPUBLIC": "SY", "SYRIA": "SY", "TAIWAN, PROVINCE OF CHINA": "TW",
-    "TAIWAN": "TW", "TAJIKISTAN": "TJ", "TANZANIA, UNITED REPUBLIC OF": "TZ", "TANZANIA": "TZ", "THAILAND": "TH",
-    "TIMOR-LESTE": "TL", "TOGO": "TG", "TOKELAU": "TK", "TONGA": "TO", "TRINIDAD AND TOBAGO": "TT",
+    "TAIWAN": "TW", "TAJIKISTAN": "TJ", "TKL": "TK", "TKM": "TM", "TLS": "TL", "TON": "TO", "TTO": "TT",
     "TUNISIA": "TN", "TURKEY": "TR", "TURKMENISTAN": "TM", "TURKS AND CAICOS ISLANDS": "TC", "TUVALU": "TV",
     "UGANDA": "UG", "UKRAINE": "UA", "UNITED ARAB EMIRATES": "AE", "UAE": "AE", "UNITED KINGDOM": "GB",
     "UNITED STATES": "US", "UNITED STATES OF AMERICA": "US", "USA": "US", "UK": "GB", "GB": "GB",
@@ -704,7 +703,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         if proxy_str and "://" in proxy_str:
             proxy_str = proxy_str.split("://")[-1]
         
-        # تفكيك البطاقة لدعم المتغيرات المنفصلة بشكل كامل وتوفير توافق 100% مع الـ API
         card_parts = str(card).strip().split('|')
         cc_num, cc_month, cc_year, cc_cvv = (card_parts[0], card_parts[1], card_parts[2], card_parts[3]) if len(card_parts) >= 4 else ("", "", "", "")
         
@@ -712,7 +710,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         if not site_param.startswith("http"):
             site_param = f"https://{site_param}"
             
-        # بناء قاموس المتغيرات الشامل ليتوافق مع أي بنية API في FastAPI أو PHP
         params = {
             "cc": str(card).strip(),
             "card": str(card).strip(),
@@ -758,7 +755,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             rl = rm.lower()
             
-            # فحص وحل مشكلة site requires login و Status 404 وتحويلها إلى Site Error لتبديل الموقع فوراً تلقائياً!
             if any(k in rl for k in [
                 'login', 'require login', 'requires login', 'customer_login', 'customer/login',
                 '404', 'not found', 'status: 404', 'status:404', 'site error! status: 404',
@@ -1076,13 +1072,12 @@ async def run_mass_check_task(uid, cards, gateway, bot, message_obj):
                 
             state["checked"] += 1
 
-    # واجهة تحديث ذكية متأخرة (Throttled Progress Updates) لحظر حدود التليجرام تماماً وتسريع العملية لأقصى حد
     async def progress_reporter():
         last_report_time = time.time()
         while state["checked"] < state["total"] and not state["stopped"]:
             await asyncio.sleep(0.5)
             now = time.time()
-            if now - last_report_time >= 2.5: # تحديث كل 2.5 ثانية فقط لتفادي تجميد البوت من التليجرام
+            if now - last_report_time >= 2.5: 
                 last_report_time = now
                 await update_progress_msg()
         await update_progress_msg(final=True)
@@ -1092,7 +1087,6 @@ async def run_mass_check_task(uid, cards, gateway, bot, message_obj):
         total = state["total"]
         pct = int((checked / total) * 100) if total > 0 else 0
         
-        # بار تقدم بصري فاخر
         filled = int(pct / 10)
         bar = "█" * filled + "░" * (10 - filled)
         
@@ -1132,11 +1126,10 @@ async def run_mass_check_task(uid, cards, gateway, bot, message_obj):
 
     reporter_task = asyncio.create_task(progress_reporter())
     
-    # تشغيل البطاقات دفعة واحدة بأقصى كفاءة متوازية
     tasks = [asyncio.create_task(process_card_worker(card)) for card in cards]
     await asyncio.gather(*tasks)
     
-    state["checked"] = len(cards) # التأكد من القيمة النهائية
+    state["checked"] = len(cards) 
     await reporter_task
     ACTIVE_MTXT_PROCESSES.pop(uid, None)
 
@@ -1270,7 +1263,6 @@ async def addpxy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for l in lines:
         parsed = parse_proxy_format(l)
         if parsed:
-            # تخزين البروكسي كـ HTTP/HTTPS فقط واستبعاد SOCKS
             await add_proxy_db(uid, parsed['proxy_url'])
             added += 1
             
@@ -1333,7 +1325,6 @@ async def checkpxy_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ====================== ADMIN AND MANAGEMENT HANDLERS ======================
 async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_ID: return
-    # تفاصيل حالة النظام الأساسية
     active_runs = len(ACTIVE_MTXT_PROCESSES)
     await styled_reply(update, f"<b>⚙️ System Status:</b>\n\n├ <b>Active Threads:</b> <code>{active_runs}</code>\n╰ <b>Worker Pool Limit:</b> <code>{WORKERS} Tasks</code>", use_gif=False)
 
@@ -1400,9 +1391,13 @@ def main():
         logger.error("No BOT_TOKEN set in environment variables.")
         sys.exit(1)
         
-    # تهيئة قواعد البيانات
-    init_db()
+    # تشغيل تهيئة قاعدة البيانات بشكل أسينك صحيح لتفادي تحذير الـ RuntimeWarning
+    try:
+        asyncio.run(init_db())
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
     
+    # تم حل المشكلة: تم استيراد فئة Defaults من حزمة telegram.ext بشكل سليم
     app = Application.builder().token(BOT_TOKEN).defaults(Defaults(parse_mode=ParseMode.HTML)).build()
     
     app.add_handler(CommandHandler("start", start_cmd))
@@ -1423,7 +1418,6 @@ def main():
     
     app.add_handler(CallbackQueryHandler(handle_callback_query))
     
-    # معالج الملفات لاستقبال ملفات الكومبو تلقائياً وبدء التحقق
     app.add_handler(MessageHandler(filters.Document.FileExtension("txt"), auto_file_check_cmd))
     
     app.add_error_handler(global_error_handler)

@@ -86,13 +86,13 @@ JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
 # روابط الـ APIs النشطة
-SHOPIFY_API_URL_1 = 'web-production-10488b.up.railway.app'
+SHOPIFY_API_URL_1 = 'https://web-production-10488b.up.railway.app/api/v1/check'
 AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة
-WORKERS = 70  
+WORKERS = 40  
 DELAY = 5.0  
 HIT_DELAY = 1.0
 API_TIMEOUT = 65

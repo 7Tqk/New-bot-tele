@@ -93,7 +93,7 @@ KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة
 WORKERS = 40  
-DELAY = 10  
+DELAY = 8  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
 

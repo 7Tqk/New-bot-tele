@@ -94,7 +94,7 @@ KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة
 WORKERS = 40  
-DELAY = 10  
+DELAY = 18  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
 
@@ -261,10 +261,9 @@ COUNTRY_NAME_TO_CODE = {
     "MONTSERRAT": "MS", "MOROCCO": "MA", "MOZAMBIQUE": "MZ", "MYANMAR": "MM", "NAMIBIA": "NA", "NAURU": "NR",
     "NEPAL": "NP", "NETHERLANDS": "NL", "NETHERLANDS ANTILLES": "AN", "NEW CALEDONIA": "NC", "NEW ZEALAND": "NZ",
     "NICARAGUA": "NI", "NIGER": "NE", "NIGERIA": "NG", "NIUE": "NU", "NORFOLK ISLAND": "NF", "NORTHERN MARIANA ISLANDS": "MP",
-    "NORWAY": "NO", "OMAN": "OM", "PAKISTAN": "PK", "PALAU": "PW", "PALESTINIAN TERRITORY, OCCUPIED": "PS",
-    "PALESTINE": "PS", "PANAMA": "PA", "PAPUA NEW GUINEA": "PG", "PARAGUAY": "PY", "PERU": "PE",
-    "PHL": "PH", "PITCAIRN": "PN", "POLAND": "PL", "PORTUGAL": "PT", "PUERTO RICO": "PR",
-    "QATAR": "QA", "REUNION": "RE", "ROMANIA": "RO", "RUSSIAN FEDERATION": "RU", "RUSSIA": "RU",
+    "NORWAY": "NO", "OMAN": "OM", "PAKISTAN": "PK", "PANAMA": "PA", "PCN": "PN", "PER": "PE",
+    "PHL": "PH", "PLW": "PW", "PNG": "PG", "POLAND": "PL", "PRI": "PR", "PRK": "KP", "PRT": "PT", "PRY": "PY",
+    "PSE": "PS", "PYF": "PF", "QAT": "QA", "REU": "RE", "ROU": "RO", "RUSSIAN FEDERATION": "RU", "RUSSIA": "RU",
     "RWANDA": "RW", "SAINT HELENA": "SH", "SAINT KITTS AND NEVIS": "KN", "SAINT LUCIA": "LC",
     "SAINT PIERRE AND MIQUELON": "PM", "SAINT VINCENT AND THE GRENADINES": "VC", "SAMOA": "WS",
     "SAN MARINO": "SM", "SAO TOME AND PRINCIPE": "ST", "SAUDI ARABIA": "SA", "SENEGAL": "SN",
@@ -1609,9 +1608,10 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
         await asyncio.sleep(wid * 0.02)
         nonlocal chk, chg, app, ins, dec, err, last_resp
         while not queue.empty() and not is_stopped():
-            try: card = queue.get_nowait()
-            except Exception: break
             async with sem:
+                if queue.empty() or is_stopped(): break
+                try: card = queue.get_nowait()
+                except Exception: break
                 try:
                     # محرك تنظيم التدفق المتسلسل لثبات الـ CPM حوالي 50-60
                     async with pacing_lock:
@@ -1665,6 +1665,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     el = int(time.time() - st)
     h, m, s = el // 3600, (el % 3600) // 60, el % 60
     avg_cpm = int((chk / el) * 60) if el > 0 else 0
+    ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(current_workers))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {Total Time'}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(current_workers))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     
     fkb = [

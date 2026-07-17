@@ -87,14 +87,14 @@ JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
 # روابط الـ APIs النشطة
-SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
+SHOPIFY_API_URL_1 = 'https://web-production-2fa5c.up.railway.app/check'
 AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة
 WORKERS = 40  
-DELAY = 18  
+DELAY = 10  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
 
@@ -182,7 +182,7 @@ CE_CARD = '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>'
 CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
 CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
 
-# ====================== CASH & STATUS EMOJIS ======================
+# ====================== CANCEL & STATUS EMOJIS ======================
 CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
 CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
 CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
@@ -1665,7 +1665,6 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     el = int(time.time() - st)
     h, m, s = el // 3600, (el % 3600) // 60, el % 60
     avg_cpm = int((chk / el) * 60) if el > 0 else 0
-    ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(current_workers))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {Total Time'}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     ft = f"<b>{CE_CROWN} {sf('DONE')} {CE_PARTY}</b>\n\n├ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gate_name)}</code>\n├ <b>{CE_GEAR} {sf('Workers')}:</b> <code>{sf(str(current_workers))}</code>\n├ <b>{CE_BOOM} {sf('Response')}:</b> <code>{sf(last_resp)}</code>\n╰ <b>{CE_CHART} {sf('Total Time')}:</b> <code>{sf(f'{h}h {m}m {s}s')}</code>"
     
     fkb = [

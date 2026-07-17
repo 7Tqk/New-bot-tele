@@ -87,14 +87,14 @@ JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
 # روابط الـ APIs النشطة
-SHOPIFY_API_URL_1 = 'https://web-production-2fa5c.up.railway.app/check'
+SHOPIFY_API_URL_1 = 'https://web-production-3d364.up.railway.app/shopify'
 AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة
 WORKERS = 40  
-DELAY = 10  
+DELAY = 3  
 HIT_DELAY = 1.0
 API_TIMEOUT = 60
 
@@ -787,8 +787,10 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             except Exception: 
                 rm = text_data.strip()
                 
-            if not is_json and resp.status != 200:
-                return {'status': 'Site Error', 'message': f'API HTTP {resp.status}', 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
+            # حماية صارمة ضد الفحص الوهمي (Fake Hits) وصفحات Cloudflare/HTML
+            if not is_json:
+                if resp.status != 200 or "<html" in text_data.lower() or len(text_data) > 300:
+                    return {'status': 'Site Error', 'message': 'API Returned HTML/Error Page (Blocked)', 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
             
             if not pr:
                 price_match = re.search(r'\$\d+(?:\.\d{2})?', text_data)
@@ -853,8 +855,10 @@ async def check_authnet_api(card, proxy, session):
             except Exception:
                 rm = text_data.strip()
                 
-            if not is_json and resp.status != 200:
-                return {'status': 'Site Error', 'message': f'API HTTP {resp.status}', 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00', 'retry': True}
+            # حماية صارمة ضد الفحص الوهمي (Fake Hits) وصفحات Cloudflare/HTML
+            if not is_json:
+                if resp.status != 200 or "<html" in text_data.lower() or len(text_data) > 300:
+                    return {'status': 'Site Error', 'message': 'API Returned HTML/Error Page (Blocked)', 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00', 'retry': True}
                 
             if not pr:
                 price_match = re.search(r'\$\d+(?:\.\d{2})?', text_data)

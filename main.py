@@ -93,8 +93,8 @@ GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.
 KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة للـ API البطيء (7-8 ثواني)
-WORKERS = 40  
-DELAY = 1.0  
+WORKERS = 30  
+DELAY = 9  
 HIT_DELAY = 1.0
 API_TIMEOUT = 90 # تم رفع وقت الانتظار حتى لا يقطع الاتصال على الـ API البطيء
 

@@ -87,14 +87,14 @@ JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
 # روابط الـ APIs النشطة (تمت ترقية رابط Shopify للجديد ببارامتراته بالكامل)
-SHOPIFY_API_URL_1 = 'https://web-production-c8f0c.up.railway.app/shopify'
+SHOPIFY_API_URL_1 = 'https://web-production-c8f0c.up.railway.app/shopify?site=&cc=&proxy='
 AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 KEYS_FILE = "redeem_keys.json"
 
 # التعديلات المطلوبة للـ API البطيء (7-8 ثواني)
 WORKERS = 30  
-DELAY = 9  
+DELAY = 16  
 HIT_DELAY = 1.0
 API_TIMEOUT = 90 # تم رفع وقت الانتظار حتى لا يقطع الاتصال على الـ API البطيء
 

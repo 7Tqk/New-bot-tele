@@ -86,9 +86,9 @@ GOSPEL_API_URL = "https://gates.valyrian.cc/gospel-piano/check"
 KEYS_FILE = "redeem_keys.json"
 
 # ====================== TIMEOUT & RETRY CONFIG ======================
-API_TIMEOUT = 60
-API_MAX_RETRIES = 3
-API_RETRY_DELAY = 2.0
+API_TIMEOUT = 90
+API_MAX_RETRIES = 8
+API_RETRY_DELAY = 5.0
 
 HIT_DELAY = 1.0
 

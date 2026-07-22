@@ -1,4 +1,3 @@
-
 # ==============================================================================
 # VIP BOT - ADYEN & STRIPE API CHECK ENGINE v3.0
 # ==============================================================================
@@ -88,7 +87,7 @@ KEYS_FILE = "redeem_keys.json"
 
 # ====================== TIMEOUT & RETRY CONFIG ======================
 API_TIMEOUT = 60
-API_MAX_RETRIES = 5
+API_MAX_RETRIES = 3
 API_RETRY_DELAY = 2.0
 
 HIT_DELAY = 1.0

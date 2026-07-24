@@ -449,7 +449,8 @@ async def get_user_http_session(uid):
             force_close=False,
             ttl_dns_cache=600,
             use_dns_cache=True,
-            family=0
+            family=0,
+            enable_tcp_nodelay=True  # ⚡ Send packets immediately, no buffering
         )
         timeout = aiohttp.ClientTimeout(total=API_TIMEOUT, connect=5)
         _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(
@@ -457,7 +458,9 @@ async def get_user_http_session(uid):
             timeout=timeout,
             headers={
                 "Connection": "keep-alive",
-                "Keep-Alive": "timeout=30, max=100"
+                "Keep-Alive": "timeout=30, max=100",
+                "Accept-Encoding": "gzip, deflate",  # ⚡ Compress responses
+                "Cache-Control": "no-cache"
             }
         )
     return _USER_HTTP_SESSIONS[key]
@@ -686,7 +689,8 @@ async def check_adyen_api(card, proxy, session):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "application/json",
         "Accept-Language": "en-US,en;q=0.9",
-        "Connection": "keep-alive"
+        "Connection": "keep-alive",
+        "Accept-Encoding": "gzip, deflate"
     }
 
     last_error = None
@@ -810,7 +814,8 @@ async def check_stripe_api(card, proxy, session):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "application/json",
         "Accept-Language": "en-US,en;q=0.9",
-        "Connection": "keep-alive"
+        "Connection": "keep-alive",
+        "Accept-Encoding": "gzip, deflate"
     }
 
     last_error = None
@@ -1457,6 +1462,27 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
 # ==============================================================================
 # REAL MASS PROCESSOR v3.2 - MAX SPEED (40 Concurrent, 20 Workers)
 # ==============================================================================
+async def _warmup_api_connection(session, proxies, gate_name):
+    """⚡ Send a dummy request to warm up TCP/TLS connection before mass check"""
+    try:
+        p_dict = random.choice(proxies) if proxies else None
+        p_url = p_dict['proxy_url'] if p_dict else None
+        test_card = "4111111111111111|12|2027|123"
+        if gate_name == "Adyen":
+            url = f"{TRIUMPH_API_URL}?card={quote(test_card)}"
+        else:
+            url = f"{GOSPEL_API_URL}?card={quote(test_card)}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive"
+        }
+        async with session.get(url, headers=headers, proxy=p_url, timeout=8, ssl=False) as resp:
+            await resp.read()  # Read and discard - just warming up the connection
+    except Exception:
+        pass  # Warm-up failure is non-critical
+
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
     uid = update.effective_user.id
     tot = len(cards)
@@ -1465,6 +1491,10 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     proxies = await get_all_user_proxies(uid)
     proxies = list(proxies) if proxies else []
     http_session = await get_user_http_session(uid)
+
+    # ⚡ Warm-up API connection before mass check (non-blocking)
+    if proxies:
+        asyncio.create_task(_warmup_api_connection(http_session, proxies, gate_name))
     last_resp = sf("Waiting for response...")
 
     def is_stopped():
@@ -1483,6 +1513,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
             if is_stopped(): break
             elapsed_now = int(time.time() - st)
             cpm = int((chk / elapsed_now) * 60) if elapsed_now > 0 else 0
+            pacing_ms = int(_current_pacing * 1000)
             h_now, m_now, s_now = elapsed_now // 3600, (elapsed_now % 3600) // 60, elapsed_now % 60
             dt = f"""<b>━━━ {CE_GEAR} {sf('CHECKING IN PROGRESS')} {CE_GEAR} ━━━</b>
 
@@ -1495,7 +1526,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 [InlineKeyboardButton(f'Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
                 [InlineKeyboardButton(f'Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
                 [InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
-                [InlineKeyboardButton(f'Speed: {cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")],
+                [InlineKeyboardButton(f'Speed: {cpm} CPM | Delay: {pacing_ms}ms', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")],
                 [InlineKeyboardButton('Stop Process', callback_data=f"{stop_prefix}:{uid}", style="danger", icon_custom_emoji_id="5386367538735104399")]
             ]
             try:
@@ -1511,7 +1542,10 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
         queue.put_nowait(c)
 
     async def worker():
-        nonlocal chk, chg, app, ins, dec, err, last_resp
+        nonlocal chk, chg, app, ins, dec, err, last_resp, _current_pacing
+        consecutive_fast = 0
+        consecutive_slow = 0
+
         while not queue.empty() and not is_stopped():
             async with sem:
                 if queue.empty() or is_stopped():
@@ -1524,12 +1558,33 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     if is_stopped():
                         queue.task_done()
                         break
+
+                    # ⚡ Adaptive Pacing - ننتظر بين الطلبات حتى ما نضغط الـ API
+                    if _current_pacing > 0:
+                        await asyncio.sleep(_current_pacing)
+
                     c_st = time.time()
                     res = await check_card_real(card, proxies, http_session, gate_name, uid)
+                    c_el = time.time() - c_st
+
+                    # ⚡ Adaptive Logic - نعدل السرعة حسب استجابة الـ API
+                    if c_el < 3.0:  # API سريع
+                        consecutive_fast += 1
+                        consecutive_slow = 0
+                        if consecutive_fast >= 5 and _current_pacing > 0.01:
+                            _current_pacing = max(0.01, _current_pacing - 0.01)  # نزيد السرعة
+                            consecutive_fast = 0
+                    elif c_el > 6.0:  # API بطيئ
+                        consecutive_slow += 1
+                        consecutive_fast = 0
+                        if consecutive_slow >= 3:
+                            _current_pacing = min(0.2, _current_pacing + 0.02)  # نقلل السرعة
+                            consecutive_slow = 0
+
                     if is_stopped():
                         queue.task_done()
                         break
-                    c_el = time.time() - c_st
+
                     status = res.get('status', 'Dead')
                     raw_msg = str(res.get('message', status)).replace('\n', ' ').strip()
                     chk += 1
@@ -1622,7 +1677,7 @@ def main():
     app.add_handler(CallbackQueryHandler(prompt_redeem_cb, pattern=r"^prompt_redeem$"))
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
-    logger.info("\u2705 VIP BOT v3.2 MAX SPEED - 40 CONCURRENT / 20 WORKERS / 12s TIMEOUT")
+    logger.info("\u2705 VIP BOT v3.2 ADAPTIVE - 15 CONCURRENT / 10 WORKERS / 8s TIMEOUT / ADAPTIVE PACING")
     while True:
         try:
             app.run_polling(drop_pending_updates=True)

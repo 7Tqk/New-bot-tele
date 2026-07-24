@@ -86,11 +86,11 @@ GOSPEL_API_URL = "https://gates.valyrian.cc/gospel-piano/check"
 KEYS_FILE = "redeem_keys.json"
 
 # ====================== TIMEOUT & RETRY CONFIG ======================
-API_TIMEOUT = 60
-API_MAX_RETRIES = 8
-API_RETRY_DELAY = 7.0
+API_TIMEOUT = 15  # OPTIMIZED: 15s instead of 60s (dead cards reject fast)
+API_MAX_RETRIES = 3  # OPTIMIZED: 3 retries instead of 8 (faster fail)
+API_RETRY_DELAY = 2.0  # OPTIMIZED: 2s instead of 7s (faster retry)
 
-HIT_DELAY = 1.0
+HIT_DELAY = 0.0  # OPTIMIZED: No delay for instant hit delivery
 
 _JOIN_CACHE = {}
 _MAINTENANCE_MODE = False
@@ -103,8 +103,6 @@ _USER_NAMES = {}
 USER_LAST_REQ = {}
 ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
-
-TEST_CARD = "4111111111111111|12|2027|123"
 
 # ====================== SAFE CHARGED FONT ENGINE ======================
 def sf(text) -> str:
@@ -439,8 +437,9 @@ _USER_HTTP_SESSIONS = {}
 async def get_user_http_session(uid):
     key = f"{uid}_msp"
     if key not in _USER_HTTP_SESSIONS or _USER_HTTP_SESSIONS[key].closed:
-        connector = aiohttp.TCPConnector(limit=20, ssl=False, enable_cleanup_closed=True, force_close=False, ttl_dns_cache=300)
-        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(connector=connector)
+        connector = aiohttp.TCPConnector(limit=50, limit_per_host=30, ssl=False, enable_cleanup_closed=True, force_close=False, ttl_dns_cache=600, use_dns_cache=True, family=0)  # OPTIMIZED: Higher limits + DNS cache
+        timeout = aiohttp.ClientTimeout(total=API_TIMEOUT, connect=5)
+        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(connector=connector, timeout=timeout, headers={"Connection": "keep-alive", "Keep-Alive": "timeout=30, max=100"})
     return _USER_HTTP_SESSIONS[key]
 
 async def cleanup_user_http_session(uid):
@@ -911,41 +910,42 @@ async def check_stripe_api(card, proxy, session):
     return {'status': 'Site Error', 'message': last_error or 'Unknown Error', 'card': card}
 
 # ==============================================================================
-# REAL PROXY CHECKER ENGINE - Uses API to verify proxy
+# REAL PROXY CHECKER ENGINE v3.1 - OPTIMIZED (Fixed False Dead Detection)
 # ==============================================================================
+# المشكلة كانت: يفحص البروكسي ببطاقة اختبار والـ API يرفضها فيحذف البروكسي الشغال
+# الحل: نفحص الاتصال فقط عبر ipify مع retry، بدون فحص البطاقة
 async def check_proxy_real(proxy_dict, session, timeout=15):
     proxy_url = proxy_dict.get('proxy_url') if isinstance(proxy_dict, dict) else proxy_dict
     if not proxy_url:
         return False, "No proxy URL"
-    try:
-        test_headers = {"User-Agent": "Mozilla/5.0"}
-        async with session.get("https://api.ipify.org?format=json", proxy=proxy_url, timeout=timeout, ssl=False) as r:
-            if r.status != 200:
-                return False, f"IP Check Failed: {r.status}"
-    except Exception as e:
-        return False, f"IP Check Error: {str(e)[:30]}"
-    try:
-        card_encoded = quote(TEST_CARD)
-        req_url = f"{GOSPEL_API_URL}?card={card_encoded}"
-        async with session.get(req_url, headers=test_headers, proxy=proxy_url, timeout=timeout, ssl=False) as r:
-            text = await r.text()
-            if r.status == 200 and text.strip():
-                if "<html" not in text.lower():
+
+    # Test 1: IP Connectivity with retry (3 attempts)
+    for attempt in range(3):
+        try:
+            test_headers = {"User-Agent": "Mozilla/5.0"}
+            async with session.get("https://api.ipify.org?format=json", proxy=proxy_url, timeout=timeout, ssl=False) as r:
+                if r.status == 200:
                     try:
-                        rj = json.loads(text)
-                        if 'status' in rj or 'error' in rj:
-                            return True, "API Gateway Test Passed"
+                        data = await r.json()
+                        ip = data.get('ip', 'unknown')
+                        return True, f"Working (IP: {ip})"
                     except:
-                        if len(text.strip()) > 5:
-                            return True, "API Reachable"
-            if r.status in [200, 400, 401, 403, 404, 422]:
-                if text.strip() and len(text.strip()) > 5:
-                    return True, f"API Reachable ({r.status})"
-        return False, f"API Test Failed: {r.status}"
-    except asyncio.TimeoutError:
-        return False, "API Gateway Timeout"
-    except Exception as e:
-        return False, f"API Gateway Error: {str(e)[:30]}"
+                        return True, "Working (IP check passed)"
+                elif r.status in [403, 407, 429]:
+                    # Proxy auth issues or rate limit - still alive but has issues
+                    return True, f"Working but limited ({r.status})"
+        except asyncio.TimeoutError:
+            if attempt < 2:
+                await asyncio.sleep(1)
+                continue
+            return False, "IP Check Timeout"
+        except Exception as e:
+            if attempt < 2:
+                await asyncio.sleep(1)
+                continue
+            return False, f"IP Check Error: {str(e)[:30]}"
+
+    return False, "IP Check Failed after retries"
 
 # ==============================================================================
 # REAL CHECK CARD ENGINE - API ONLY (No Workers, No Sites)
@@ -1176,7 +1176,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tm = await styled_reply(update,
                 f"<b>{CE_GEAR} {sf('Starting REAL proxy check...')}</b>\n"
                 f"├ <b>{CE_DIAMOND} {sf('Total Proxies')}:</b> <code>{len(proxies)}</code>\n"
-                f"╰ <b>{CE_HOURGLASS} {sf('Testing each proxy via API Gateway...')}</b>",
+                f"╰ <b>{CE_HOURGLASS} {sf('Testing IP connectivity...')}</b>",
                 use_gif=True)
             dead_proxies = []
             working_count = 0
@@ -1184,12 +1184,12 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             async with aiohttp.ClientSession(connector=connector) as test_session:
                 async def test_single_proxy(idx, p_dict):
                     nonlocal working_count
-                    is_working, msg = await check_proxy_real(p_dict, test_session, timeout=15)
+                    is_working, msg = await check_proxy_real(p_dict, test_session, timeout=10)  # OPTIMIZED: 10s timeout
                     if not is_working:
                         dead_proxies.append((idx, p_dict, msg))
                     else:
                         working_count += 1
-                semaphore = asyncio.Semaphore(10)
+                semaphore = asyncio.Semaphore(20)  # OPTIMIZED: 20 concurrent proxy checks
                 async def bounded_test(idx, p_dict):
                     async with semaphore:
                         await test_single_proxy(idx, p_dict)
@@ -1465,11 +1465,11 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
 
     hit_tasks = []
     # Semaphore for API-only checking (no workers system)
-    sem = asyncio.Semaphore(5)  # 5 concurrent API calls max
+    sem = asyncio.Semaphore(25)  # OPTIMIZED: 25 concurrent API calls for high CPM
 
     async def dashboard_updater():
         while not is_stopped():
-            for _ in range(20):
+            for _ in range(50):  # OPTIMIZED: 5 seconds instead of 2 (less Telegram API load)
                 if is_stopped(): break
                 await asyncio.sleep(0.1)
             if is_stopped(): break
@@ -1546,8 +1546,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     last_resp = sf(f"Sys Err: {str(e)[:20]}")
                 queue.task_done()
 
-    # Launch workers (no fixed worker count, just semaphore-controlled)
-    wt = [asyncio.create_task(worker()) for _ in range(5)]
+    # Launch workers (OPTIMIZED: 10 workers with 25 semaphore for max CPM)
+    wt = [asyncio.create_task(worker()) for _ in range(10)]
     process_store[uid]["tasks"] = wt + [ut]
     await asyncio.gather(*wt, return_exceptions=True)
     if not ut.done():

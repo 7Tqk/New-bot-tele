@@ -100,7 +100,7 @@ MIN_DELAY = float(os.getenv("MIN_DELAY", "0.3"))
 MAX_DELAY = float(os.getenv("MAX_DELAY", "1.5"))
 
 WORKERS = max(1, min(50, CPM_TARGET // 8))
-API_TIMEOUT = 35
+API_TIMEOUT = 60
 HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}
@@ -356,7 +356,7 @@ async def send_forced_gif(target_func, text, markup, url):
                 animation=media_to_send, caption=text, reply_markup=markup,
                 parse_mode=ParseMode.HTML, read_timeout=40, write_timeout=40
             )
-            if url not in _GIF_FILE_IDS and getattr(msg, 'animation', None):
+            if url not in _GIF_FILE_IDS and msg and getattr(msg, 'animation', None):
                 _GIF_FILE_IDS[url] = msg.animation.file_id
             return msg
         except RetryAfter as e:
@@ -398,6 +398,7 @@ async def styled_reply(update: Update, text: str, buttons=None, use_gif=True, sp
         except Exception: return None
 
 async def styled_edit(msg, text, buttons=None):
+    if not msg: return None
     markup = InlineKeyboardMarkup(buttons) if buttons else None
     for retry in range(3):
         try:
@@ -509,8 +510,7 @@ async def get_shopify_sites():
     if os.path.exists('sites.txt'):
         try:
             async with aiofiles.open('sites.txt', 'r', encoding='utf-8') as f:
-                _CACHED_SHOPIFY_SITES = list(dict.fromkeys([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).split('
-') if l.strip()]))
+                _CACHED_SHOPIFY_SITES = list(dict.fromkeys([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await f.read()).splitlines() if l.strip()]))
                 if _CACHED_SHOPIFY_SITES:
                     _LAST_SITES_FETCH = now
                     return _CACHED_SHOPIFY_SITES
@@ -519,8 +519,7 @@ async def get_shopify_sites():
         async with aiohttp.ClientSession() as s:
             async with s.get(GITHUB_SITES_URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=10) as r:
                 if r.status == 200:
-                    _CACHED_SHOPIFY_SITES = list(dict.fromkeys([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).split('
-') if l.strip()]))
+                    _CACHED_SHOPIFY_SITES = list(dict.fromkeys([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in (await r.text()).splitlines() if l.strip()]))
                     _LAST_SITES_FETCH = now
     except Exception: pass
     if not _CACHED_SHOPIFY_SITES:
@@ -731,7 +730,7 @@ async def check_shopify_api(card, site, proxy, session):
             "Accept-Language": "en-US,en;q=0.9",
             "Connection": "keep-alive"
         }
-        async with session.get(req_url, headers=headers, timeout=API_TIMEOUT, ssl=False) as resp:
+        async with session.get(req_url, headers=headers, proxy=proxy_str, timeout=aiohttp.ClientTimeout(total=API_TIMEOUT), ssl=False) as resp:
             text_data = await resp.text()
             if resp.status in [500, 502, 503, 504]:
                 return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card}
@@ -866,7 +865,7 @@ async def check_adyen_api(card, proxy, session):
             "Accept": "application/json",
             "Accept-Language": "en-US,en;q=0.9"
         }
-        async with session.get(req_url, headers=headers, timeout=API_TIMEOUT, ssl=False) as resp:
+        async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=aiohttp.ClientTimeout(total=API_TIMEOUT), ssl=False) as resp:
             text_data = await resp.text()
             if resp.status in [500, 502, 503, 504]:
                 return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card}
@@ -984,7 +983,7 @@ async def check_stripe_api(card, proxy, session):
             "Accept": "application/json",
             "Accept-Language": "en-US,en;q=0.9"
         }
-        async with session.get(req_url, headers=headers, timeout=API_TIMEOUT, ssl=False) as resp:
+        async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=aiohttp.ClientTimeout(total=API_TIMEOUT), ssl=False) as resp:
             text_data = await resp.text()
             if resp.status in [500, 502, 503, 504]:
                 return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card}
@@ -1144,7 +1143,9 @@ async def check_card_real(card, sites, proxies, session, gateway_name, uid):
         # Retry once with different proxy if Site Error
         if status == 'Site Error':
             if proxies and len(proxies) > 1:
-                p_dict2 = random.choice([p for p in proxies if p != p_dict])
+                other_proxies = [p for p in proxies if p != p_dict]
+                if other_proxies:
+                    p_dict2 = random.choice(other_proxies)
                 p_url2 = p_dict2['proxy_url'] if p_dict2 else None
                 if gateway_name == "Shopify":
                     res = await check_shopify_api(card, s_target, p_url2, session)
@@ -1204,7 +1205,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         if uid in ACTIVE_MTXT_PROCESSES and not ACTIVE_MTXT_PROCESSES[uid].get("stopped", True):
             return await styled_edit(pm, f"<b>{CE_BOOM} {sf('A process is already active! Please wait for it to finish.')}</b>")
         doc = update.message.document
-        if doc.file_size > 3 * 1024 * 1024:
+        if doc.file_size and doc.file_size > 3 * 1024 * 1024:
             return await styled_edit(pm, f"<b>{CE_BOOM} {sf('File too large! (Max 3MB)')}</b>")
         if not await force_join_check(update, context):
             try: await pm.delete()
@@ -1304,7 +1305,8 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif cmd == "fb":
             if not await force_join_check(update, context): return
             txt = raw_text.split(maxsplit=1)[1] if len(tokens) > 1 else ""
-            if not txt and not update.message.reply_to_message and not getattr(update.message, 'media', None):
+            has_media = bool(update.message.photo or update.message.video or update.message.document or update.message.audio or update.message.voice or update.message.animation)
+            if not txt and not update.message.reply_to_message and not has_media:
                 return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide a message.')}</b>", use_gif=True)
             if ADMIN_ID:
                 try:
@@ -1345,6 +1347,8 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not parsed: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('All proxies are already added, invalid, or ignored (SOCKS).')}</b>", use_gif=True)
             parsed = parsed[:100-len(eu)]
             tm = await styled_reply(update, f"<b>{CE_GEAR} {sf('Adding proxies...')}</b>", use_gif=True)
+            if not tm:
+                return
             c = 0
             for p2 in parsed: await add_proxy_db(uid, p2); c += 1
             await styled_edit(tm, f"<b>{CE_SMILE} {sf('Successfully Added')}:</b> <code>{sf(str(c))} {sf('Proxies')}</code>")
@@ -1454,7 +1458,10 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if uid not in ADMIN_ID: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>", use_gif=True)
             if len(args) < 1: return await styled_reply(update, f"{CE_FLASH} {sf('Format')}: <code>/gen [plan] [qty]</code>", use_gif=True)
             pk = args[0].lower()
-            amt = int(args[1]) if len(args) > 1 else 1
+            try:
+                amt = int(args[1]) if len(args) > 1 else 1
+            except ValueError:
+                return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid quantity. Please provide a number.')}</b>", use_gif=True)
             if pk not in PLANS: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Invalid Plan. Use: plan1, plan2, plan3, plan4')}</b>", use_gif=True)
             pi = PLANS[pk]
             kdb = await load_keys()

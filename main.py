@@ -94,16 +94,16 @@ GITHUB_API_SITES_URL = os.getenv("GITHUB_API_SITES_URL", "")
 KEYS_FILE = "redeem_keys.json"
 
 # ====================== CPM & SPEED CONTROL ======================
-CPM_TARGET = int(os.getenv("CPM_TARGET", "120"))
+CPM_TARGET = int(os.getenv("CPM_TARGET", "60"))
 MIN_DELAY = float(os.getenv("MIN_DELAY", "0.5"))
 MAX_DELAY = float(os.getenv("MAX_DELAY", "2.0"))
 
 WORKERS = max(1, min(50, CPM_TARGET // 10))
-API_TIMEOUT = 60
+API_TIMEOUT = 45
 HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}
-_MAX_SITE_ERRORS = 8
+_MAX_SITE_ERRORS = 3
 _JOIN_CACHE = {}
 _MAINTENANCE_MODE = False
 
@@ -1819,7 +1819,7 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
     uid = update.effective_user.id
     tot = len(cards)
-    chk = chg = app = ins = dec = err = site_err = 0
+    chk = chg = app = ins = dec = err = 0
     st = time.time()
     sites = await get_shopify_sites() if gate_name == "Shopify" else []
     proxies = await get_all_user_proxies(uid)
@@ -1828,15 +1828,13 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     last_resp = sf("Waiting for response...")
     def is_stopped():
         return process_store.get(uid, {}).get("stopped", False)
-    # Gate-specific worker configuration
+    # Workers config: Shopify=30, Adyen=20, Stripe=12, AuthNet=1
     if gate_name == "Shopify":
         current_workers = 30
-    elif gate_name == "AuthNet":
-        current_workers = 1
     elif gate_name == "Adyen":
-        current_workers = 1
+        current_workers = 20
     elif gate_name == "Stripe":
-        current_workers = 1
+        current_workers = 12
     else:
         current_workers = 1
     cpm_ctrl = CPMController(CPM_TARGET)
@@ -1863,7 +1861,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 [InlineKeyboardButton(f'{chk}/{tot} ({percent}%)', callback_data="none", style="success" if percent == 100 else "primary", icon_custom_emoji_id="5445163772706582819")],
                 [InlineKeyboardButton(f'Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
                 [InlineKeyboardButton(f'Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
-                [InlineKeyboardButton(f'Site Errors: {site_err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768"), InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
+                [InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
                 [InlineKeyboardButton(f'Speed: {cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")],
                 [InlineKeyboardButton('Stop Process', callback_data=f"{stop_prefix}:{uid}", style="danger", icon_custom_emoji_id="5386367538735104399")]
             ]
@@ -1892,15 +1890,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     break
                 try:
                     await cpm_ctrl.wait()
-                    # Gate-specific extra delays to avoid errors/timeouts
-                    if gate_name == "Adyen":
-                        await asyncio.sleep(3.0)  # Slow Adyen check
-                    elif gate_name == "Stripe":
-                        await asyncio.sleep(2.5)  # Slow Stripe check
-                    elif gate_name == "Shopify":
-                        await asyncio.sleep(3.5)  # Slow Shopify check for accuracy
-                    elif gate_name == "AuthNet":
-                        await asyncio.sleep(2.0)  # Slow AuthNet check
+                    # Sleep 5 seconds between every card for all gates
+                    await asyncio.sleep(5.0)
                     if is_stopped():
                         queue.task_done()
                         break
@@ -1925,13 +1916,13 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     elif status == 'Dead':
                         dec += 1
                     elif status == 'Site Error':
-                        site_err += 1
+                        err += 1
                     else:
                         dec += 1
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
-                    site_err += 1
+                    err += 1
                     chk += 1
                     last_resp = sf(f"Sys Err: {str(e)[:20]}")
                 queue.task_done()
@@ -1957,7 +1948,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
         [InlineKeyboardButton(f"{chk}/{tot} (100%)", callback_data="none", style="success", icon_custom_emoji_id="5445163772706582819")],
         [InlineKeyboardButton(f'Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
         [InlineKeyboardButton(f'Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
-        [InlineKeyboardButton(f'Site Errors: {site_err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768"), InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
+        [InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
         [InlineKeyboardButton(f'Average Speed: {avg_cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")]
     ]
     try:

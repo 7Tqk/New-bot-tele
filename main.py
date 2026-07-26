@@ -1,3 +1,4 @@
+
 # ==============================================================================
 # SHOPIFY VIP BOT - ULTIMATE PRODUCTION SYSTEM (REAL CHECK ENGINE v3.0)
 # ==============================================================================
@@ -1516,27 +1517,52 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif cmd == "rmpxy":
             if not await force_join_check(update, context): return
-            proxies = await get_all_user_proxies(uid)
+            try:
+                proxies = await get_all_user_proxies(uid)
+            except Exception as e:
+                return await styled_reply(update, f"<b>{CE_CLOWN} {sf('DB Error')}</b>\n<code>{sf(str(e)[:50])}</code>", use_gif=True)
             if not proxies: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies to remove.')}</b>", use_gif=True)
-            if not args: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Specify all, proxy number, or proxy text.')}</b>", use_gif=True)
+            if not args: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Specify all, proxy number, or proxy text.')}</b>\n\n<b>{sf('Examples')}:</b>\n<code>/rmpxy all</code>\n<code>/rmpxy 1</code>\n<code>/rmpxy 209.50.163.241</code>", use_gif=True)
             arg = args[0].strip()
+
+            # Remove ALL
             if arg.lower() == 'all':
-                c = await clear_all_proxies(uid)
-                return await styled_reply(update, f"<b>{CE_SMILE} {sf('Cleared')} <code>{sf(str(c))}</code> {sf('Proxies successfully.')}</b>", use_gif=True)
+                try:
+                    c = await clear_all_proxies(uid)
+                    return await styled_reply(update, f"<b>{CE_SMILE} {sf('Cleared')} <code>{sf(str(c))}</code> {sf('Proxies successfully.')}</b>", use_gif=True)
+                except Exception as e:
+                    return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Failed to clear')}</b>\n<code>{sf(str(e)[:50])}</code>", use_gif=True)
+
+            # Remove by INDEX
             try:
                 idx = int(arg) - 1
                 if 0 <= idx < len(proxies):
-                    await remove_proxy_by_index(uid, idx)
-                    return await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy removed successfully by index.')}</b>", use_gif=True)
-            except ValueError: pass
+                    try:
+                        p_removed = proxies[idx]
+                        await remove_proxy_by_index(uid, idx)
+                        return await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy removed')}:</b>\n<code>{sf(p_removed['ip'])}:{sf(str(p_removed['port']))}</code>", use_gif=True)
+                    except Exception as e:
+                        return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Remove failed')}</b>\n<code>{sf(str(e)[:50])}</code>", use_gif=True)
+                else:
+                    return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Index out of range.')}</b>\n{sf('Valid range')}: <code>1-{sf(str(len(proxies)))}</code>", use_gif=True)
+            except ValueError:
+                pass  # Not a number, try text match
+
+            # Remove by TEXT/IP match
             found = False
             for idx, p in enumerate(proxies):
-                if arg in p['proxy_url'] or p['ip'] in arg:
-                    await remove_proxy_by_index(uid, idx)
-                    found = True
-                    break
-            if found: await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy matched and removed successfully.')}</b>", use_gif=True)
-            else: await styled_reply(update, f"<b>{CE_CLOWN} {sf('Proxy not found or invalid format.')}</b>", use_gif=True)
+                proxy_text = p.get('proxy_url', '')
+                proxy_ip = p.get('ip', '')
+                if arg in proxy_text or arg in proxy_ip:
+                    try:
+                        await remove_proxy_by_index(uid, idx)
+                        return await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy removed')}:</b>\n<code>{sf(proxy_ip)}:{sf(str(p.get('port','?')))}</code>", use_gif=True)
+                    except Exception as e:
+                        return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Remove failed')}</b>\n<code>{sf(str(e)[:50])}</code>", use_gif=True)
+
+            # Not found
+            proxy_list = "\n".join([f"<code>{i+1}. {sf(p.get('ip','?'))}:{sf(str(p.get('port','?')))}</code>" for i, p in enumerate(proxies[:10])])
+            await styled_reply(update, f"<b>{CE_CLOWN} {sf('Proxy not found.')}</b>\n\n<b>{sf('Your proxies')}:</b>\n{proxy_list}", use_gif=True)
 
         elif cmd == "gen":
             if uid not in ADMIN_ID: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>", use_gif=True)

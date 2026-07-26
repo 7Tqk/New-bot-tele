@@ -1446,6 +1446,164 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <i>{sf('You cannot use /chkpxy again for 1 hour.')}</i>"""
             await styled_edit(tm, result_msg)
 
+
+        # ====================== REAL /checkgates COMMAND ======================
+        elif cmd == "checkgates":
+            if uid not in ADMIN_ID:
+                return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>", use_gif=True)
+            now = time.time()
+            if uid in _CHECKED_USERS_GATES:
+                last_time = _CHECK_GATES_TIME.get(uid, 0)
+                remaining = _CHECK_GATES_COOLDOWN - (now - last_time)
+                if remaining > 0:
+                    mins = int(remaining // 60)
+                    secs = int(remaining % 60)
+                    return await styled_reply(update,
+                        f"<b>{CE_BOOM} {sf('Command Already Used!')}</b>\n\n"
+                        f"├ {sf('You have already used /checkgates recently.')}\n"
+                        f"╰ {sf('Please wait')} <code>{mins}m {secs}s</code> {sf('before using it again.')}",
+                        use_gif=True)
+            _CHECKED_USERS_GATES.add(uid)
+            _CHECK_GATES_TIME[uid] = now
+            tm = await styled_reply(update,
+                f"<b>{CE_GEAR} {sf('Starting REAL Gates Check...')}</b>\n"
+                f"╰ <b>{CE_HOURGLASS} {sf('Testing all API gateways with real cards...')}</b>",
+                use_gif=True)
+
+            connector = aiohttp.TCPConnector(limit=20, ssl=False)
+            test_card = TEST_CARD
+            admin_proxies = await get_all_user_proxies(uid)
+            proxy_url = admin_proxies[0]['proxy_url'] if admin_proxies else None
+
+            working_gates = []
+            dead_gates = []
+
+            async with aiohttp.ClientSession(connector=connector) as test_session:
+                headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+
+                # Test Adyen API
+                try:
+                    req_url = f"{ADYEN_API_URL}?card={quote(test_card)}"
+                    async with test_session.get(req_url, headers=headers, proxy=proxy_url, timeout=15, ssl=False) as r:
+                        text = await r.text()
+                        if r.status == 200 and text.strip() and "<html" not in text.lower():
+                            working_gates.append(("Adyen", "Triumph Gate", "Active"))
+                        else:
+                            dead_gates.append(("Adyen", f"Status {r.status}"))
+                except Exception as e:
+                    dead_gates.append(("Adyen", str(e)[:30]))
+
+                # Test Stripe API
+                try:
+                    req_url = f"{STRIPE_API_URL}?card={quote(test_card)}"
+                    async with test_session.get(req_url, headers=headers, proxy=proxy_url, timeout=15, ssl=False) as r:
+                        text = await r.text()
+                        if r.status == 200 and text.strip() and "<html" not in text.lower():
+                            working_gates.append(("Stripe", "$1.00 Charge", "Active"))
+                        else:
+                            dead_gates.append(("Stripe", f"Status {r.status}"))
+                except Exception as e:
+                    dead_gates.append(("Stripe", str(e)[:30]))
+
+                # Test AuthNet API
+                try:
+                    req_url = f"{AUTHNET_API_URL}?cc={quote(test_card)}&amount=20&amt=20&price=20"
+                    async with test_session.get(req_url, headers=headers, proxy=proxy_url, timeout=15, ssl=False) as r:
+                        text = await r.text()
+                        if r.status == 200 and text.strip() and "<html" not in text.lower():
+                            working_gates.append(("AuthNet", "$20.00 Charge", "Active"))
+                        else:
+                            dead_gates.append(("AuthNet", f"Status {r.status}"))
+                except Exception as e:
+                    dead_gates.append(("AuthNet", str(e)[:30]))
+
+                # Test Shopify API with a working site
+                try:
+                    site = "touch-of-finland.myshopify.com"
+                    req_url = f"{SHOPIFY_API_URL_1}?site=https://{site}&cc={quote(test_card)}"
+                    if proxy_url:
+                        req_url += f"&proxy={quote(proxy_url)}"
+                    async with test_session.get(req_url, headers=headers, proxy=proxy_url, timeout=15, ssl=False) as r:
+                        text = await r.text()
+                        if r.status == 200 and text.strip() and "<html" not in text.lower():
+                            working_gates.append(("Shopify", "Charge Gate", "Active"))
+                        else:
+                            dead_gates.append(("Shopify", f"Status {r.status}"))
+                except Exception as e:
+                    dead_gates.append(("Shopify", str(e)[:30]))
+
+                # Now check Shopify sites.txt
+                raw_sites = []
+                if update.message.reply_to_message and update.message.reply_to_message.document:
+                    f = await context.bot.get_file(update.message.reply_to_message.document.file_id)
+                    fp = f"temp_gates_{uid}.txt"
+                    await f.download_to_drive(fp)
+                    async with aiofiles.open(fp, "r", encoding="utf-8", errors='ignore') as file:
+                        content = await file.read()
+                    os.remove(fp)
+                    raw_sites = list(dict.fromkeys([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.splitlines() if l.strip()]))
+                else:
+                    raw_sites = await get_shopify_sites()
+
+                valid_sites = []
+                for site in raw_sites:
+                    site = site.lower().strip()
+                    if not site or "." not in site: continue
+                    site = site.split('/')[0].split('?')[0]
+                    if len(site) > 4:
+                        valid_sites.append(site)
+                valid_sites = list(dict.fromkeys(valid_sites))
+
+                if valid_sites:
+                    await styled_edit(tm,
+                        f"<b>{CE_HOURGLASS} {sf('Testing')} <code>{len(valid_sites)}</code> {sf('Shopify sites...')}</b>")
+
+                    working_sites = []
+                    dead_sites = []
+                    cf_sites = []
+                    semaphore = asyncio.Semaphore(5)
+
+                    async def test_single_gate(site):
+                        async with semaphore:
+                            is_working, status, preview = await check_gate_real(site, proxy_url, test_session, timeout=15)
+                            if is_working:
+                                working_sites.append(site)
+                            elif "cloudflare" in preview.lower() or status in [403, 429, 430]:
+                                cf_sites.append(site)
+                            else:
+                                dead_sites.append((site, preview))
+
+                    tasks = [test_single_gate(site) for site in valid_sites]
+                    await asyncio.gather(*tasks, return_exceptions=True)
+
+                    # Save working sites back to sites.txt
+                    if working_sites:
+                        async with aiofiles.open('sites.txt', 'w', encoding='utf-8') as f2:
+                            await f2.write('\n'.join(working_sites))
+                        global _CACHED_SHOPIFY_SITES
+                        _CACHED_SHOPIFY_SITES = working_sites
+                        _LAST_SITES_FETCH = time.time()
+
+                    sites_result = f"\n├ <b>{CE_CHECK} {sf('Working Sites')}:</b> <code>{sf(str(len(working_sites)))}</code>\n├ <b>{CE_SHIELD} {sf('Cloudflare')}:</b> <code>{sf(str(len(cf_sites)))}</code>\n├ <b>{CE_CLOWN} {sf('Dead Removed')}:</b> <code>{sf(str(len(dead_sites)))}</code>"
+                else:
+                    sites_result = "\n├ <b>{CE_SHIELD} {sf('Sites Check')}:</b> <code>{sf('No sites to test')}</code>"
+
+            # Build result message
+            gates_result = ""
+            for name, desc, status in working_gates:
+                gates_result += f"\n├ <b>{CE_CHECK} {sf(name)} ({sf(desc)}):</b> <code>{sf(status)}</code>"
+            for name, reason in dead_gates:
+                gates_result += f"\n├ <b>{CE_CLOWN} {sf(name)}:</b> <code>{sf(reason)}</code>"
+
+            res_msg = f"""<b>{CE_CROWN} {sf('REAL Gates Check Complete')} {CE_PARTY}</b>
+
+<b>{CE_GEAR} {sf('API Gateways Status')}:</b>{gates_result}
+<b>{CE_TOP} {sf('Shopify Sites')}:</b>{sites_result}
+
+<i>{sf('Dead sites removed from sites.txt')}</i>
+<i>{sf('You cannot use /checkgates again for 30 minutes.')}</i>"""
+            await styled_edit(tm, res_msg)
+
         elif cmd == "rmpxy":
             if not await force_join_check(update, context): return
             proxies = await get_all_user_proxies(uid)

@@ -1,4 +1,3 @@
-
 # ==============================================================================
 # SHOPIFY VIP BOT - ULTIMATE PRODUCTION SYSTEM (REAL CHECK ENGINE v3.0)
 # ==============================================================================
@@ -100,11 +99,11 @@ MIN_DELAY = float(os.getenv("MIN_DELAY", "0.5"))
 MAX_DELAY = float(os.getenv("MAX_DELAY", "2.0"))
 
 WORKERS = max(1, min(50, CPM_TARGET // 10))
-API_TIMEOUT = 45
+API_TIMEOUT = 60
 HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}
-_MAX_SITE_ERRORS = 3
+_MAX_SITE_ERRORS = 8
 _JOIN_CACHE = {}
 _MAINTENANCE_MODE = False
 
@@ -742,17 +741,44 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         }
         async with session.get(req_url, headers=headers, timeout=API_TIMEOUT, ssl=False) as resp:
             text_data = await resp.text()
-            if resp.status in [500, 502, 503, 504]:
-                return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card}
+
+            # ===== HTTP STATUS BASED SITE ERRORS (REAL) =====
+            if resp.status == 404:
+                return {'status': 'Site Error', 'message': f'HTTP 404 - Not Found', 'card': card}
+            if resp.status == 504:
+                return {'status': 'Site Error', 'message': f'HTTP 504 - Gateway Timeout', 'card': card}
+            if resp.status == 505:
+                return {'status': 'Site Error', 'message': f'HTTP 505 - Version Not Supported', 'card': card}
+            if resp.status in [500, 501, 502, 503]:
+                return {'status': 'Site Error', 'message': f'HTTP {resp.status} - Server Error', 'card': card}
+            if resp.status == 429:
+                return {'status': 'Site Error', 'message': f'HTTP 429 - Rate Limited', 'card': card}
+            if resp.status == 403:
+                return {'status': 'Site Error', 'message': f'HTTP 403 - Forbidden', 'card': card}
+            if resp.status == 401:
+                return {'status': 'Site Error', 'message': f'HTTP 401 - Unauthorized', 'card': card}
+            if resp.status == 400:
+                return {'status': 'Site Error', 'message': f'HTTP 400 - Bad Request', 'card': card}
+            if resp.status == 422:
+                return {'status': 'Site Error', 'message': f'HTTP 422 - Unprocessable', 'card': card}
+
+            # Cloudflare / HTML block
             if "<html" in text_data.lower() and any(k in text_data.lower() for k in ["cloudflare", "just a moment", "challenge", "captcha", "ddos"]):
                 return {'status': 'Site Error', 'message': 'Cloudflare Blocked', 'card': card}
+
+            # Empty response
             if not text_data or not text_data.strip():
                 return {'status': 'Site Error', 'message': 'Empty Response', 'card': card}
+
+            # ===== PARSE REAL API JSON RESPONSE =====
             gt = "Shopify"
             pr = None
             rm = text_data.strip()
+            api_status = None
+
             try:
                 rj = json.loads(text_data)
+                # Extract the REAL response message from API
                 rm = str(rj.get('response_msg',
                          rj.get('result',
                          rj.get('Response',
@@ -761,58 +787,68 @@ async def check_shopify_api(api_url, card, site, proxy, session):
                          rj.get('msg',
                          rj.get('status',
                          rj.get('data', ''))))))))).strip()
+
+                # Extract gateway name
                 gt = rj.get('Gateway', rj.get('gateway', 'Shopify'))
+
+                # Extract price
                 for k in ['Price', 'price', 'amount', 'Amount', 'amt', 'Amt', 'charged', 'charge', 'total']:
                     if k in rj and rj[k] is not None and str(rj[k]).strip():
                         pr = str(rj[k]).strip()
                         break
+
+                # Extract API status field if exists
+                api_status = str(rj.get('status', rj.get('Status', ''))).lower().strip()
+
             except Exception:
                 pass
+
+            # If we got valid JSON with a status field, trust it
+            if api_status:
+                if api_status in ['charged', 'approved', 'success', 'succeeded', 'completed', 'captured', 'paid']:
+                    return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+                if api_status in ['declined', 'dead', 'rejected', 'denied', 'failed']:
+                    return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+                if api_status in ['insufficient', 'insufficient_funds', 'nsf']:
+                    return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+                if api_status in ['site_error', 'error', 'timeout', 'unreachable']:
+                    return {'status': 'Site Error', 'message': rm, 'card': card}
+
+            # ===== FALLBACK: Classify based on actual response text (no fake guessing) =====
             clean_rm = unsf(rm).lower().strip()
-            charged_keywords = [
-                'charged', 'completed', 'payment succeeded', 'success', 'succeeded',
-                'captured', 'approved', 'transaction approved', 'payment complete',
-                'charge complete', 'payment successful', 'order confirmed'
-            ]
-            if any(k in clean_rm for k in charged_keywords):
+
+            # CHARGED - only if API explicitly says charged/success
+            if any(k in clean_rm for k in ['charged', 'payment succeeded', 'success', 'captured', 'approved', 'completed']):
                 if 'not charged' in clean_rm or 'declined' in clean_rm:
                     return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
                 return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
-            approved_keywords = [
-                'cvv match', 'security code', 'invalid_cvv', 'incorrect_cvv', 'match',
-                'avs', 'address verification', 'cvv2', 'cid', 'cvv correct'
-            ]
-            if any(k in clean_rm for k in approved_keywords):
+
+            # APPROVED - CVV match / AVS
+            if any(k in clean_rm for k in ['cvv match', 'avs', 'security code match', 'cvv correct']):
                 return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
-            insufficient_keywords = [
-                'insufficient', 'funds', 'balance', 'low balance', 'not enough',
-                'limit exceeded', 'over limit', 'exceeds', 'nsf'
-            ]
-            if any(k in clean_rm for k in insufficient_keywords):
+
+            # INSUFFICIENT FUNDS
+            if any(k in clean_rm for k in ['insufficient funds', 'not enough funds', 'low balance']):
                 return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
-            dead_keywords = [
-                'declined', 'do not honor', 'pick up card', 'stolen', 'lost', 'fraud',
-                'not allowed', 'expired', 'processor_declined', 'card_declined',
-                'invalid account', 'invalid number', 'call issuer', 'limit exceeded',
-                'authentication_required', '3d secure', 'otp required', 'challenge',
-                'incorrect', 'wrong', 'denied', 'rejected', 'blocked', 'banned',
-                'unauthorized', 'forbidden', 'invalid cvv', 'invalid expiry'
-            ]
-            if any(k in clean_rm for k in dead_keywords):
+
+            # DEAD - declined by bank
+            if any(k in clean_rm for k in ['declined', 'do not honor', 'pick up card', 'stolen', 'lost', 'fraud',
+                                            'expired', 'invalid number', 'invalid card', 'call issuer',
+                                            'not permitted', 'not allowed', 'restricted']):
                 return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
-            site_error_keywords = [
-                'step 0', 'step 1', 'missing stable', 'max ret', 'max retries',
-                'session_error', 'empty stream', 'format error', 'not supported',
-                'not shopify', 'site dead', 'requires login', 'login required',
-                'unauthorized', '401', '403', '404', '422', 'cart failed',
-                'error processing', 'error possessing', 'site error', 'gateway error',
-                'connection', 'timeout', 'refused', 'unreachable'
-            ]
-            if any(k in clean_rm for k in site_error_keywords):
+
+            # SITE ERROR - gateway/site issues
+            if any(k in clean_rm for k in ['site error', 'gateway error', 'not shopify', 'cart failed',
+                                            'step 0', 'step 1', 'session error', 'max retries',
+                                            'requires login', 'login required', 'format error']):
                 return {'status': 'Site Error', 'message': rm, 'card': card}
-            if len(clean_rm) < 5 or clean_rm in ['ok', 'done', 'yes', 'true']:
-                return {'status': 'Dead', 'message': rm or 'Unknown Response', 'card': card, 'gateway': gt, 'price': pr or '-'}
+
+            # Unknown but valid response = Dead (bank declined, not our fault)
+            if len(clean_rm) < 3:
+                return {'status': 'Site Error', 'message': rm or 'Empty/Invalid Response', 'card': card}
+
             return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+
     except asyncio.TimeoutError:
         return {'status': 'Site Error', 'message': 'API Timeout', 'card': card}
     except aiohttp.ClientError as e:
@@ -1862,7 +1898,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     elif gate_name == "Stripe":
                         await asyncio.sleep(2.5)  # Slow Stripe check
                     elif gate_name == "Shopify":
-                        await asyncio.sleep(1.5)  # Slow Shopify check
+                        await asyncio.sleep(3.5)  # Slow Shopify check for accuracy
                     elif gate_name == "AuthNet":
                         await asyncio.sleep(2.0)  # Slow AuthNet check
                     if is_stopped():

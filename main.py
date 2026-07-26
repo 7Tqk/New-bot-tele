@@ -85,7 +85,7 @@ JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
 # ====================== API ENDPOINTS ======================
-SHOPIFY_API_URL_1 = 'https://web-production-c2d03.up.railway.app/shopify'
+SHOPIFY_API_URL_1 = 'https://shopy-kappa-nine.vercel.app/check'
 ADYEN_API_URL = 'https://gates.valyrian.cc/triumph/check'
 STRIPE_API_URL = 'https://gates.valyrian.cc/gospel-piano/check'
 AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'

@@ -85,7 +85,7 @@ JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
 # ====================== API ENDPOINTS ======================
-SHOPIFY_API_URL_1 = 'https://shopy-kappa-nine.vercel.app/check'
+SHOPIFY_API_URL_1 = 'https://web-production-c2d03.up.railway.app/shopify'
 ADYEN_API_URL = 'https://gates.valyrian.cc/triumph/check'
 STRIPE_API_URL = 'https://gates.valyrian.cc/gospel-piano/check'
 AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
@@ -1090,65 +1090,52 @@ async def check_authnet_api(card, proxy, session):
 
 
 # ====================== REAL PROXY CHECKER ENGINE v3.0 ======================
-async def check_proxy_real(proxy_dict, session, test_card=TEST_CARD, timeout=12):
+async def check_proxy_real(proxy_dict, session, test_card=TEST_CARD, timeout=15):
     proxy_url = proxy_dict.get('proxy_url') if isinstance(proxy_dict, dict) else proxy_dict
     if not proxy_url:
         return False, "No proxy URL"
 
-    test_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    # Test endpoints - multiple fallbacks
+    test_urls = [
+        "https://httpbin.org/get",
+        "https://api.ipify.org?format=json",
+        "https://www.google.com/generate_204",
+    ]
 
-    # Test 1: Simple IP check (most reliable)
-    try:
-        async with session.get("https://api.ipify.org?format=json", proxy=proxy_url, timeout=timeout, ssl=False) as r:
-            if r.status == 200:
-                data = await r.json()
-                ip = data.get('ip', 'unknown')
-                return True, f"Proxy OK (IP: {ip})"
-            # Even non-200 means proxy is working (just blocked by target)
-            if r.status in [403, 429, 503]:
-                return True, f"Proxy OK (Blocked by target: {r.status})"
-    except asyncio.TimeoutError:
-        return False, "Proxy Timeout"
-    except aiohttp.ClientProxyConnectionError as e:
-        return False, f"Proxy Connection Error"
-    except aiohttp.ClientHttpProxyError as e:
-        return False, f"Proxy Auth Error ({e.status})"
-    except Exception as e:
-        err_str = str(e).lower()
-        if 'proxy' in err_str:
-            return False, f"Proxy Error: {str(e)[:35]}"
-        # Some other error, might still be proxy-related
+    for url in test_urls:
+        try:
+            async with session.get(
+                url, 
+                proxy=proxy_url, 
+                timeout=aiohttp.ClientTimeout(total=timeout),
+                ssl=False
+            ) as r:
+                # ANY HTTP response = proxy is working
+                # Even 407 (auth required), 403 (blocked), 404, 500 = proxy routes traffic
+                return True, f"Proxy Working ({r.status})"
+        except asyncio.TimeoutError:
+            continue  # Try next URL
+        except aiohttp.ClientProxyConnectionError:
+            return False, "Cannot Connect to Proxy"
+        except aiohttp.ClientHttpProxyError as e:
+            status = getattr(e, 'status', '?')
+            if status == 407:
+                return False, "Proxy Auth Required (407)"
+            return False, f"Proxy Auth Error ({status})"
+        except Exception as e:
+            err = str(e).lower()
+            # Connection refused, reset, unreachable = proxy dead
+            if any(x in err for x in ['refused', 'reset', 'unreachable', 'closed', 'abort']):
+                return False, f"Proxy Dead: {str(e)[:40]}"
+            # DNS, timeout, network errors = try next URL
+            if any(x in err for x in ['dns', 'resolve', 'name', 'host']):
+                continue
+            # Other errors might be target-related, not proxy-related
+            # Try next URL to be sure
+            continue
 
-    # Test 2: Try a simple HTTP request to check if proxy routes traffic
-    try:
-        async with session.get("https://httpbin.org/get", proxy=proxy_url, timeout=timeout, ssl=False) as r:
-            if r.status in [200, 400, 401, 403, 404, 405, 429, 500, 502, 503]:
-                return True, f"Proxy Routes Traffic ({r.status})"
-    except Exception:
-        pass
-
-    # Test 3: Gateway test (lenient - any response means proxy works)
-    try:
-        card_encoded = quote(test_card)
-        req_url = f"{ADYEN_API_URL}?card={card_encoded}"
-        async with session.get(req_url, headers=test_headers, proxy=proxy_url, timeout=timeout, ssl=False) as r:
-            text = await r.text()
-            # ANY response means proxy is working - even declined/error means connection succeeded
-            if text.strip() and len(text.strip()) > 3:
-                if "<html" not in text.lower()[:100]:
-                    return True, f"Gateway Response OK ({r.status})"
-            if r.status in [200, 400, 401, 403, 404, 422, 429, 500]:
-                return True, f"Gateway Reachable ({r.status})"
-    except asyncio.TimeoutError:
-        return False, "Gateway Timeout"
-    except aiohttp.ClientProxyConnectionError:
-        return False, "Proxy Cannot Connect"
-    except aiohttp.ClientHttpProxyError as e:
-        return False, f"Proxy Auth Failed ({e.status})"
-    except Exception as e:
-        return False, f"Check Failed: {str(e)[:35]}"
-
-    return False, "Proxy Unresponsive"
+    # All URLs failed - proxy is likely dead or extremely slow
+    return False, "Proxy Unresponsive (All checks failed)"
 
 # ====================== REAL GATE CHECKER ENGINE (Shopify Only) ======================
 async def check_gate_real(site, proxy_url, session, test_card=TEST_CARD, timeout=15):
@@ -1462,20 +1449,17 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 semaphore = asyncio.Semaphore(5)
 
                 async def safe_test_proxy(idx, p_dict):
-                    global working_count
-                    nonlocal checked_count
+                    nonlocal working_count, checked_count
                     async with semaphore:
                         try:
-                            is_working, msg = await check_proxy_real(p_dict, test_session, timeout=8)
+                            is_working, msg = await check_proxy_real(p_dict, test_session, timeout=15)
                             if is_working:
                                 working_count += 1
                             else:
                                 dead_proxies.append((idx, p_dict, msg))
                         except Exception as e:
-                            dead_proxies.append((idx, p_dict, f"Exception: {str(e)[:25]}"))
+                            dead_proxies.append((idx, p_dict, f"Exception: {str(e)[:35]}"))
                         checked_count += 1
-                        # Allow event loop to breathe
-                        await asyncio.sleep(0)
 
                 # Create tasks with a global timeout wrapper
                 tasks = []

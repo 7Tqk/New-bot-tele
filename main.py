@@ -1237,63 +1237,77 @@ class CPMController:
 async def check_card_real(card, sites, proxies, session, gateway_name, uid):
     p_dict = random.choice(proxies) if proxies else None
     p_url = p_dict['proxy_url'] if p_dict else None
-    s_target = random.choice(sites) if sites else "touch-of-finland.myshopify.com"
-    try:
-        if gateway_name == "Shopify":
+
+    # ===== SHOPIFY: Try ALL sites, skip any that give Site Error =====
+    if gateway_name == "Shopify":
+        if not sites:
+            sites = ["touch-of-finland.myshopify.com"]
+
+        # Shuffle sites for random order
+        sites_shuffled = list(sites)
+        random.shuffle(sites_shuffled)
+
+        last_error = "All sites failed"
+
+        for s_target in sites_shuffled:
+            # Try with current proxy
             res = await check_shopify_api(SHOPIFY_API_URL_1, card, s_target, p_url, session)
-        elif gateway_name == "AuthNet":
-            res = await check_authnet_api(card, p_url, session)
-        elif gateway_name == "Adyen":
-            res = await check_adyen_api(card, p_url, session)
-        elif gateway_name == "Stripe":
-            res = await check_stripe_api(card, p_url, session)
-        else:
-            return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
-        status = res.get('status')
-        # Retry once with different proxy on Site Error
-        if status == 'Site Error':
+            status = res.get('status')
+
+            # If we got a real response (NOT Site Error), return it immediately
+            if status != 'Site Error':
+                return res
+
+            # Site Error - save the message and try next site
+            last_error = res.get('message', 'Site Error')
+
+            # Try with different proxy on same site
             if proxies and len(proxies) > 1:
                 p_dict2 = random.choice([p for p in proxies if p != p_dict])
                 p_url2 = p_dict2['proxy_url'] if p_dict2 else None
-                if gateway_name == "Shopify":
-                    res = await check_shopify_api(SHOPIFY_API_URL_1, card, s_target, p_url2, session)
-                elif gateway_name == "AuthNet":
-                    res = await check_authnet_api(card, p_url2, session)
-                elif gateway_name == "Adyen":
-                    res = await check_adyen_api(card, p_url2, session)
-                elif gateway_name == "Stripe":
-                    res = await check_stripe_api(card, p_url2, session)
-                status = res.get('status')
-        if status == 'Site Error':
-            return {'status': 'Site Error', 'message': res.get('message', 'Gateway Failed'), 'card': card, 'gateway': gateway_name, 'price': '-'}
-        return res
-    except Exception as e:
-        return {'status': 'Site Error', 'message': f'Check Failed: {str(e)[:30]}', 'card': card, 'gateway': gateway_name, 'price': '-'}
+                res2 = await check_shopify_api(SHOPIFY_API_URL_1, card, s_target, p_url2, session)
+                status2 = res2.get('status')
+                if status2 != 'Site Error':
+                    return res2
+                last_error = res2.get('message', 'Site Error')
 
-def format_card_result(card, gateway, price="-", bin_info=None, elapsed=0.0):
-    bi = bin_info or {}
-    ps = sf(f"{str(price)}") if price and price != "-" else sf("-")
-    h = f"<b>{CE_CROWN} {sf('PAYMENT SUCCEEDED')} {CE_PARTY}</b>"
-    country_code = str(bi.get('country_code', '')).strip()
-    flag = bi.get('flag')
-    if not flag or str(flag).strip() in ["", "\U0001f3f3\ufe0f", "-"]:
-        flag = get_flag_emoji(country_code)
-    cd = f"{sf(bi.get('country', '-'))} {flag}"
-    return f"""{h}
+            # Still Site Error? Skip this site and try next one
+            continue
 
-<b>{CE_DIAMOND} {sf('Card')}:</b> <code>{card}</code>
-<b>{CE_BOOM} {sf('Response')}:</b> <code>{sf('Payment Succeeded')}</code>
-<b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>
-<b>{CE_CASH} {sf('Price')}:</b> <code>{ps}</code>
+        # All sites exhausted - return last error
+        return {'status': 'Site Error', 'message': last_error, 'card': card, 'gateway': gateway_name, 'price': '-'}
 
-<b>{CE_GEAR} {sf('Bank Info')}:</b>
- ├ <b>{sf('Bank')}:</b> <code>{sf(bi.get('bank', '-'))}</code>
- ├ <b>{sf('Country')}:</b> <code>{cd}</code>
- ├ <b>{sf('Brand')}:</b> <code>{sf(bi.get('brand', '-'))}</code>
- ╰ <b>{sf('Type')}:</b> <code>{sf(bi.get('type', '-'))} - {sf(bi.get('level', '-'))}</code>
+    # ===== NON-SHOPIFY GATES (single attempt with retry) =====
+    else:
+        try:
+            if gateway_name == "AuthNet":
+                res = await check_authnet_api(card, p_url, session)
+            elif gateway_name == "Adyen":
+                res = await check_adyen_api(card, p_url, session)
+            elif gateway_name == "Stripe":
+                res = await check_stripe_api(card, p_url, session)
+            else:
+                return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
 
-<b>{CE_CHART} {sf('Took')}:</b> <code>{sf(f'{elapsed:.2f}s')}</code>"""
+            status = res.get('status')
+            # Retry once with different proxy on Site Error
+            if status == 'Site Error':
+                if proxies and len(proxies) > 1:
+                    p_dict2 = random.choice([p for p in proxies if p != p_dict])
+                    p_url2 = p_dict2['proxy_url'] if p_dict2 else None
+                    if gateway_name == "AuthNet":
+                        res = await check_authnet_api(card, p_url2, session)
+                    elif gateway_name == "Adyen":
+                        res = await check_adyen_api(card, p_url2, session)
+                    elif gateway_name == "Stripe":
+                        res = await check_stripe_api(card, p_url2, session)
+                    status = res.get('status')
 
+            if status == 'Site Error':
+                return {'status': 'Site Error', 'message': res.get('message', 'Gateway Failed'), 'card': card, 'gateway': gateway_name, 'price': '-'}
+            return res
+        except Exception as e:
+            return {'status': 'Site Error', 'message': f'Check Failed: {str(e)[:30]}', 'card': card, 'gateway': gateway_name, 'price': '-'}
 async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session):
     await asyncio.sleep(HIT_DELAY)
     try:

@@ -94,12 +94,12 @@ GITHUB_API_SITES_URL = os.getenv("GITHUB_API_SITES_URL", "")
 KEYS_FILE = "redeem_keys.json"
 
 # ====================== CPM & SPEED CONTROL ======================
-CPM_TARGET = int(os.getenv("CPM_TARGET", "60"))
+CPM_TARGET = int(os.getenv("CPM_TARGET", "30"))
 MIN_DELAY = float(os.getenv("MIN_DELAY", "0.5"))
 MAX_DELAY = float(os.getenv("MAX_DELAY", "2.0"))
 
 WORKERS = max(1, min(50, CPM_TARGET // 10))
-API_TIMEOUT = 45
+API_TIMEOUT = 60
 HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}
@@ -1828,9 +1828,9 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     last_resp = sf("Waiting for response...")
     def is_stopped():
         return process_store.get(uid, {}).get("stopped", False)
-    # Workers config: Shopify=30, Adyen=20, Stripe=12, AuthNet=1
+    # Workers config: Shopify=15 (reduced for accuracy), Adyen=20, Stripe=12, AuthNet=1
     if gate_name == "Shopify":
-        current_workers = 30
+        current_workers = 15
     elif gate_name == "Adyen":
         current_workers = 20
     elif gate_name == "Stripe":
@@ -1890,8 +1890,11 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     break
                 try:
                     await cpm_ctrl.wait()
-                    # Sleep 5 seconds between every card for all gates
-                    await asyncio.sleep(5.0)
+                    # Sleep between cards - Shopify gets extra delay for accuracy
+                    if gate_name == "Shopify":
+                        await asyncio.sleep(7.0)  # Slower Shopify = less errors
+                    else:
+                        await asyncio.sleep(5.0)
                     if is_stopped():
                         queue.task_done()
                         break

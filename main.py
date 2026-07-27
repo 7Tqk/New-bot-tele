@@ -99,11 +99,11 @@ MIN_DELAY = float(os.getenv("MIN_DELAY", "0.5"))
 MAX_DELAY = float(os.getenv("MAX_DELAY", "2.0"))
 
 WORKERS = max(1, min(50, CPM_TARGET // 10))
-API_TIMEOUT = 60
-HIT_DELAY = 1.0
+API_TIMEOUT = 70
+HIT_DELAY = 1.9
 
 _SITE_ERRORS_COUNT = {}
-_MAX_SITE_ERRORS = 3
+_MAX_SITE_ERRORS = 5
 _JOIN_CACHE = {}
 _MAINTENANCE_MODE = False
 

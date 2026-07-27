@@ -99,11 +99,11 @@ MIN_DELAY = float(os.getenv("MIN_DELAY", "0.5"))
 MAX_DELAY = float(os.getenv("MAX_DELAY", "2.0"))
 
 WORKERS = max(1, min(50, CPM_TARGET // 10))
-API_TIMEOUT = 70
-HIT_DELAY = 1.9
+API_TIMEOUT = 60
+HIT_DELAY = 1.0
 
 _SITE_ERRORS_COUNT = {}
-_MAX_SITE_ERRORS = 5
+_MAX_SITE_ERRORS = 3
 _JOIN_CACHE = {}
 _MAINTENANCE_MODE = False
 
@@ -1351,10 +1351,10 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
         kb = [
-            [InlineKeyboardButton('Shopify (Charge) [30 Workers]', callback_data="gate:Shopify", style="success", icon_custom_emoji_id="5445388803223091254")],
-            [InlineKeyboardButton('Adyen (Triumph) [Slow]', callback_data="gate:Adyen", style="success", icon_custom_emoji_id="5445388803223091254")],
-            [InlineKeyboardButton('Stripe ($1.00) [Slow]', callback_data="gate:Stripe", style="success", icon_custom_emoji_id="5447453226498552490")],
-            [InlineKeyboardButton('AuthNet ($20.00) [Slow]', callback_data="gate:AuthNet", style="primary", icon_custom_emoji_id="5447453226498552490")],
+            [InlineKeyboardButton('Shopify (Charge)', callback_data="gate:Shopify", style="success", icon_custom_emoji_id="5445388803223091254")],
+            [InlineKeyboardButton('Adyen (Triumph)', callback_data="gate:Adyen", style="success", icon_custom_emoji_id="5445388803223091254")],
+            [InlineKeyboardButton('Stripe ($1.00)', callback_data="gate:Stripe", style="success", icon_custom_emoji_id="5447453226498552490")],
+            [InlineKeyboardButton('AuthNet ($20.00)', callback_data="gate:AuthNet", style="primary", icon_custom_emoji_id="5447453226498552490")],
             [InlineKeyboardButton('Cancel', callback_data="gate:cancel", style="danger", icon_custom_emoji_id="5269531045165816230")]
         ]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
@@ -1842,9 +1842,9 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     last_resp = sf("Waiting for response...")
     def is_stopped():
         return process_store.get(uid, {}).get("stopped", False)
-    # Workers config: Shopify=15 (reduced for accuracy), Adyen=20, Stripe=12, AuthNet=1
+    # Workers config: Shopify=random(15-50), Adyen=20, Stripe=12, AuthNet=1
     if gate_name == "Shopify":
-        current_workers = 15
+        current_workers = random.randint(15, 50)
     elif gate_name == "Adyen":
         current_workers = 20
     elif gate_name == "Stripe":

@@ -22,7 +22,7 @@ from telegram.constants import ParseMode
 from database2 import (
     init_db, ensure_user, get_user_plan, set_user_plan,
     get_all_user_proxies, add_proxy_db, remove_proxy_by_index,
-    clear_all_proxies, mark_user_joined
+    clear_all_proxies, mark_user_joined, get_all_user_ids
 )
 
 BUTTON_REGISTRY = {}
@@ -545,7 +545,7 @@ async def is_user_joined(uid, bot):
     return True
 
 async def send_welcome_menu(update_or_bot, uid, plan, limit):
-    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /chkpxy - {sf('Test Proxies')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
+    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /chkpxy - {sf('Test Proxies')}\n ├ {CE_CANDLE} /cast - {sf('Broadcast Message')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
     t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
 
 <b>{CE_TOP} {sf('Checker Engine')}:</b>
@@ -1884,9 +1884,9 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 broadcast_text = raw_text.split(maxsplit=1)[1]
             if not broadcast_text:
                 return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide a message.')}</b>\n\n<b>{sf('Usage')}:</b>\n<code>/cast Your message here</code>\n{sf('Or reply to any message with')} <code>/cast</code>", use_gif=True)
-            target_users = list(USER_LAST_REQ.keys())
+            target_users = await get_all_user_ids()
             if not target_users:
-                return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No users found in session.')}</b>", use_gif=True)
+                return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No users found in database.')}</b>", use_gif=True)
             status_msg = await styled_reply(update, f"<b>{CE_GEAR} {sf('Broadcasting...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Target Users')}:</b> <code>{len(target_users)}</code>\n╰ <b>{CE_HOURGLASS} {sf('Sending messages...')}</b>", use_gif=True)
             sent_count = 0
             fail_count = 0
@@ -2125,7 +2125,7 @@ async def back_start_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and uid not in ADMIN_ID: return await q.answer("Maintenance Break!", show_alert=True)
     plan = await get_user_plan(uid)
     limit = get_cc_limit(plan, uid)
-    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /chkpxy - {sf('Test Proxies')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
+    admin_panel = f"\n\n<b>{CE_GLASSES} {sf('Admin Panel')}:</b>\n ├ {CE_CANDLE} /gen {sf('[plan] [qty]')} - {sf('Generate Keys')}\n ├ {CE_CANDLE} /validate {sf('[key]')} - {sf('Check Key')}\n ├ {CE_CANDLE} /users - {sf('System Status')}\n ├ {CE_CANDLE} /chkpxy - {sf('Test Proxies')}\n ├ {CE_CANDLE} /cast - {sf('Broadcast Message')}\n ╰ {CE_CANDLE} /maint - {sf('Maintenance Mode')}" if uid in ADMIN_ID else ""
     t = f"""<b>━━━ {CE_CROWN} {sf('VIP CHECKER SYSTEM')} {CE_CROWN} ━━━</b>
 
 <b>{CE_TOP} {sf('Checker Engine')}:</b>

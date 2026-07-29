@@ -1,3 +1,4 @@
+
 import os
 import json
 import datetime
@@ -193,6 +194,11 @@ async def remove_global_site(site: str) -> bool:
             await _write_db(data)
             return True
         return False
+
+async def get_all_user_ids():
+    async with DB_LOCK:
+        data = await _read_db()
+        return [int(uid) for uid in data["users"].keys()]
 
 async def get_total_users() -> int:
     async with DB_LOCK:

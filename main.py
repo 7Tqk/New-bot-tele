@@ -867,7 +867,7 @@ async def check_shopify_api(api_url, card, site, proxy, session):
 # Adyen Triumph Gate - MODIFIED WITH RETRY + INCREASED TIMEOUT
 async def check_adyen_api(card, proxy, session):
     max_retries = 3
-    retry_delay = 4.0
+    retry_delay = 2.5
 
     for attempt in range(max_retries):
         try:
@@ -876,125 +876,128 @@ async def check_adyen_api(card, proxy, session):
             req_url = f"{ADYEN_API_URL}?card={quote(card)}"
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                "Accept": "application/json",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Connection": "keep-alive"
+                "Accept": "application/json"
             }
-            adyen_timeout = aiohttp.ClientTimeout(total=60, connect=12, sock_connect=12, sock_read=40)
+            # Tighter timeout to prevent hanging
+            adyen_timeout = aiohttp.ClientTimeout(total=25, connect=8, sock_connect=8, sock_read=15)
 
-            async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=adyen_timeout, ssl=False) as resp:
-                text_data = await resp.text()
+            # Use asyncio.wait_for as extra safety net against aiohttp timeout bugs
+            async def _do_request():
+                async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=adyen_timeout, ssl=False) as resp:
+                    return await resp.text(), resp.status
 
-                if resp.status in [500, 502, 503, 504]:
-                    if attempt < max_retries - 1:
-                        logger.warning(f"Adyen API server error {resp.status}, retrying {attempt+1}/{max_retries}...")
-                        await asyncio.sleep(retry_delay * (attempt + 1))
-                        continue
-                    return {"status": "Site Error", "message": f"Server Error {resp.status}", "card": card}
+            text_data, status_code = await asyncio.wait_for(_do_request(), timeout=28)
 
-                if resp.status == 429:
-                    if attempt < max_retries - 1:
-                        logger.warning(f"Adyen API rate limited, retrying {attempt+1}/{max_retries}...")
-                        await asyncio.sleep(retry_delay * 2)
-                        continue
-                    return {"status": "Site Error", "message": "Rate Limited (429)", "card": card}
+            if status_code in [500, 502, 503, 504]:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Adyen API server error {status_code}, retrying {attempt+1}/{max_retries}...")
+                    await asyncio.sleep(retry_delay * (attempt + 1))
+                    continue
+                return {"status": "Site Error", "message": f"Server Error {status_code}", "card": card}
 
-                if resp.status == 403:
-                    return {"status": "Site Error", "message": "Access Denied (403)", "card": card}
+            if status_code == 429:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Adyen API rate limited, retrying {attempt+1}/{max_retries}...")
+                    await asyncio.sleep(retry_delay * 2)
+                    continue
+                return {"status": "Site Error", "message": "Rate Limited (429)", "card": card}
 
-                if "<html" in text_data.lower() and any(k in text_data.lower() for k in ["cloudflare", "just a moment", "challenge", "captcha", "ddos"]):
-                    return {"status": "Site Error", "message": "Cloudflare Blocked", "card": card}
+            if status_code == 403:
+                return {"status": "Site Error", "message": "Access Denied (403)", "card": card}
 
-                if not text_data or not text_data.strip():
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(retry_delay * (attempt + 1))
-                        continue
-                    return {"status": "Site Error", "message": "Empty Response", "card": card}
+            if "<html" in text_data.lower() and any(k in text_data.lower() for k in ["cloudflare", "just a moment", "challenge", "captcha", "ddos"]):
+                return {"status": "Site Error", "message": "Cloudflare Blocked", "card": card}
 
-                gt = "Adyen"
-                pr = None
-                rm = text_data.strip()
-                api_status = None
+            if not text_data or not text_data.strip():
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay * (attempt + 1))
+                    continue
+                return {"status": "Site Error", "message": "Empty Response", "card": card}
 
-                try:
-                    rj = json.loads(text_data)
-                    rm = str(rj.get("response_msg",
-                             rj.get("result",
-                             rj.get("Response",
-                             rj.get("message",
-                             rj.get("error",
-                             rj.get("msg",
-                             rj.get("status",
-                             rj.get("data", ""))))))))).strip()
-                    gt = rj.get("Gateway", rj.get("gateway", "Adyen"))
-                    for k in ["Price", "price", "amount", "Amount", "amt", "Amt", "charged", "charge", "total"]:
-                        if k in rj and rj[k] is not None and str(rj[k]).strip():
-                            pr = str(rj[k]).strip()
-                            break
-                    api_status = str(rj.get("status", rj.get("Status", ""))).lower().strip()
-                except Exception:
-                    pass
+            gt = "Adyen"
+            pr = None
+            rm = text_data.strip()
+            api_status = None
 
-                if api_status:
-                    if api_status in ["authorised", "authorized", "success", "completed", "captured", "settled", "paid", "approved"]:
-                        return {"status": "Charged", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-                    if api_status in ["declined", "dead", "rejected", "denied", "failed", "refused"]:
-                        return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-                    if api_status in ["insufficient", "insufficient_funds", "nsf"]:
-                        return {"status": "Insufficient", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+            try:
+                rj = json.loads(text_data)
+                rm = str(rj.get("response_msg",
+                         rj.get("result",
+                         rj.get("Response",
+                         rj.get("message",
+                         rj.get("error",
+                         rj.get("msg",
+                         rj.get("status",
+                         rj.get("data", ""))))))))).strip()
+                gt = rj.get("Gateway", rj.get("gateway", "Adyen"))
+                for k in ["Price", "price", "amount", "Amount", "amt", "Amt", "charged", "charge", "total"]:
+                    if k in rj and rj[k] is not None and str(rj[k]).strip():
+                        pr = str(rj[k]).strip()
+                        break
+                api_status = str(rj.get("status", rj.get("Status", ""))).lower().strip()
+            except Exception:
+                pass
 
-                clean_rm = unsf(rm).lower().strip()
-
-                charged_keywords = [
-                    "authorised", "authorized", "success", "payment completed", "transaction completed",
-                    "approved", "accepted", "payment successful", "charge complete", "captured",
-                    "settled", "completed", "payment confirmed", "order confirmed", "paid"
-                ]
-                if any(k in clean_rm for k in charged_keywords):
-                    if "not authorised" in clean_rm or "declined" in clean_rm or "refused" in clean_rm:
-                        return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+            if api_status:
+                if api_status in ["authorised", "authorized", "success", "completed", "captured", "settled", "paid", "approved"]:
                     return {"status": "Charged", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-
-                approved_keywords = [
-                    "cvv match", "security code", "invalid_cvv", "incorrect_cvv", "cvv correct",
-                    "avs", "address verification", "cvv2", "cid", "match", "cvv declined",
-                    "avs declined", "3d authenticated", "challenge completed", "identifyshopper"
-                ]
-                if any(k in clean_rm for k in approved_keywords):
-                    return {"status": "Approved", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-
-                insufficient_keywords = [
-                    "insufficient", "funds", "balance", "low balance", "not enough",
-                    "limit exceeded", "over limit", "exceeds", "nsf", "not sufficient",
-                    "insufficient_funds", "no money", "low funds"
-                ]
-                if any(k in clean_rm for k in insufficient_keywords):
+                if api_status in ["declined", "dead", "rejected", "denied", "failed", "refused"]:
+                    return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+                if api_status in ["insufficient", "insufficient_funds", "nsf"]:
                     return {"status": "Insufficient", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
 
-                dead_keywords = [
-                    "refused", "declined", "do not honor", "pick up card", "stolen", "lost", "fraud",
-                    "not allowed", "expired", "invalid card", "invalid number", "call issuer",
-                    "authentication_required", "3d secure", "otp required", "challenge",
-                    "incorrect", "wrong", "denied", "rejected", "blocked", "banned",
-                    "unauthorized", "forbidden", "invalid cvv", "invalid expiry",
-                    "acquirer fraud", "shopper fraud", "risk", "not supported",
-                    "unsupported", "cancelled", "canceled", "abandoned"
-                ]
-                if any(k in clean_rm for k in dead_keywords):
+            clean_rm = unsf(rm).lower().strip()
+
+            charged_keywords = [
+                "authorised", "authorized", "success", "payment completed", "transaction completed",
+                "approved", "accepted", "payment successful", "charge complete", "captured",
+                "settled", "completed", "payment confirmed", "order confirmed", "paid"
+            ]
+            if any(k in clean_rm for k in charged_keywords):
+                if "not authorised" in clean_rm or "declined" in clean_rm or "refused" in clean_rm:
                     return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+                return {"status": "Charged", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
 
-                site_error_keywords = [
-                    "timeout", "connection", "unreachable", "gateway error",
-                    "server error", "internal error", "service unavailable", "bad gateway",
-                    "empty response", "no response", "format error", "parse error",
-                    "invalid request", "missing parameter", "required field"
-                ]
-                if any(k in clean_rm for k in site_error_keywords):
-                    return {"status": "Site Error", "message": rm, "card": card}
+            approved_keywords = [
+                "cvv match", "security code", "invalid_cvv", "incorrect_cvv", "cvv correct",
+                "avs", "address verification", "cvv2", "cid", "match", "cvv declined",
+                "avs declined", "3d authenticated", "challenge completed", "identifyshopper"
+            ]
+            if any(k in clean_rm for k in approved_keywords):
+                return {"status": "Approved", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
 
-                if len(clean_rm) < 5 or clean_rm in ["ok", "done", "yes", "true"]:
-                    return {"status": "Dead", "message": rm or "Unknown Response", "card": card, "gateway": gt, "price": pr or "-"}
+            insufficient_keywords = [
+                "insufficient", "funds", "balance", "low balance", "not enough",
+                "limit exceeded", "over limit", "exceeds", "nsf", "not sufficient",
+                "insufficient_funds", "no money", "low funds"
+            ]
+            if any(k in clean_rm for k in insufficient_keywords):
+                return {"status": "Insufficient", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+
+            dead_keywords = [
+                "refused", "declined", "do not honor", "pick up card", "stolen", "lost", "fraud",
+                "not allowed", "expired", "invalid card", "invalid number", "call issuer",
+                "authentication_required", "3d secure", "otp required", "challenge",
+                "incorrect", "wrong", "denied", "rejected", "blocked", "banned",
+                "unauthorized", "forbidden", "invalid cvv", "invalid expiry",
+                "acquirer fraud", "shopper fraud", "risk", "not supported",
+                "unsupported", "cancelled", "canceled", "abandoned"
+            ]
+            if any(k in clean_rm for k in dead_keywords):
                 return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+
+            site_error_keywords = [
+                "timeout", "connection", "unreachable", "gateway error",
+                "server error", "internal error", "service unavailable", "bad gateway",
+                "empty response", "no response", "format error", "parse error",
+                "invalid request", "missing parameter", "required field"
+            ]
+            if any(k in clean_rm for k in site_error_keywords):
+                return {"status": "Site Error", "message": rm, "card": card}
+
+            if len(clean_rm) < 5 or clean_rm in ["ok", "done", "yes", "true"]:
+                return {"status": "Dead", "message": rm or "Unknown Response", "card": card, "gateway": gt, "price": pr or "-"}
+            return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
 
         except asyncio.TimeoutError:
             if attempt < max_retries - 1:
@@ -1002,6 +1005,18 @@ async def check_adyen_api(card, proxy, session):
                 await asyncio.sleep(retry_delay * (attempt + 1))
                 continue
             return {"status": "Site Error", "message": "API Timeout", "card": card}
+        except aiohttp.ClientConnectorError as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Adyen connector error: {e}, retrying {attempt+1}/{max_retries}...")
+                await asyncio.sleep(retry_delay * (attempt + 1))
+                continue
+            return {"status": "Site Error", "message": f"Proxy/Connector Error", "card": card}
+        except aiohttp.ServerDisconnectedError as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"Adyen server disconnected, retrying {attempt+1}/{max_retries}...")
+                await asyncio.sleep(retry_delay * (attempt + 1))
+                continue
+            return {"status": "Site Error", "message": "Server Disconnected", "card": card}
         except aiohttp.ClientError as e:
             if attempt < max_retries - 1:
                 logger.warning(f"Adyen API connection error, retrying {attempt+1}/{max_retries}...")
@@ -1016,11 +1031,6 @@ async def check_adyen_api(card, proxy, session):
             return {"status": "Site Error", "message": f"System Error: {str(e)[:30]}", "card": card}
 
     return {"status": "Site Error", "message": "Max Retries Exceeded", "card": card}
-
-
-# Stripe Gospel-Piano Gate - MODIFIED WITH RETRY + INCREASED TIMEOUT
-STRIPE_PRICE = "$1.00"
-
 async def check_stripe_api(card, proxy, session):
     max_retries = 3
     retry_delay = 5.0
@@ -1892,29 +1902,62 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             fail_count = 0
             blocked_count = 0
             deleted_count = 0
+            not_found_count = 0
             other_fail = 0
             for target_uid in target_users:
                 if target_uid == uid:
                     continue
                 try:
-                    await styled_send(context.bot, target_uid, broadcast_text, use_gif=False)
-                    sent_count += 1
-                    await asyncio.sleep(0.05)
+                    msg = await context.bot.send_message(
+                        chat_id=target_uid,
+                        text=broadcast_text,
+                        parse_mode=ParseMode.HTML
+                    )
+                    if msg and msg.message_id:
+                        sent_count += 1
+                    else:
+                        other_fail += 1
+                        fail_count += 1
+                    await asyncio.sleep(0.08)
                 except Forbidden as e:
-                    if "blocked" in str(e).lower() or "deactivated" in str(e).lower():
+                    err = str(e).lower()
+                    if "blocked" in err or "deactivated" in err:
                         blocked_count += 1
                     else:
                         other_fail += 1
                     fail_count += 1
+                    logger.warning(f"Cast Forbidden to {target_uid}: {e}")
                 except BadRequest as e:
-                    if "chat not found" in str(e).lower() or "user is deactivated" in str(e).lower():
+                    err = str(e).lower()
+                    if "chat not found" in err:
+                        not_found_count += 1
+                    elif "user is deactivated" in err or "deactivated" in err:
                         deleted_count += 1
                     else:
                         other_fail += 1
                     fail_count += 1
-                except Exception:
+                    logger.warning(f"Cast BadRequest to {target_uid}: {e}")
+                except RetryAfter as e:
+                    await asyncio.sleep(e.retry_after + 0.5)
+                    try:
+                        msg = await context.bot.send_message(
+                            chat_id=target_uid,
+                            text=broadcast_text,
+                            parse_mode=ParseMode.HTML
+                        )
+                        if msg and msg.message_id:
+                            sent_count += 1
+                        else:
+                            other_fail += 1
+                            fail_count += 1
+                    except Exception as e2:
+                        other_fail += 1
+                        fail_count += 1
+                        logger.warning(f"Cast retry failed to {target_uid}: {e2}")
+                except Exception as e:
                     other_fail += 1
                     fail_count += 1
+                    logger.warning(f"Cast error to {target_uid}: {e}")
             result_text = f"""<b>{CE_CROWN} {sf('Broadcast Complete')}</b>
 
 ├ <b>{CE_DIAMOND} {sf('Total Targets')}:</b> <code>{len(target_users)}</code>
@@ -1922,10 +1965,12 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ├ <b>{CE_CLOWN} {sf('Failed')}:</b> <code>{fail_count}</code>
 │ ├ <b>{sf('Blocked Bot')}:</b> <code>{blocked_count}</code>
 │ ├ <b>{sf('Deleted Account')}:</b> <code>{deleted_count}</code>
+│ ├ <b>{sf('Chat Not Found')}:</b> <code>{not_found_count}</code>
 │ ╰ <b>{sf('Other Errors')}:</b> <code>{other_fail}</code>
 ╰ <b>{CE_SMILE} {sf('Message Preview')}:</b>
 <code>{broadcast_text[:200]}{'...' if len(broadcast_text) > 200 else ''}</code>"""
             await styled_edit(status_msg, result_text)
+
 
         else:
             await styled_reply(update, f"<b>{CE_THINK1} {sf('Unknown Command!')}</b>\n\n╰ {sf('Type /start to see available commands.')}", use_gif=True)
@@ -1963,8 +2008,8 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
         current_workers = random.randint(15, 50)
         card_delay = 7.0
     elif gate_name == "Adyen":
-        current_workers = 5          # Was 20, now SLOWER
-        card_delay = 8.0             # Was 5.0, now SLOWER
+        current_workers = 15
+        card_delay = 3.0
     elif gate_name == "Stripe":
         current_workers = 3          # Was 12, now SLOWEST
         card_delay = 12.0            # Was 5.0, now SLOWEST

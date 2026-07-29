@@ -1871,6 +1871,62 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try: await styled_send(context.bot, tu, f"<b>{CE_BOOM} {sf('System Alert')}</b>\n\n╰ {sf('Your VIP access has been revoked by the administrator.')}", use_gif=True)
             except Exception: pass
 
+        elif cmd == "cast":
+            if uid not in ADMIN_ID: return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Access Denied')}</b>", use_gif=True)
+            broadcast_text = ""
+            if update.message.reply_to_message:
+                reply_msg = update.message.reply_to_message
+                if reply_msg.text:
+                    broadcast_text = reply_msg.text
+                elif reply_msg.caption:
+                    broadcast_text = reply_msg.caption
+            if not broadcast_text and len(tokens) > 1:
+                broadcast_text = raw_text.split(maxsplit=1)[1]
+            if not broadcast_text:
+                return await styled_reply(update, f"<b>{CE_CLOWN} {sf('Please provide a message.')}</b>\n\n<b>{sf('Usage')}:</b>\n<code>/cast Your message here</code>\n{sf('Or reply to any message with')} <code>/cast</code>", use_gif=True)
+            target_users = list(USER_LAST_REQ.keys())
+            if not target_users:
+                return await styled_reply(update, f"<b>{CE_CLOWN} {sf('No users found in session.')}</b>", use_gif=True)
+            status_msg = await styled_reply(update, f"<b>{CE_GEAR} {sf('Broadcasting...')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Target Users')}:</b> <code>{len(target_users)}</code>\n╰ <b>{CE_HOURGLASS} {sf('Sending messages...')}</b>", use_gif=True)
+            sent_count = 0
+            fail_count = 0
+            blocked_count = 0
+            deleted_count = 0
+            other_fail = 0
+            for target_uid in target_users:
+                if target_uid == uid:
+                    continue
+                try:
+                    await styled_send(context.bot, target_uid, broadcast_text, use_gif=False)
+                    sent_count += 1
+                    await asyncio.sleep(0.05)
+                except Forbidden as e:
+                    if "blocked" in str(e).lower() or "deactivated" in str(e).lower():
+                        blocked_count += 1
+                    else:
+                        other_fail += 1
+                    fail_count += 1
+                except BadRequest as e:
+                    if "chat not found" in str(e).lower() or "user is deactivated" in str(e).lower():
+                        deleted_count += 1
+                    else:
+                        other_fail += 1
+                    fail_count += 1
+                except Exception:
+                    other_fail += 1
+                    fail_count += 1
+            result_text = f"""<b>{CE_CROWN} {sf('Broadcast Complete')}</b>
+
+├ <b>{CE_DIAMOND} {sf('Total Targets')}:</b> <code>{len(target_users)}</code>
+├ <b>{CE_CHECK} {sf('Sent Successfully')}:</b> <code>{sent_count}</code>
+├ <b>{CE_CLOWN} {sf('Failed')}:</b> <code>{fail_count}</code>
+│ ├ <b>{sf('Blocked Bot')}:</b> <code>{blocked_count}</code>
+│ ├ <b>{sf('Deleted Account')}:</b> <code>{deleted_count}</code>
+│ ╰ <b>{sf('Other Errors')}:</b> <code>{other_fail}</code>
+╰ <b>{CE_SMILE} {sf('Message Preview')}:</b>
+<code>{broadcast_text[:200]}{'...' if len(broadcast_text) > 200 else ''}</code>"""
+            await styled_edit(status_msg, result_text)
+
         else:
             await styled_reply(update, f"<b>{CE_THINK1} {sf('Unknown Command!')}</b>\n\n╰ {sf('Type /start to see available commands.')}", use_gif=True)
 

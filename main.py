@@ -80,7 +80,7 @@ JOIN_CHANNEL_TARGET = get_valid_target(JOIN_CHANNEL_LINK, JOIN_CHANNEL_ID)
 JOIN_GROUP_TARGET = get_valid_target(JOIN_GROUP_LINK, JOIN_GROUP_ID)
 HITS_GROUP_TARGET = get_valid_target(HITS_GROUP_LINK, HITS_GROUP_ID)
 
-SHOPIFY_API_URL_1 = 'https://web-production-213d4.up.railway.app/shopify?site=&cc=&proxy='
+SHOPIFY_API_URL_1 = 'http://5.175.222.144:8081/?CC'
 STRIPE_API_URL = 'https://web-production-1f57e.up.railway.app/gateway=AutoStripe/key=md-tech1/site=/cc=/proxy='
 GITHUB_SITES_URL = os.getenv("GITHUB_SITES_URL", "https://raw.githubusercontent.com/7Tqk/New-bot-tele/refs/heads/main/sites.txt")
 GITHUB_API_SITES_URL = os.getenv("GITHUB_API_SITES_URL", "")
